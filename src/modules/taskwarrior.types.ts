@@ -33,6 +33,7 @@ export interface CreateTaskDto {
   scheduled?: string;
   recur?: string;
   depends?: string;
+  annotation?: string;
 }
 
-export interface UpdateTaskDto extends Partial<CreateTaskDto> {}
+export type UpdateTaskDto = Partial<CreateTaskDto>;

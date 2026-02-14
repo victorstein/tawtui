@@ -4,6 +4,7 @@ import type { Task, CreateTaskDto } from '../../taskwarrior.types';
 import type { TaskwarriorService } from '../../taskwarrior.service';
 import { BoardColumn } from '../components/board-column';
 import { TaskForm } from '../components/task-form';
+import { TaskDetail } from '../components/task-detail';
 import { FilterBar } from '../components/filter-bar';
 import { ArchiveView } from '../components/archive-view';
 import { useDialog } from '../context/dialog';
@@ -319,34 +320,47 @@ export function TasksView(props: TasksViewProps) {
       return;
     }
 
-    // Edit selected task
+    // View task detail
     if (key.name === 'return') {
       const task = selectedTask();
       if (!task) return;
       dialog.show(
         () => (
-          <TaskForm
-            mode="edit"
-            initialValues={{
-              description: task.description,
-              project: task.project,
-              priority: task.priority,
-              tags: task.tags,
-              due: task.due,
-            }}
-            onSubmit={async (dto: CreateTaskDto) => {
-              const tw = getTaskwarriorService();
-              if (tw) {
-                try {
-                  await tw.updateTask(task.uuid, dto);
-                } catch {
-                  // Ignore update errors; refresh will show current state
-                }
-                await loadTasks();
-              }
+          <TaskDetail
+            task={task}
+            onEdit={() => {
               dialog.close();
+              dialog.show(
+                () => (
+                  <TaskForm
+                    mode="edit"
+                    initialValues={{
+                      description: task.description,
+                      annotation: task.annotations?.[0]?.description,
+                      project: task.project,
+                      priority: task.priority,
+                      tags: task.tags,
+                      due: task.due,
+                    }}
+                    onSubmit={async (dto: CreateTaskDto) => {
+                      const tw = getTaskwarriorService();
+                      if (tw) {
+                        try {
+                          await tw.updateTask(task.uuid, dto);
+                        } catch {
+                          // Ignore update errors; refresh will show current state
+                        }
+                        await loadTasks();
+                      }
+                      dialog.close();
+                    }}
+                    onCancel={() => dialog.close()}
+                  />
+                ),
+                { size: 'large' },
+              );
             }}
-            onCancel={() => dialog.close()}
+            onClose={() => dialog.close()}
           />
         ),
         { size: 'large' },

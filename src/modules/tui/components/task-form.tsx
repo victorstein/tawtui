@@ -25,11 +25,19 @@ interface TaskFormProps {
   onCancel: () => void;
 }
 
-const FIELDS = ['description', 'project', 'priority', 'tags', 'due'] as const;
+const FIELDS = [
+  'description',
+  'annotation',
+  'project',
+  'priority',
+  'tags',
+  'due',
+] as const;
 type FieldName = (typeof FIELDS)[number];
 
 const FIELD_LABELS: Record<FieldName, string> = {
-  description: 'Description',
+  description: 'Title',
+  annotation: 'Description',
   project: 'Project',
   priority: 'Priority',
   tags: 'Tags',
@@ -49,6 +57,9 @@ export function TaskForm(props: TaskFormProps) {
   const [focusedField, setFocusedField] = createSignal<number>(0);
   const [description, setDescription] = createSignal(
     props.initialValues?.description ?? '',
+  );
+  const [annotation, setAnnotation] = createSignal(
+    props.initialValues?.annotation ?? '',
   );
   const [priority, setPriority] = createSignal<'' | 'L' | 'M' | 'H'>(
     props.initialValues?.priority ?? '',
@@ -140,6 +151,8 @@ export function TaskForm(props: TaskFormProps) {
     if (!desc) return;
 
     const dto: CreateTaskDto = { description: desc };
+    const ann = annotation().trim();
+    if (ann) dto.annotation = ann;
     const proj = allProjects()[projectIndex()];
     if (proj) dto.project = proj;
     const pri = priority();
@@ -302,7 +315,7 @@ export function TaskForm(props: TaskFormProps) {
         <input
           width={60}
           value={description()}
-          placeholder="Task description (required)"
+          placeholder="Task title (required)"
           focused={focusedField() === 0}
           backgroundColor={focusedField() === 0 ? BG_INPUT_FOCUS : BG_INPUT}
           textColor={FG_NORMAL}
@@ -311,16 +324,40 @@ export function TaskForm(props: TaskFormProps) {
       </box>
       <box height={1} />
 
-      {/* Project */}
+      {/* Body / Notes */}
       <box flexDirection="row">
         <box width={14} height={1}>
           <text fg={labelColor(1)} attributes={focusedField() === 1 ? 1 : 0}>
             {focusedField() === 1 ? '> ' : '  '}
+            {FIELD_LABELS.annotation}
+          </text>
+        </box>
+        <textarea
+          width={60}
+          height={5}
+          initialValue={annotation()}
+          placeholder="Optional notes or body text (supports markdown)"
+          placeholderColor={FG_DIM}
+          focused={focusedField() === 1}
+          backgroundColor={focusedField() === 1 ? BG_INPUT_FOCUS : BG_INPUT}
+          focusedBackgroundColor={BG_INPUT_FOCUS}
+          focusedTextColor={FG_NORMAL}
+          textColor={FG_NORMAL}
+          onContentChange={(val: string) => setAnnotation(val)}
+        />
+      </box>
+      <box height={1} />
+
+      {/* Project */}
+      <box flexDirection="row">
+        <box width={14} height={1}>
+          <text fg={labelColor(2)} attributes={focusedField() === 2 ? 1 : 0}>
+            {focusedField() === 2 ? '> ' : '  '}
             {FIELD_LABELS.project}
           </text>
         </box>
         <Show
-          when={focusedField() === 1}
+          when={focusedField() === 2}
           fallback={
             <box height={1}>
               <text
@@ -368,13 +405,13 @@ export function TaskForm(props: TaskFormProps) {
       {/* Priority */}
       <box flexDirection="row">
         <box width={14} height={1}>
-          <text fg={labelColor(2)} attributes={focusedField() === 2 ? 1 : 0}>
-            {focusedField() === 2 ? '> ' : '  '}
+          <text fg={labelColor(3)} attributes={focusedField() === 3 ? 1 : 0}>
+            {focusedField() === 3 ? '> ' : '  '}
             {FIELD_LABELS.priority}
           </text>
         </box>
         <Show
-          when={focusedField() === 2}
+          when={focusedField() === 3}
           fallback={
             <box height={1}>
               <text fg={priInfo().color}>{priInfo().label}</text>
@@ -398,13 +435,13 @@ export function TaskForm(props: TaskFormProps) {
       {/* Tags */}
       <box flexDirection="row">
         <box width={14} height={1}>
-          <text fg={labelColor(3)} attributes={focusedField() === 3 ? 1 : 0}>
-            {focusedField() === 3 ? '> ' : '  '}
+          <text fg={labelColor(4)} attributes={focusedField() === 4 ? 1 : 0}>
+            {focusedField() === 4 ? '> ' : '  '}
             {FIELD_LABELS.tags}
           </text>
         </box>
         <Show
-          when={focusedField() === 3}
+          when={focusedField() === 4}
           fallback={
             <box height={1}>
               <text fg={selectedTags().size > 0 ? FG_NORMAL : FG_DIM}>
@@ -481,8 +518,8 @@ export function TaskForm(props: TaskFormProps) {
       {/* Due */}
       <box height={1} flexDirection="row">
         <box width={14}>
-          <text fg={labelColor(4)} attributes={focusedField() === 4 ? 1 : 0}>
-            {focusedField() === 4 ? '> ' : '  '}
+          <text fg={labelColor(5)} attributes={focusedField() === 5 ? 1 : 0}>
+            {focusedField() === 5 ? '> ' : '  '}
             {FIELD_LABELS.due}
           </text>
         </box>
@@ -490,8 +527,8 @@ export function TaskForm(props: TaskFormProps) {
           width={60}
           value={due()}
           placeholder="e.g. tomorrow, eow, 2026-03-01"
-          focused={focusedField() === 4}
-          backgroundColor={focusedField() === 4 ? BG_INPUT_FOCUS : BG_INPUT}
+          focused={focusedField() === 5}
+          backgroundColor={focusedField() === 5 ? BG_INPUT_FOCUS : BG_INPUT}
           textColor={FG_NORMAL}
           onInput={(val: string) => setDue(val)}
         />
@@ -503,7 +540,7 @@ export function TaskForm(props: TaskFormProps) {
       {/* Validation hint */}
       <Show when={!description().trim()}>
         <box height={1}>
-          <text fg={COLOR_ERROR}>{'  * Description is required'}</text>
+          <text fg={COLOR_ERROR}>{'  * Title is required'}</text>
         </box>
       </Show>
 
