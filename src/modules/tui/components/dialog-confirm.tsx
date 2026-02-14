@@ -24,10 +24,14 @@ export function DialogConfirm(props: DialogConfirmProps) {
       <text fg={FG_NORMAL}>{props.message}</text>
       <box height={1} />
       <box flexDirection="row">
-        <text fg={COLOR_SUCCESS} attributes={1}>{' [Y] '}</text>
-        <text fg={FG_DIM}>{'Yes    '}</text>
-        <text fg={ACCENT_PRIMARY} attributes={1}>{' [N] '}</text>
-        <text fg={FG_DIM}>{'No'}</text>
+        <box border={1} paddingX={1} marginRight={2}>
+          <text fg={COLOR_SUCCESS} attributes={1}>{'Y'}</text>
+          <text fg={FG_DIM}>{' Yes'}</text>
+        </box>
+        <box border={1} paddingX={1}>
+          <text fg={ACCENT_PRIMARY} attributes={1}>{'N'}</text>
+          <text fg={FG_DIM}>{' No'}</text>
+        </box>
       </box>
     </box>
   );
