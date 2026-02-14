@@ -258,8 +258,12 @@ export function ReposView() {
       return;
     }
 
-    // Enter on a PR — open full PR detail dialog
+    // Enter: on repos pane → switch to PRs, on PRs pane → open detail
     if (key.name === 'return') {
+      if (pane === 'repos' && repos().length > 0) {
+        setActivePane('prs');
+        return;
+      }
       if (pane === 'prs') {
         const repoList = repos();
         const repo = repoList[repoIndex()];

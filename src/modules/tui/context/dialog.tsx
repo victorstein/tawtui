@@ -127,7 +127,7 @@ export function DialogProvider(props: ParentProps) {
               top={dialogTop()}
               left={dialogLeft()}
               width={dialogWidth()}
-              height={dialogHeight()}
+              maxHeight={dialogHeight()}
               flexDirection="column"
               backgroundColor={BG_SURFACE}
               borderStyle="rounded"
