@@ -13,6 +13,7 @@
 - **Codebase**: `src/modules/tui/`
 - **Use for**: Components, views, theme tokens, dialogs, keyboard handling
 - **Model**: Opus
+- **Design Reference**: `.claude/docs/tui-design-reference.md` — semantic tokens, gradient patterns, button styles, border conventions, powerline caps, selection/focus patterns. **Must read before building any new component.**
 
 ## @planning
 

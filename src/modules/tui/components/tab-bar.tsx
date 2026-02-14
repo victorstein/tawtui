@@ -1,5 +1,5 @@
 import { type Accessor, For, Index } from 'solid-js';
-import { BG_BASE, ACCENT_PRIMARY, BORDER_DIM } from '../theme';
+import { ACCENT_PRIMARY, BORDER_DIM } from '../theme';
 
 const LEFT_CAP = '\uE0B6';
 const RIGHT_CAP = '\uE0B4';
@@ -35,7 +35,6 @@ export function TabBar(props: TabBarProps) {
       justifyContent="center"
       alignItems="center"
       paddingTop={1}
-      backgroundColor={BG_BASE}
     >
       <Index each={props.tabs}>
         {(tab, index) => {
