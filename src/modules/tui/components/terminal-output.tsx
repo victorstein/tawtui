@@ -1,5 +1,13 @@
 import { Show } from 'solid-js';
 import type { CaptureResult } from '../../terminal.types';
+import {
+  ACCENT_PRIMARY,
+  BORDER_DIM,
+  SEPARATOR_COLOR,
+  FG_NORMAL,
+  FG_DIM,
+  FG_MUTED,
+} from '../theme';
 
 interface TerminalOutputProps {
   capture: CaptureResult | null;
@@ -20,15 +28,15 @@ export function TerminalOutput(props: TerminalOutputProps) {
   };
 
   const headerColor = () => {
-    if (props.isInteractive) return '#e94560';
-    if (props.isActivePane) return '#e94560';
-    return '#888888';
+    if (props.isInteractive) return ACCENT_PRIMARY;
+    if (props.isActivePane) return ACCENT_PRIMARY;
+    return FG_DIM;
   };
 
-  const borderColor = () => {
-    if (props.isInteractive) return '#e94560';
-    if (props.isActivePane) return '#e94560';
-    return '#333333';
+  const borderColorVal = () => {
+    if (props.isInteractive) return ACCENT_PRIMARY;
+    if (props.isActivePane) return ACCENT_PRIMARY;
+    return BORDER_DIM;
   };
 
   const borderStyle = () => {
@@ -43,7 +51,7 @@ export function TerminalOutput(props: TerminalOutputProps) {
       flexGrow={1}
       height="100%"
       borderStyle={borderStyle()}
-      borderColor={borderColor()}
+      borderColor={borderColorVal()}
     >
       {/* Header */}
       <box height={1} width="100%" paddingX={1} flexDirection="row">
@@ -58,7 +66,7 @@ export function TerminalOutput(props: TerminalOutputProps) {
 
       {/* Separator */}
       <box height={1} width="100%">
-        <text fg={props.isInteractive ? '#e94560' : '#333333'} truncate>
+        <text fg={props.isInteractive ? ACCENT_PRIMARY : SEPARATOR_COLOR} truncate>
           {props.isInteractive
             ? '\u2550'.repeat(200)
             : '\u2500'.repeat(200)}
@@ -71,7 +79,7 @@ export function TerminalOutput(props: TerminalOutputProps) {
           when={props.agentName}
           fallback={
             <box paddingX={1} paddingY={1}>
-              <text fg="#555555">No agent selected</text>
+              <text fg={FG_MUTED}>No agent selected</text>
             </box>
           }
         >
@@ -79,7 +87,7 @@ export function TerminalOutput(props: TerminalOutputProps) {
             when={props.capture}
             fallback={
               <box paddingX={1} paddingY={1}>
-                <text fg="#888888">Waiting for output...</text>
+                <text fg={FG_DIM}>Waiting for output...</text>
               </box>
             }
           >
@@ -87,12 +95,12 @@ export function TerminalOutput(props: TerminalOutputProps) {
               <box flexDirection="column" flexGrow={1} width="100%">
                 {/* Terminal content — ANSI escape sequences rendered natively */}
                 <box flexGrow={1} width="100%">
-                  <text fg="#cccccc">{capture().content}</text>
+                  <text fg={FG_NORMAL}>{capture().content}</text>
                 </box>
 
                 {/* Cursor position indicator */}
                 <box height={1} width="100%" paddingX={1}>
-                  <text fg="#555555">
+                  <text fg={FG_MUTED}>
                     {`cursor: ${capture().cursor.x},${capture().cursor.y}`}
                   </text>
                 </box>

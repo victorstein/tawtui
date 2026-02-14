@@ -11,6 +11,19 @@ import type { Task } from '../../taskwarrior.types';
 import type { TaskwarriorService } from '../../taskwarrior.service';
 import { DialogConfirm } from './dialog-confirm';
 import { useDialog } from '../context/dialog';
+import {
+  BG_SELECTED,
+  FG_PRIMARY,
+  FG_NORMAL,
+  FG_DIM,
+  FG_MUTED,
+  ACCENT_PRIMARY,
+  SEPARATOR_COLOR,
+  COLOR_ERROR,
+  PRIORITY_H,
+  PRIORITY_M,
+  PRIORITY_L,
+} from '../theme';
 
 /**
  * Access the TaskwarriorService bridged from NestJS DI via globalThis.
@@ -20,9 +33,9 @@ function getTaskwarriorService(): TaskwarriorService | null {
 }
 
 const PRIORITY_COLORS: Record<string, string> = {
-  H: '#e94560',
-  M: '#f0a500',
-  L: '#4ecca3',
+  H: PRIORITY_H,
+  M: PRIORITY_M,
+  L: PRIORITY_L,
 };
 
 const MONTH_NAMES = [
@@ -325,17 +338,17 @@ export function ArchiveView(props: ArchiveViewProps) {
     <box flexDirection="column" flexGrow={1} width="100%">
       {/* Archive header */}
       <box height={1} paddingX={1}>
-        <text fg="#e94560" attributes={1}>
+        <text fg={ACCENT_PRIMARY} attributes={1}>
           {'ARCHIVE'}
         </text>
-        <text fg="#888888">
+        <text fg={FG_DIM}>
           {` \u2014 ${tasks().length} completed task${tasks().length !== 1 ? 's' : ''}`}
         </text>
       </box>
 
       {/* Separator */}
       <box height={1} paddingX={1}>
-        <text fg="#333333" truncate>
+        <text fg={SEPARATOR_COLOR} truncate>
           {'\u2500'.repeat(Math.max(contentWidth() - 2, 1))}
         </text>
       </box>
@@ -343,21 +356,21 @@ export function ArchiveView(props: ArchiveViewProps) {
       {/* Loading */}
       <Show when={loading() && tasks().length === 0}>
         <box height={1} paddingX={1}>
-          <text fg="#888888">Loading archive...</text>
+          <text fg={FG_DIM}>Loading archive...</text>
         </box>
       </Show>
 
       {/* Error */}
       <Show when={error()}>
         <box height={1} paddingX={1}>
-          <text fg="#e94560">Error: {error()}</text>
+          <text fg={COLOR_ERROR}>Error: {error()}</text>
         </box>
       </Show>
 
       {/* Empty state */}
       <Show when={!loading() && !error() && tasks().length === 0}>
         <box paddingX={2} paddingY={1}>
-          <text fg="#555555">No archived tasks found.</text>
+          <text fg={FG_MUTED}>No archived tasks found.</text>
         </box>
       </Show>
 
@@ -377,7 +390,7 @@ export function ArchiveView(props: ArchiveViewProps) {
                 }
               >
                 <box height={1} paddingX={1} marginTop={flatIdx() > 0 ? 1 : 0}>
-                  <text fg="#e94560" attributes={1}>
+                  <text fg={ACCENT_PRIMARY} attributes={1}>
                     {(item as { type: 'header'; label: string }).label}
                   </text>
                 </box>
@@ -408,8 +421,8 @@ function ArchiveTaskRow(props: ArchiveTaskRowProps) {
 
   const priorityColor = () => {
     const p = task().priority;
-    if (!p) return '#888888';
-    return PRIORITY_COLORS[p] ?? '#888888';
+    if (!p) return FG_DIM;
+    return PRIORITY_COLORS[p] ?? FG_DIM;
   };
 
   const metaLine = () => {
@@ -432,7 +445,7 @@ function ArchiveTaskRow(props: ArchiveTaskRowProps) {
     <box
       flexDirection="column"
       width="100%"
-      backgroundColor={selected() ? '#16213e' : undefined}
+      backgroundColor={selected() ? BG_SELECTED : undefined}
       paddingX={2}
     >
       {/* First line: priority badge + description */}
@@ -443,7 +456,7 @@ function ArchiveTaskRow(props: ArchiveTaskRowProps) {
           </text>
         </Show>
         <text
-          fg={selected() ? '#ffffff' : '#cccccc'}
+          fg={selected() ? FG_PRIMARY : FG_NORMAL}
           attributes={selected() ? 1 : 0}
           truncate
         >
@@ -454,7 +467,7 @@ function ArchiveTaskRow(props: ArchiveTaskRowProps) {
       {/* Second line: completion date, project */}
       <Show when={metaLine()}>
         <box height={1} width="100%">
-          <text fg="#666666" truncate>
+          <text fg={FG_MUTED} truncate>
             {'  ' + metaLine()}
           </text>
         </box>

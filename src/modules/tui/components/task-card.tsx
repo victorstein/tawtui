@@ -1,5 +1,20 @@
 import { Show, For } from 'solid-js';
 import type { Task } from '../../taskwarrior.types';
+import {
+  BG_SELECTED,
+  FG_PRIMARY,
+  FG_NORMAL,
+  FG_DIM,
+  FG_MUTED,
+  FG_FAINT,
+  ACCENT_PRIMARY,
+  ACCENT_SECONDARY,
+  ACCENT_TERTIARY,
+  PRIORITY_H,
+  PRIORITY_M,
+  PRIORITY_L,
+  COLOR_ERROR,
+} from '../theme';
 
 interface TaskCardProps {
   task: Task;
@@ -8,21 +23,21 @@ interface TaskCardProps {
 }
 
 const PRIORITY_COLORS: Record<string, string> = {
-  H: '#e94560',
-  M: '#f0a500',
-  L: '#4ecca3',
+  H: PRIORITY_H,
+  M: PRIORITY_M,
+  L: PRIORITY_L,
 };
 
 /** Palette of distinct colors for tag rendering. */
 const TAG_COLORS = [
-  '#e94560',
-  '#4ecca3',
-  '#f0a500',
-  '#6c5ce7',
-  '#00cec9',
-  '#fd79a8',
-  '#55efc4',
-  '#74b9ff',
+  ACCENT_SECONDARY,  // #c334ec — bright purple
+  '#55efc4',         // green
+  '#f0a500',         // amber
+  ACCENT_TERTIARY,   // #8e3cd9 — medium purple
+  '#00cec9',         // teal
+  ACCENT_PRIMARY,    // #f72cff — neon pink
+  '#74b9ff',         // sky blue
+  '#fd79a8',         // rose
 ];
 
 /** Color used specifically for project tags. */
@@ -83,8 +98,8 @@ export function TaskCard(props: TaskCardProps) {
 
   const priorityColor = () => {
     const p = task().priority;
-    if (!p) return '#888888';
-    return PRIORITY_COLORS[p] ?? '#888888';
+    if (!p) return FG_DIM;
+    return PRIORITY_COLORS[p] ?? FG_DIM;
   };
 
   /** Structured tag parts for individually colored rendering. */
@@ -114,15 +129,15 @@ export function TaskCard(props: TaskCardProps) {
     if (task().due) {
       const dateStr = formatDueDate(task().due!);
       if (isOverdue(task().due!)) {
-        parts.push({ text: `@${dateStr} OVERDUE`, color: '#e94560' });
+        parts.push({ text: `@${dateStr} OVERDUE`, color: COLOR_ERROR });
       } else {
-        parts.push({ text: `@${dateStr}`, color: '#888888' });
+        parts.push({ text: `@${dateStr}`, color: FG_DIM });
       }
     }
 
     // Dependency indicator
     if (task().depends) {
-      parts.push({ text: 'BLOCKED', color: '#e94560' });
+      parts.push({ text: 'BLOCKED', color: COLOR_ERROR });
     }
 
     return parts;
@@ -134,7 +149,7 @@ export function TaskCard(props: TaskCardProps) {
     <box
       flexDirection="column"
       width="100%"
-      backgroundColor={selected() ? '#16213e' : undefined}
+      backgroundColor={selected() ? BG_SELECTED : undefined}
       paddingX={1}
     >
       {/* First line: priority badge + description */}
@@ -145,7 +160,7 @@ export function TaskCard(props: TaskCardProps) {
           </text>
         </Show>
         <text
-          fg={selected() ? '#ffffff' : '#cccccc'}
+          fg={selected() ? FG_PRIMARY : FG_NORMAL}
           attributes={selected() ? 1 : 0}
           truncate
         >
@@ -156,12 +171,12 @@ export function TaskCard(props: TaskCardProps) {
       {/* Second line: tags, project, due date — each tag individually colored */}
       <Show when={hasTagParts()}>
         <box height={1} width="100%" flexDirection="row">
-          <text fg="#666666">{'  '}</text>
+          <text fg={FG_FAINT}>{'  '}</text>
           <For each={tagParts()}>
             {(part, index) => (
               <>
                 <Show when={index() > 0}>
-                  <text fg="#555555">{' '}</text>
+                  <text fg={FG_FAINT}>{' '}</text>
                 </Show>
                 <text
                   fg={part.color}

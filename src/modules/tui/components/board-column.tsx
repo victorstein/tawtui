@@ -1,6 +1,13 @@
 import { For, Show } from 'solid-js';
 import type { Task } from '../../taskwarrior.types';
 import { TaskCard } from './task-card';
+import {
+  ACCENT_PRIMARY,
+  BORDER_DIM,
+  FG_DIM,
+  FG_MUTED,
+  SEPARATOR_COLOR,
+} from '../theme';
 
 interface BoardColumnProps {
   title: string;
@@ -19,12 +26,12 @@ export function BoardColumn(props: BoardColumnProps) {
       width={props.width}
       height="100%"
       borderStyle={props.isActiveColumn ? 'double' : 'single'}
-      borderColor={props.isActiveColumn ? '#e94560' : '#333333'}
+      borderColor={props.isActiveColumn ? ACCENT_PRIMARY : BORDER_DIM}
     >
       {/* Column header */}
       <box height={1} width="100%" paddingX={1}>
         <text
-          fg={props.isActiveColumn ? '#e94560' : '#888888'}
+          fg={props.isActiveColumn ? ACCENT_PRIMARY : FG_DIM}
           attributes={1}
           truncate
         >
@@ -34,7 +41,7 @@ export function BoardColumn(props: BoardColumnProps) {
 
       {/* Separator line */}
       <box height={1} width="100%">
-        <text fg="#333333" truncate>
+        <text fg={SEPARATOR_COLOR} truncate>
           {'\u2500'.repeat(Math.max(props.width - 2, 1))}
         </text>
       </box>
@@ -45,7 +52,7 @@ export function BoardColumn(props: BoardColumnProps) {
           when={props.tasks.length > 0}
           fallback={
             <box paddingX={1} paddingY={1}>
-              <text fg="#555555">No tasks</text>
+              <text fg={FG_MUTED}>No tasks</text>
             </box>
           }
         >

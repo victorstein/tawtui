@@ -1,5 +1,17 @@
 import { For, Show } from 'solid-js';
 import type { TerminalSession } from '../../terminal.types';
+import {
+  ACCENT_PRIMARY,
+  BORDER_DIM,
+  SEPARATOR_COLOR,
+  BG_SELECTED,
+  FG_PRIMARY,
+  FG_NORMAL,
+  FG_DIM,
+  FG_MUTED,
+  COLOR_SUCCESS,
+  COLOR_ERROR,
+} from '../theme';
 
 interface AgentListProps {
   agents: TerminalSession[];
@@ -10,9 +22,9 @@ interface AgentListProps {
 
 /** Status indicator color mapping. */
 const STATUS_COLORS: Record<string, string> = {
-  running: '#4ecca3',
-  done: '#888888',
-  failed: '#e94560',
+  running: COLOR_SUCCESS,
+  done: FG_DIM,
+  failed: COLOR_ERROR,
 };
 
 /** Status dot character. */
@@ -27,12 +39,12 @@ export function AgentList(props: AgentListProps) {
       width={props.width}
       height="100%"
       borderStyle={props.isActivePane ? 'double' : 'single'}
-      borderColor={props.isActivePane ? '#e94560' : '#333333'}
+      borderColor={props.isActivePane ? ACCENT_PRIMARY : BORDER_DIM}
     >
       {/* Header */}
       <box height={1} width="100%" paddingX={1}>
         <text
-          fg={props.isActivePane ? '#e94560' : '#888888'}
+          fg={props.isActivePane ? ACCENT_PRIMARY : FG_DIM}
           attributes={1}
           truncate
         >
@@ -42,7 +54,7 @@ export function AgentList(props: AgentListProps) {
 
       {/* Separator */}
       <box height={1} width="100%">
-        <text fg="#333333" truncate>
+        <text fg={SEPARATOR_COLOR} truncate>
           {'\u2500'.repeat(Math.max(props.width - 2, 1))}
         </text>
       </box>
@@ -53,9 +65,9 @@ export function AgentList(props: AgentListProps) {
           when={props.agents.length > 0}
           fallback={
             <box paddingX={1} paddingY={1} flexDirection="column">
-              <text fg="#555555">No agents running</text>
+              <text fg={FG_MUTED}>No agents running</text>
               <box height={1} />
-              <text fg="#666666">Press 'n' to spawn a new agent</text>
+              <text fg={FG_MUTED}>Press 'n' to spawn a new agent</text>
             </box>
           }
         >
@@ -64,7 +76,7 @@ export function AgentList(props: AgentListProps) {
               const isSelected = () =>
                 props.isActivePane && index() === props.selectedIndex;
               const statusColor = () =>
-                STATUS_COLORS[agent.status] ?? '#888888';
+                STATUS_COLORS[agent.status] ?? FG_DIM;
 
               /** Build the metadata line (PR or task association). */
               const metaText = () => {
@@ -82,14 +94,14 @@ export function AgentList(props: AgentListProps) {
                 <box
                   width="100%"
                   flexDirection="column"
-                  backgroundColor={isSelected() ? '#16213e' : undefined}
+                  backgroundColor={isSelected() ? BG_SELECTED : undefined}
                   paddingX={1}
                 >
                   {/* Line 1: status dot + session name */}
                   <box height={1} width="100%" flexDirection="row">
                     <text fg={statusColor()}>{STATUS_DOT} </text>
                     <text
-                      fg={isSelected() ? '#ffffff' : '#cccccc'}
+                      fg={isSelected() ? FG_PRIMARY : FG_NORMAL}
                       attributes={isSelected() ? 1 : 0}
                       truncate
                     >
@@ -100,7 +112,7 @@ export function AgentList(props: AgentListProps) {
                   {/* Line 2: metadata (PR / task) if present */}
                   <Show when={metaText()}>
                     <box height={1} width="100%" paddingX={0}>
-                      <text fg="#666666" truncate>
+                      <text fg={FG_MUTED} truncate>
                         {`  ${metaText()}`}
                       </text>
                     </box>

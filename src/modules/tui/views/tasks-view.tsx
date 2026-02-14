@@ -7,6 +7,14 @@ import { TaskForm } from '../components/task-form';
 import { FilterBar } from '../components/filter-bar';
 import { ArchiveView } from '../components/archive-view';
 import { useDialog } from '../context/dialog';
+import {
+  BG_BASE,
+  FG_DIM,
+  FG_MUTED,
+  ACCENT_PRIMARY,
+  ACCENT_SECONDARY,
+  COLOR_ERROR,
+} from '../theme';
 
 /** Column definitions for the kanban board. */
 const COLUMNS = ['TODO', 'IN PROGRESS', 'DONE'] as const;
@@ -402,24 +410,24 @@ export function TasksView(props: TasksViewProps) {
 
         {/* Active filter indicator — shown when a filter is applied but bar is closed */}
         <Show when={!filterActive() && appliedFilter().trim()}>
-          <box height={1} width="100%" paddingX={1} backgroundColor="#1a1a2e">
-            <text fg="#e94560" attributes={1}>{'Filter: '}</text>
-            <text fg="#4ecca3">{appliedFilter()}</text>
-            <text fg="#555555">{'  (press / to edit, Esc in filter to clear)'}</text>
+          <box height={1} width="100%" paddingX={1} backgroundColor={BG_BASE}>
+            <text fg={ACCENT_PRIMARY} attributes={1}>{'Filter: '}</text>
+            <text fg={ACCENT_SECONDARY}>{appliedFilter()}</text>
+            <text fg={FG_MUTED}>{'  (press / to edit, Esc in filter to clear)'}</text>
           </box>
         </Show>
 
         {/* Loading indicator */}
         <Show when={loading() && !todoTasks().length && !inProgressTasks().length}>
           <box height={1} paddingX={1}>
-            <text fg="#888888">Loading tasks...</text>
+            <text fg={FG_DIM}>Loading tasks...</text>
           </box>
         </Show>
 
         {/* Error message */}
         <Show when={error()}>
           <box height={1} paddingX={1}>
-            <text fg="#e94560">Error: {error()}</text>
+            <text fg={COLOR_ERROR}>Error: {error()}</text>
           </box>
         </Show>
 

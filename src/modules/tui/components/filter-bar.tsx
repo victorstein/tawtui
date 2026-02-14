@@ -1,6 +1,23 @@
 import { createSignal, Show, For, onMount } from 'solid-js';
 import { useKeyboard } from '@opentui/solid';
 import type { TaskwarriorService } from '../../taskwarrior.service';
+import {
+  BG_BASE,
+  BG_SURFACE,
+  BG_INPUT,
+  BG_INPUT_FOCUS,
+  BG_SELECTED,
+  BORDER_DIM,
+  FG_PRIMARY,
+  FG_NORMAL,
+  FG_DIM,
+  FG_MUTED,
+  FG_FAINT,
+  ACCENT_PRIMARY,
+  ACCENT_SECONDARY,
+  ACCENT_TERTIARY,
+  COLOR_SUCCESS,
+} from '../theme';
 
 interface FilterBarProps {
   /** Current filter text value (two-way binding). */
@@ -188,11 +205,11 @@ export function FilterBar(props: FilterBarProps) {
         height={1}
         width="100%"
         flexDirection="row"
-        backgroundColor="#1a1a2e"
+        backgroundColor={BG_BASE}
         paddingX={1}
       >
         {/* Filter icon / label */}
-        <text fg="#e94560" attributes={1}>
+        <text fg={ACCENT_PRIMARY} attributes={1}>
           {'/ Filter: '}
         </text>
 
@@ -202,8 +219,8 @@ export function FilterBar(props: FilterBarProps) {
           value={props.filterText}
           placeholder="e.g. project:work +urgent priority:H"
           focused={props.focused && !showSuggestions()}
-          backgroundColor="#232335"
-          textColor="#ddddee"
+          backgroundColor={BG_INPUT}
+          textColor={FG_NORMAL}
           onInput={(val: string) => props.onFilterTextChange(val)}
         />
       </box>
@@ -215,16 +232,16 @@ export function FilterBar(props: FilterBarProps) {
           width="100%"
           flexDirection="row"
           paddingX={1}
-          backgroundColor="#1a1a2e"
+          backgroundColor={BG_BASE}
         >
-          <text fg="#555555">{'Active: '}</text>
+          <text fg={FG_MUTED}>{'Active: '}</text>
           <For each={chips()}>
             {(chip, index) => (
               <>
                 <Show when={index() > 0}>
-                  <text fg="#333333">{' '}</text>
+                  <text fg={FG_FAINT}>{' '}</text>
                 </Show>
-                <text fg="#4ecca3" attributes={1}>
+                <text fg={ACCENT_SECONDARY} attributes={1}>
                   {`[${chip}]`}
                 </text>
               </>
@@ -239,16 +256,16 @@ export function FilterBar(props: FilterBarProps) {
         width="100%"
         flexDirection="row"
         paddingX={1}
-        backgroundColor="#1a1a2e"
+        backgroundColor={BG_BASE}
       >
-        <text fg="#4ecca3" attributes={1}>{' [Enter] '}</text>
-        <text fg="#aaaaaa">{'Apply'}</text>
-        <text fg="#888888">{'  |  '}</text>
-        <text fg="#cc8888" attributes={1}>{' [Esc] '}</text>
-        <text fg="#aaaaaa">{'Clear & Close'}</text>
-        <text fg="#888888">{'  |  '}</text>
-        <text fg="#88aacc" attributes={1}>{' [Tab] '}</text>
-        <text fg="#aaaaaa">{'Suggestions'}</text>
+        <text fg={COLOR_SUCCESS} attributes={1}>{' [Enter] '}</text>
+        <text fg={FG_DIM}>{'Apply'}</text>
+        <text fg={FG_MUTED}>{'  |  '}</text>
+        <text fg={ACCENT_PRIMARY} attributes={1}>{' [Esc] '}</text>
+        <text fg={FG_DIM}>{'Clear & Close'}</text>
+        <text fg={FG_MUTED}>{'  |  '}</text>
+        <text fg={ACCENT_TERTIARY} attributes={1}>{' [Tab] '}</text>
+        <text fg={FG_DIM}>{'Suggestions'}</text>
       </box>
 
       {/* Suggestions popup */}
@@ -256,12 +273,12 @@ export function FilterBar(props: FilterBarProps) {
         <box
           flexDirection="column"
           width="100%"
-          backgroundColor="#1e1e2e"
+          backgroundColor={BG_SURFACE}
           borderStyle="single"
-          borderColor="#444466"
+          borderColor={BORDER_DIM}
         >
           <box height={1} paddingX={1}>
-            <text fg="#888888" attributes={1}>
+            <text fg={FG_DIM} attributes={1}>
               {'Suggestions (Tab to cycle, Enter to select)'}
             </text>
           </box>
@@ -272,15 +289,15 @@ export function FilterBar(props: FilterBarProps) {
                 paddingX={1}
                 backgroundColor={
                   index() === selectedSuggestion()
-                    ? '#16213e'
+                    ? BG_SELECTED
                     : undefined
                 }
               >
                 <text
                   fg={
                     index() === selectedSuggestion()
-                      ? '#ffffff'
-                      : '#aaaaaa'
+                      ? FG_PRIMARY
+                      : FG_DIM
                   }
                   attributes={index() === selectedSuggestion() ? 1 : 0}
                 >

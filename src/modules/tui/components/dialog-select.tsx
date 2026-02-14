@@ -1,5 +1,14 @@
 import { createSignal, For } from 'solid-js';
 import { useKeyboard } from '@opentui/solid';
+import {
+  ACCENT_PRIMARY,
+  ACCENT_TERTIARY,
+  FG_PRIMARY,
+  FG_NORMAL,
+  FG_DIM,
+  FG_MUTED,
+  COLOR_SUCCESS,
+} from '../theme';
 
 interface SelectOption {
   label: string;
@@ -42,18 +51,18 @@ export function DialogSelect(props: DialogSelectProps) {
 
   return (
     <box flexDirection="column" paddingX={1} paddingY={1}>
-      <text fg="#ccccdd">{props.title}</text>
+      <text fg={FG_NORMAL}>{props.title}</text>
       <box height={1} />
       <For each={props.options}>
         {(option, index) => {
           const isSelected = () => selectedIndex() === index();
           return (
             <box height={1} flexDirection="row">
-              <text fg={isSelected() ? '#e94560' : '#555555'}>
+              <text fg={isSelected() ? ACCENT_PRIMARY : FG_MUTED}>
                 {isSelected() ? '  > ' : '    '}
               </text>
               <text
-                fg={isSelected() ? '#eeeeee' : '#888888'}
+                fg={isSelected() ? FG_PRIMARY : FG_DIM}
                 attributes={isSelected() ? 1 : 0}
               >
                 {option.label}
@@ -64,10 +73,10 @@ export function DialogSelect(props: DialogSelectProps) {
       </For>
       <box height={1} />
       <box flexDirection="row">
-        <text fg="#88aacc" attributes={1}>{' [Enter] '}</text>
-        <text fg="#aaaaaa">{'Select  '}</text>
-        <text fg="#cc8888" attributes={1}>{' [Esc] '}</text>
-        <text fg="#aaaaaa">{'Cancel'}</text>
+        <text fg={COLOR_SUCCESS} attributes={1}>{' [Enter] '}</text>
+        <text fg={FG_DIM}>{'Select  '}</text>
+        <text fg={ACCENT_PRIMARY} attributes={1}>{' [Esc] '}</text>
+        <text fg={FG_DIM}>{'Cancel'}</text>
       </box>
     </box>
   );

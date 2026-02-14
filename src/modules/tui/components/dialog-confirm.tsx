@@ -1,4 +1,5 @@
 import { useKeyboard } from '@opentui/solid';
+import { FG_NORMAL, FG_DIM, COLOR_SUCCESS, ACCENT_PRIMARY } from '../theme';
 
 interface DialogConfirmProps {
   message: string;
@@ -20,13 +21,13 @@ export function DialogConfirm(props: DialogConfirmProps) {
 
   return (
     <box flexDirection="column" paddingX={1} paddingY={1}>
-      <text fg="#ccccdd">{props.message}</text>
+      <text fg={FG_NORMAL}>{props.message}</text>
       <box height={1} />
       <box flexDirection="row">
-        <text fg="#88cc88" attributes={1}>{' [Y] '}</text>
-        <text fg="#aaaaaa">{'Yes    '}</text>
-        <text fg="#cc8888" attributes={1}>{' [N] '}</text>
-        <text fg="#aaaaaa">{'No'}</text>
+        <text fg={COLOR_SUCCESS} attributes={1}>{' [Y] '}</text>
+        <text fg={FG_DIM}>{'Yes    '}</text>
+        <text fg={ACCENT_PRIMARY} attributes={1}>{' [N] '}</text>
+        <text fg={FG_DIM}>{'No'}</text>
       </box>
     </box>
   );

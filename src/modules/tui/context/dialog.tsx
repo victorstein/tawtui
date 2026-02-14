@@ -8,6 +8,7 @@ import {
 } from 'solid-js';
 import { useKeyboard, useTerminalDimensions } from '@opentui/solid';
 import { RGBA } from '@opentui/core';
+import { BG_SURFACE, BORDER_DIALOG } from '../theme';
 
 export type DialogSize = 'small' | 'medium' | 'large';
 
@@ -113,9 +114,9 @@ export function DialogProvider(props: ParentProps) {
               left={dialogLeft()}
               width={dialogWidth()}
               flexDirection="column"
-              backgroundColor="#1e1e2e"
+              backgroundColor={BG_SURFACE}
               borderStyle="rounded"
-              borderColor="#444466"
+              borderColor={BORDER_DIALOG}
               zIndex={101}
             >
               {entry().content()}

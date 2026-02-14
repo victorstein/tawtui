@@ -1,4 +1,5 @@
 import type { Accessor } from 'solid-js';
+import { BG_BASE, FG_FAINT } from '../theme';
 
 interface StatusBarProps {
   activeTab: Accessor<number>;
@@ -27,9 +28,9 @@ export function StatusBar(props: StatusBarProps) {
     <box
       height={1}
       width="100%"
-      backgroundColor="#1a1a2e"
+      backgroundColor={BG_BASE}
     >
-      <text fg="#555555" truncate>{` ${hint()}`}</text>
+      <text fg={FG_FAINT} truncate>{` ${hint()}`}</text>
     </box>
   );
 }

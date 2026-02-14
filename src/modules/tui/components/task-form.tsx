@@ -1,6 +1,21 @@
 import { createSignal, Show } from 'solid-js';
 import { useKeyboard } from '@opentui/solid';
 import type { CreateTaskDto } from '../../taskwarrior.types';
+import {
+  BG_INPUT,
+  BG_INPUT_FOCUS,
+  FG_PRIMARY,
+  FG_NORMAL,
+  FG_DIM,
+  FG_MUTED,
+  ACCENT_PRIMARY,
+  ACCENT_TERTIARY,
+  COLOR_ERROR,
+  COLOR_SUCCESS,
+  PRIORITY_H,
+  PRIORITY_M,
+  PRIORITY_L,
+} from '../theme';
 
 interface TaskFormProps {
   mode: 'create' | 'edit';
@@ -23,10 +38,10 @@ const FIELD_LABELS: Record<FieldName, string> = {
 const PRIORITY_CYCLE: ('' | 'L' | 'M' | 'H')[] = ['', 'L', 'M', 'H'];
 
 const PRIORITY_DISPLAY: Record<string, { label: string; color: string }> = {
-  '': { label: 'None', color: '#555555' },
-  L: { label: 'Low', color: '#4ecca3' },
-  M: { label: 'Medium', color: '#f0a500' },
-  H: { label: 'High', color: '#e94560' },
+  '': { label: 'None', color: FG_MUTED },
+  L: { label: 'Low', color: PRIORITY_L },
+  M: { label: 'Medium', color: PRIORITY_M },
+  H: { label: 'High', color: PRIORITY_H },
 };
 
 export function TaskForm(props: TaskFormProps) {
@@ -96,7 +111,7 @@ export function TaskForm(props: TaskFormProps) {
   });
 
   const labelColor = (idx: number) =>
-    focusedField() === idx ? '#ddddee' : '#888888';
+    focusedField() === idx ? FG_NORMAL : FG_DIM;
 
   const priInfo = () => PRIORITY_DISPLAY[priority()] ?? PRIORITY_DISPLAY[''];
 
@@ -104,7 +119,7 @@ export function TaskForm(props: TaskFormProps) {
     <box flexDirection="column" paddingX={2} paddingY={1}>
       {/* Title */}
       <box height={1}>
-        <text fg="#ddddee" attributes={1}>
+        <text fg={FG_PRIMARY} attributes={1}>
           {props.mode === 'create' ? 'New Task' : 'Edit Task'}
         </text>
       </box>
@@ -123,8 +138,8 @@ export function TaskForm(props: TaskFormProps) {
           value={description()}
           placeholder="Task description (required)"
           focused={focusedField() === 0}
-          backgroundColor={focusedField() === 0 ? '#2a2a3e' : '#232335'}
-          textColor="#ddddee"
+          backgroundColor={focusedField() === 0 ? BG_INPUT_FOCUS : BG_INPUT}
+          textColor={FG_NORMAL}
           onInput={(val: string) => setDescription(val)}
         />
       </box>
@@ -143,8 +158,8 @@ export function TaskForm(props: TaskFormProps) {
           value={project()}
           placeholder="e.g. work, personal"
           focused={focusedField() === 1}
-          backgroundColor={focusedField() === 1 ? '#2a2a3e' : '#232335'}
-          textColor="#ddddee"
+          backgroundColor={focusedField() === 1 ? BG_INPUT_FOCUS : BG_INPUT}
+          textColor={FG_NORMAL}
           onInput={(val: string) => setProject(val)}
         />
       </box>
@@ -168,14 +183,14 @@ export function TaskForm(props: TaskFormProps) {
         >
           <box
             height={1}
-            backgroundColor="#2a2a3e"
+            backgroundColor={BG_INPUT_FOCUS}
             width={60}
             paddingX={1}
           >
             <text fg={priInfo().color} attributes={1}>
               {priInfo().label}
             </text>
-            <text fg="#555555">{' - press [p] to cycle'}</text>
+            <text fg={FG_MUTED}>{' - press [p] to cycle'}</text>
           </box>
         </Show>
       </box>
@@ -194,8 +209,8 @@ export function TaskForm(props: TaskFormProps) {
           value={tags()}
           placeholder="comma-separated, e.g. bug, urgent"
           focused={focusedField() === 3}
-          backgroundColor={focusedField() === 3 ? '#2a2a3e' : '#232335'}
-          textColor="#ddddee"
+          backgroundColor={focusedField() === 3 ? BG_INPUT_FOCUS : BG_INPUT}
+          textColor={FG_NORMAL}
           onInput={(val: string) => setTags(val)}
         />
       </box>
@@ -214,8 +229,8 @@ export function TaskForm(props: TaskFormProps) {
           value={due()}
           placeholder="e.g. tomorrow, eow, 2026-03-01"
           focused={focusedField() === 4}
-          backgroundColor={focusedField() === 4 ? '#2a2a3e' : '#232335'}
-          textColor="#ddddee"
+          backgroundColor={focusedField() === 4 ? BG_INPUT_FOCUS : BG_INPUT}
+          textColor={FG_NORMAL}
           onInput={(val: string) => setDue(val)}
         />
       </box>
@@ -226,19 +241,19 @@ export function TaskForm(props: TaskFormProps) {
       {/* Validation hint */}
       <Show when={!description().trim()}>
         <box height={1}>
-          <text fg="#e94560">{'  * Description is required'}</text>
+          <text fg={COLOR_ERROR}>{'  * Description is required'}</text>
         </box>
       </Show>
 
       {/* Key hints */}
       <box height={1} />
       <box height={1} flexDirection="row">
-        <text fg="#88aacc" attributes={1}>{' [Tab] '}</text>
-        <text fg="#aaaaaa">{'Next field  '}</text>
-        <text fg="#4ecca3" attributes={1}>{' [Enter] '}</text>
-        <text fg="#aaaaaa">{'Save  '}</text>
-        <text fg="#cc8888" attributes={1}>{' [Esc] '}</text>
-        <text fg="#aaaaaa">{'Cancel'}</text>
+        <text fg={ACCENT_TERTIARY} attributes={1}>{' [Tab] '}</text>
+        <text fg={FG_DIM}>{'Next field  '}</text>
+        <text fg={COLOR_SUCCESS} attributes={1}>{' [Enter] '}</text>
+        <text fg={FG_DIM}>{'Save  '}</text>
+        <text fg={ACCENT_PRIMARY} attributes={1}>{' [Esc] '}</text>
+        <text fg={FG_DIM}>{'Cancel'}</text>
       </box>
     </box>
   );

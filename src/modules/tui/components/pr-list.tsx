@@ -1,5 +1,18 @@
 import { For, Show } from 'solid-js';
 import type { PullRequest } from '../../github.types';
+import {
+  ACCENT_PRIMARY,
+  BORDER_DIM,
+  SEPARATOR_COLOR,
+  BG_SELECTED,
+  FG_PRIMARY,
+  FG_NORMAL,
+  FG_DIM,
+  FG_MUTED,
+  COLOR_SUCCESS,
+  COLOR_ERROR,
+  COLOR_WARNING,
+} from '../theme';
 
 interface PrListProps {
   prs: PullRequest[];
@@ -17,13 +30,13 @@ interface PrListProps {
 function getReviewIcon(decision: string | null): { char: string; color: string } {
   switch (decision) {
     case 'APPROVED':
-      return { char: '\u2713', color: '#4ecca3' }; // green checkmark
+      return { char: '\u2713', color: COLOR_SUCCESS };
     case 'CHANGES_REQUESTED':
-      return { char: '\u2717', color: '#e94560' }; // red X
+      return { char: '\u2717', color: COLOR_ERROR };
     case 'REVIEW_REQUIRED':
-      return { char: '\u25CF', color: '#f0a500' }; // yellow dot
+      return { char: '\u25CF', color: COLOR_WARNING };
     default:
-      return { char: '\u25CB', color: '#666666' }; // hollow circle, muted
+      return { char: '\u25CB', color: FG_MUTED };
   }
 }
 
@@ -34,25 +47,25 @@ function getCiIcon(
   checks: Array<{ name: string; status: string; conclusion: string | null }>,
 ): { char: string; color: string } {
   if (checks.length === 0) {
-    return { char: '\u25CB', color: '#666666' }; // no checks, hollow circle
+    return { char: '\u25CB', color: FG_MUTED };
   }
 
   const anyFailing = checks.some(
     (c) => c.conclusion === 'FAILURE' || c.conclusion === 'ERROR',
   );
   if (anyFailing) {
-    return { char: '\u2717', color: '#e94560' }; // red X
+    return { char: '\u2717', color: COLOR_ERROR };
   }
 
   const allPassed = checks.every(
     (c) => c.conclusion === 'SUCCESS' || c.conclusion === 'NEUTRAL' || c.conclusion === 'SKIPPED',
   );
   if (allPassed) {
-    return { char: '\u2713', color: '#4ecca3' }; // green checkmark
+    return { char: '\u2713', color: COLOR_SUCCESS };
   }
 
   // Some are still pending
-  return { char: '\u25CF', color: '#f0a500' }; // yellow dot
+  return { char: '\u25CF', color: COLOR_WARNING };
 }
 
 export function PrList(props: PrListProps) {
@@ -72,12 +85,12 @@ export function PrList(props: PrListProps) {
       flexGrow={1}
       height="100%"
       borderStyle={props.isActivePane ? 'double' : 'single'}
-      borderColor={props.isActivePane ? '#e94560' : '#333333'}
+      borderColor={props.isActivePane ? ACCENT_PRIMARY : BORDER_DIM}
     >
       {/* Header */}
       <box height={1} width="100%" paddingX={1}>
         <text
-          fg={props.isActivePane ? '#e94560' : '#888888'}
+          fg={props.isActivePane ? ACCENT_PRIMARY : FG_DIM}
           attributes={1}
           truncate
         >
@@ -88,7 +101,7 @@ export function PrList(props: PrListProps) {
       {/* Sub-header: repo name */}
       <Show when={subHeaderText()}>
         <box height={1} width="100%" paddingX={1}>
-          <text fg="#666666" truncate>
+          <text fg={FG_MUTED} truncate>
             {subHeaderText()}
           </text>
         </box>
@@ -96,7 +109,7 @@ export function PrList(props: PrListProps) {
 
       {/* Separator */}
       <box height={1} width="100%">
-        <text fg="#333333" truncate>
+        <text fg={SEPARATOR_COLOR} truncate>
           {'\u2500'.repeat(Math.max(props.width - 2, 1))}
         </text>
       </box>
@@ -105,19 +118,19 @@ export function PrList(props: PrListProps) {
       <scrollbox flexGrow={1} width="100%">
         <Show when={!props.repoLabel}>
           <box paddingX={1} paddingY={1}>
-            <text fg="#555555">No repo selected</text>
+            <text fg={FG_MUTED}>No repo selected</text>
           </box>
         </Show>
 
         <Show when={props.repoLabel && props.loading}>
           <box paddingX={1} paddingY={1}>
-            <text fg="#888888">Loading pull requests...</text>
+            <text fg={FG_DIM}>Loading pull requests...</text>
           </box>
         </Show>
 
         <Show when={props.repoLabel && props.error}>
           <box paddingX={1} paddingY={1}>
-            <text fg="#e94560">Error: {props.error}</text>
+            <text fg={COLOR_ERROR}>Error: {props.error}</text>
           </box>
         </Show>
 
@@ -126,7 +139,7 @@ export function PrList(props: PrListProps) {
             when={props.prs.length > 0}
             fallback={
               <box paddingX={1} paddingY={1}>
-                <text fg="#555555">No open pull requests</text>
+                <text fg={FG_MUTED}>No open pull requests</text>
               </box>
             }
           >
@@ -141,22 +154,22 @@ export function PrList(props: PrListProps) {
                   <box
                     width="100%"
                     flexDirection="column"
-                    backgroundColor={isSelected() ? '#16213e' : undefined}
+                    backgroundColor={isSelected() ? BG_SELECTED : undefined}
                     paddingX={1}
                   >
                     {/* Line 1: PR number + title + draft badge */}
                     <box height={1} width="100%" flexDirection="row">
                       <text
-                        fg={isSelected() ? '#e94560' : '#888888'}
+                        fg={isSelected() ? ACCENT_PRIMARY : FG_DIM}
                         attributes={1}
                       >
                         {`#${pr.number} `}
                       </text>
                       <Show when={pr.isDraft}>
-                        <text fg="#666666">[DRAFT] </text>
+                        <text fg={FG_MUTED}>[DRAFT] </text>
                       </Show>
                       <text
-                        fg={isSelected() ? '#ffffff' : '#cccccc'}
+                        fg={isSelected() ? FG_PRIMARY : FG_NORMAL}
                         attributes={isSelected() ? 1 : 0}
                         truncate
                       >
@@ -166,15 +179,15 @@ export function PrList(props: PrListProps) {
 
                     {/* Line 2: author, +/-lines, review icon, CI icon */}
                     <box height={1} width="100%" flexDirection="row">
-                      <text fg="#888888">
+                      <text fg={FG_DIM}>
                         {`  ${pr.author.login}  `}
                       </text>
-                      <text fg="#4ecca3">{`+${pr.additions}`}</text>
-                      <text fg="#888888">/</text>
-                      <text fg="#e94560">{`-${pr.deletions}`}</text>
-                      <text fg="#888888">{`  `}</text>
+                      <text fg={COLOR_SUCCESS}>{`+${pr.additions}`}</text>
+                      <text fg={FG_DIM}>/</text>
+                      <text fg={COLOR_ERROR}>{`-${pr.deletions}`}</text>
+                      <text fg={FG_DIM}>{`  `}</text>
                       <text fg={review().color}>{review().char}</text>
-                      <text fg="#888888"> </text>
+                      <text fg={FG_DIM}> </text>
                       <text fg={ci().color}>{ci().char}</text>
                     </box>
                   </box>

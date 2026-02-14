@@ -6,6 +6,8 @@ import { TasksView } from './views/tasks-view';
 import { ReposView } from './views/repos-view';
 import { AgentsView } from './views/agents-view';
 import { DialogProvider, useDialog } from './context/dialog';
+import { DialogConfirm } from './components/dialog-confirm';
+import { BG_BASE } from './theme';
 
 const TABS = [
   { name: 'Tasks' },
@@ -57,13 +59,25 @@ function AppContent() {
       return;
     }
 
-    // Quit
+    // Quit — show confirmation dialog
     if (key.name === 'q' && !key.ctrl && !key.meta) {
-      renderer.destroy();
-      const exit = (globalThis as any).__tuiExit;
-      if (typeof exit === 'function') {
-        exit();
-      }
+      dialog.show(
+        () => (
+          <DialogConfirm
+            message="Are you sure you want to quit?"
+            onConfirm={() => {
+              dialog.close();
+              renderer.destroy();
+              const exit = (globalThis as any).__tuiExit;
+              if (typeof exit === 'function') {
+                exit();
+              }
+            }}
+            onCancel={() => dialog.close()}
+          />
+        ),
+        { size: 'small' },
+      );
       return;
     }
   });
@@ -73,6 +87,7 @@ function AppContent() {
       flexDirection="column"
       width="100%"
       height="100%"
+      backgroundColor={BG_BASE}
     >
       <TabBar activeTab={activeTab} tabs={TABS} />
 

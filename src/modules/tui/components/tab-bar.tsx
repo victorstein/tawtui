@@ -1,4 +1,11 @@
 import { type Accessor, Index } from 'solid-js';
+import {
+  BG_BASE,
+  BG_SELECTED,
+  ACCENT_PRIMARY,
+  FG_MUTED,
+  SEPARATOR_COLOR,
+} from '../theme';
 
 export interface Tab {
   name: string;
@@ -15,7 +22,8 @@ export function TabBar(props: TabBarProps) {
       height={1}
       width="100%"
       flexDirection="row"
-      backgroundColor="#1a1a2e"
+      justifyContent="center"
+      backgroundColor={BG_BASE}
     >
       <Index each={props.tabs}>
         {(tab, index) => {
@@ -26,10 +34,10 @@ export function TabBar(props: TabBarProps) {
             <box
               width={label().length + 2}
               height={1}
-              backgroundColor={isActive() ? '#16213e' : '#1a1a2e'}
+              backgroundColor={isActive() ? BG_SELECTED : BG_BASE}
             >
               <text
-                fg={isActive() ? '#e94560' : '#666666'}
+                fg={isActive() ? ACCENT_PRIMARY : FG_MUTED}
                 attributes={isActive() ? 1 : 0}
               >
                 {` ${label()} `}
