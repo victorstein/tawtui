@@ -263,21 +263,21 @@ export function ReposView() {
           dialog.show(
             () => (
               <box flexDirection="column" paddingX={1} paddingY={1}>
-                <text fg="#f72cff" attributes={1}>
+                <text fg="#cb6836" attributes={1}>
                   {`PR #${pr.number}`}
                 </text>
                 <box height={1} />
-                <text fg="#ddddee">{pr.title}</text>
+                <text fg="#e8e0d8">{pr.title}</text>
                 <box height={1} />
-                <text fg="#9988bb">{`${pr.headRefName} -> ${pr.baseRefName}`}</text>
-                <text fg="#9988bb">{`Author: ${pr.author.login}`}</text>
-                <text fg="#9988bb">{`+${pr.additions} -${pr.deletions} (${pr.changedFiles} files)`}</text>
+                <text fg="#be9a87">{`${pr.headRefName} -> ${pr.baseRefName}`}</text>
+                <text fg="#be9a87">{`Author: ${pr.author.login}`}</text>
+                <text fg="#be9a87">{`+${pr.additions} -${pr.deletions} (${pr.changedFiles} files)`}</text>
                 <box height={1} />
-                <text fg="#6b5a8e">Full PR detail view coming soon...</text>
+                <text fg="#85a7a0">Full PR detail view coming soon...</text>
                 <box height={1} />
                 <box flexDirection="row">
-                  <text fg="#f72cff" attributes={1}>{' [Esc] '}</text>
-                  <text fg="#9988bb">Close</text>
+                  <text fg="#cb6836" attributes={1}>{' [Esc] '}</text>
+                  <text fg="#be9a87">Close</text>
                 </box>
               </box>
             ),
