@@ -1,4 +1,12 @@
-import { For, Show } from 'solid-js';
+import {
+  For,
+  Show,
+  Switch,
+  Match,
+  createSignal,
+  onMount,
+  onCleanup,
+} from 'solid-js';
 import type { PullRequest } from '../../github.types';
 import {
   ACCENT_PRIMARY,
@@ -27,7 +35,10 @@ interface PrListProps {
 /**
  * Returns a review decision indicator character and color.
  */
-function getReviewIcon(decision: string | null): { char: string; color: string } {
+function getReviewIcon(decision: string | null): {
+  char: string;
+  color: string;
+} {
   switch (decision) {
     case 'APPROVED':
       return { char: '\u2713', color: COLOR_SUCCESS };
@@ -58,7 +69,10 @@ function getCiIcon(
   }
 
   const allPassed = checks.every(
-    (c) => c.conclusion === 'SUCCESS' || c.conclusion === 'NEUTRAL' || c.conclusion === 'SKIPPED',
+    (c) =>
+      c.conclusion === 'SUCCESS' ||
+      c.conclusion === 'NEUTRAL' ||
+      c.conclusion === 'SKIPPED',
   );
   if (allPassed) {
     return { char: '\u2713', color: COLOR_SUCCESS };
@@ -69,6 +83,17 @@ function getCiIcon(
 }
 
 export function PrList(props: PrListProps) {
+  const spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+  const [spinnerIdx, setSpinnerIdx] = createSignal(0);
+
+  let spinnerInterval: ReturnType<typeof setInterval>;
+  onMount(() => {
+    spinnerInterval = setInterval(() => {
+      setSpinnerIdx((i) => (i + 1) % spinnerFrames.length);
+    }, 80);
+  });
+  onCleanup(() => clearInterval(spinnerInterval));
+
   const headerText = () => {
     if (!props.repoLabel) return 'PULL REQUESTS';
     return `PULL REQUESTS (${props.prs.length})`;
@@ -116,33 +141,29 @@ export function PrList(props: PrListProps) {
 
       {/* Content area */}
       <scrollbox flexGrow={1} width="100%">
-        <Show when={!props.repoLabel}>
-          <box paddingX={1} paddingY={1}>
-            <text fg={FG_DIM}>No repo selected</text>
-          </box>
-        </Show>
-
-        <Show when={props.repoLabel && props.loading}>
-          <box paddingX={1} paddingY={1}>
-            <text fg={FG_DIM}>Loading pull requests...</text>
-          </box>
-        </Show>
-
-        <Show when={props.repoLabel && props.error}>
-          <box paddingX={1} paddingY={1}>
-            <text fg={COLOR_ERROR}>Error: {props.error}</text>
-          </box>
-        </Show>
-
-        <Show when={props.repoLabel && !props.loading && !props.error}>
-          <Show
-            when={props.prs.length > 0}
-            fallback={
-              <box paddingX={1} paddingY={1}>
-                <text fg={FG_DIM}>No open pull requests</text>
-              </box>
-            }
-          >
+        <Switch>
+          <Match when={!props.repoLabel}>
+            <box paddingX={1} paddingY={1}>
+              <text fg={FG_DIM}>No repo selected</text>
+            </box>
+          </Match>
+          <Match when={props.loading && props.prs.length === 0}>
+            <box paddingX={1} paddingY={1} flexDirection="row">
+              <text fg={ACCENT_PRIMARY}>{spinnerFrames[spinnerIdx()]}</text>
+              <text fg={FG_DIM}> Loading pull requests...</text>
+            </box>
+          </Match>
+          <Match when={props.error}>
+            <box paddingX={1} paddingY={1}>
+              <text fg={COLOR_ERROR}>Error: {props.error}</text>
+            </box>
+          </Match>
+          <Match when={props.prs.length === 0}>
+            <box paddingX={1} paddingY={1}>
+              <text fg={FG_DIM}>No open pull requests</text>
+            </box>
+          </Match>
+          <Match when={props.prs.length > 0}>
             <For each={props.prs}>
               {(pr, index) => {
                 const isSelected = () =>
@@ -179,9 +200,7 @@ export function PrList(props: PrListProps) {
 
                     {/* Line 2: author, +/-lines, review icon, CI icon */}
                     <box height={1} width="100%" flexDirection="row">
-                      <text fg={FG_DIM}>
-                        {`  ${pr.author.login}  `}
-                      </text>
+                      <text fg={FG_DIM}>{`  ${pr.author.login}  `}</text>
                       <text fg={COLOR_SUCCESS}>{`+${pr.additions}`}</text>
                       <text fg={FG_DIM}>/</text>
                       <text fg={COLOR_ERROR}>{`-${pr.deletions}`}</text>
@@ -194,8 +213,8 @@ export function PrList(props: PrListProps) {
                 );
               }}
             </For>
-          </Show>
-        </Show>
+          </Match>
+        </Switch>
       </scrollbox>
     </box>
   );

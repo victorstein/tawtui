@@ -24,6 +24,18 @@ export class TuiService {
       githubService: this.githubService,
       configService: this.configService,
       terminalService: this.terminalService,
+      createPrReviewSession: (
+        prNumber: number,
+        repoOwner: string,
+        repoName: string,
+        prTitle: string,
+      ) =>
+        this.terminalService.createPrReviewSession(
+          prNumber,
+          repoOwner,
+          repoName,
+          prTitle,
+        ),
     };
 
     // Set up the exit promise before rendering so the App component
