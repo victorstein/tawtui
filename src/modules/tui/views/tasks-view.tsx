@@ -19,6 +19,9 @@ import {
 /** Column definitions for the kanban board. */
 const COLUMNS = ['TODO', 'IN PROGRESS', 'DONE'] as const;
 
+const DIALOG_GRAD_START = '#5a7aaa';
+const DIALOG_GRAD_END = '#2a4a7a';
+
 /**
  * Access the TaskwarriorService bridged from NestJS DI via globalThis.
  * The TuiService sets this before rendering.
@@ -315,7 +318,7 @@ export function TasksView(props: TasksViewProps) {
             onCancel={() => dialog.close()}
           />
         ),
-        { size: 'large' },
+        { size: 'large', gradStart: DIALOG_GRAD_START, gradEnd: DIALOG_GRAD_END },
       );
       return;
     }
@@ -357,13 +360,13 @@ export function TasksView(props: TasksViewProps) {
                     onCancel={() => dialog.close()}
                   />
                 ),
-                { size: 'large' },
+                { size: 'large', gradStart: DIALOG_GRAD_START, gradEnd: DIALOG_GRAD_END },
               );
             }}
             onClose={() => dialog.close()}
           />
         ),
-        { size: 'large' },
+        { size: 'large', gradStart: DIALOG_GRAD_START, gradEnd: DIALOG_GRAD_END },
       );
       return;
     }

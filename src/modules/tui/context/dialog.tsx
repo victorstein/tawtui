@@ -2,6 +2,7 @@ import {
   createContext,
   useContext,
   createSignal,
+  For,
   Show,
   type JSX,
   type ParentProps,
@@ -15,6 +16,21 @@ export type DialogSize = 'small' | 'medium' | 'large';
 export interface DialogOptions {
   size?: DialogSize;
   onClose?: () => void;
+  gradStart?: string;
+  gradEnd?: string;
+}
+
+function lerpHex(a: string, b: string, t: number): string {
+  const ar = parseInt(a.slice(1, 3), 16);
+  const ag = parseInt(a.slice(3, 5), 16);
+  const ab = parseInt(a.slice(5, 7), 16);
+  const br = parseInt(b.slice(1, 3), 16);
+  const bg = parseInt(b.slice(3, 5), 16);
+  const bb = parseInt(b.slice(5, 7), 16);
+  const r = Math.round(ar + (br - ar) * t);
+  const g = Math.round(ag + (bg - ag) * t);
+  const blue = Math.round(ab + (bb - ab) * t);
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${blue.toString(16).padStart(2, '0')}`;
 }
 
 interface DialogEntry {
@@ -121,22 +137,89 @@ export function DialogProvider(props: ParentProps) {
         />
         {/* Dialog box */}
         <Show when={topEntry()}>
-          {(entry) => (
-            <box
-              position="absolute"
-              top={dialogTop()}
-              left={dialogLeft()}
-              width={dialogWidth()}
-              maxHeight={dialogHeight()}
-              flexDirection="column"
-              backgroundColor={BG_SURFACE}
-              borderStyle="rounded"
-              borderColor={BORDER_DIALOG}
-              zIndex={101}
-            >
-              {entry().content()}
-            </box>
-          )}
+          {(entry) => {
+            const opts = () => entry().options;
+            const hasGradient = () =>
+              opts().gradStart !== undefined && opts().gradEnd !== undefined;
+            const borderCol = () =>
+              hasGradient()
+                ? lerpHex(opts().gradStart!, opts().gradEnd!, 0.5)
+                : BORDER_DIALOG;
+            const innerWidth = () => Math.max(dialogWidth() - 2, 1);
+
+            return (
+              <box
+                position="absolute"
+                top={dialogTop()}
+                left={dialogLeft()}
+                width={dialogWidth()}
+                maxHeight={dialogHeight()}
+                flexDirection="column"
+                backgroundColor={BG_SURFACE}
+                borderStyle="rounded"
+                borderColor={borderCol()}
+                zIndex={101}
+              >
+                {/* Gradient top separator */}
+                <Show when={hasGradient()}>
+                  <box height={1} width="100%" flexDirection="row">
+                    <For
+                      each={Array.from(
+                        { length: innerWidth() },
+                        (_, i) => i,
+                      )}
+                    >
+                      {(i) => {
+                        const t = () =>
+                          innerWidth() > 1 ? i / (innerWidth() - 1) : 0;
+                        return (
+                          <text
+                            fg={lerpHex(
+                              opts().gradStart!,
+                              opts().gradEnd!,
+                              t(),
+                            )}
+                          >
+                            {'\u2500'}
+                          </text>
+                        );
+                      }}
+                    </For>
+                  </box>
+                </Show>
+
+                {entry().content()}
+
+                {/* Gradient bottom separator */}
+                <Show when={hasGradient()}>
+                  <box height={1} width="100%" flexDirection="row">
+                    <For
+                      each={Array.from(
+                        { length: innerWidth() },
+                        (_, i) => i,
+                      )}
+                    >
+                      {(i) => {
+                        const t = () =>
+                          innerWidth() > 1 ? i / (innerWidth() - 1) : 0;
+                        return (
+                          <text
+                            fg={lerpHex(
+                              opts().gradStart!,
+                              opts().gradEnd!,
+                              t(),
+                            )}
+                          >
+                            {'\u2500'}
+                          </text>
+                        );
+                      }}
+                    </For>
+                  </box>
+                </Show>
+              </box>
+            );
+          }}
         </Show>
       </Show>
     </DialogContext.Provider>

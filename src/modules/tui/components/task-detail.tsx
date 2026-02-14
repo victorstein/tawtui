@@ -1,17 +1,14 @@
-import { Show, For } from 'solid-js';
+import { Show, For, createSignal } from 'solid-js';
 import { useKeyboard } from '@opentui/solid';
 import { SyntaxStyle } from '@opentui/core';
 import type { Task } from '../../taskwarrior.types';
 import {
-  BG_SELECTED,
-  BORDER_DIM,
   FG_PRIMARY,
   FG_NORMAL,
   FG_DIM,
   FG_MUTED,
   ACCENT_PRIMARY,
   ACCENT_SECONDARY,
-  COLOR_SUCCESS,
   COLOR_ERROR,
   PRIORITY_H,
   PRIORITY_M,
@@ -20,6 +17,32 @@ import {
   SEPARATOR_COLOR,
   TAG_COLORS,
 } from '../theme';
+
+function darkenHex(hex: string, factor: number): string {
+  const r = Math.round(parseInt(hex.slice(1, 3), 16) * factor);
+  const g = Math.round(parseInt(hex.slice(3, 5), 16) * factor);
+  const b = Math.round(parseInt(hex.slice(5, 7), 16) * factor);
+  const clamp = (v: number) => Math.min(255, Math.max(0, v));
+  return `#${clamp(r).toString(16).padStart(2, '0')}${clamp(g).toString(16).padStart(2, '0')}${clamp(b).toString(16).padStart(2, '0')}`;
+}
+
+function lerpHex(a: string, b: string, t: number): string {
+  const ar = parseInt(a.slice(1, 3), 16);
+  const ag = parseInt(a.slice(3, 5), 16);
+  const ab = parseInt(a.slice(5, 7), 16);
+  const br = parseInt(b.slice(1, 3), 16);
+  const bg = parseInt(b.slice(3, 5), 16);
+  const bb = parseInt(b.slice(5, 7), 16);
+  const r = Math.round(ar + (br - ar) * t);
+  const g = Math.round(ag + (bg - ag) * t);
+  const blue = Math.round(ab + (bb - ab) * t);
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${blue.toString(16).padStart(2, '0')}`;
+}
+
+const DETAIL_BUTTONS = [
+  { label: ' [e] Edit ', shortcut: 'e', gradStart: '#5aaa6a', gradEnd: '#2a7a8a' },
+  { label: ' [Esc] Close ', shortcut: 'escape', gradStart: '#e05555', gradEnd: '#8a2a2a' },
+] as const;
 
 interface TaskDetailProps {
   task: Task;
@@ -102,6 +125,8 @@ const annotationSyntaxStyle = SyntaxStyle.fromTheme([
 ]);
 
 export function TaskDetail(props: TaskDetailProps) {
+  const [focused, setFocused] = createSignal(0);
+
   useKeyboard((key) => {
     if (key.name === 'e') {
       props.onEdit();
@@ -109,6 +134,26 @@ export function TaskDetail(props: TaskDetailProps) {
     }
     if (key.name === 'escape') {
       props.onClose();
+      return;
+    }
+    if (key.name === 'tab') {
+      setFocused((prev) => (prev === 0 ? 1 : 0));
+      return;
+    }
+    if (key.name === 'left') {
+      setFocused(0);
+      return;
+    }
+    if (key.name === 'right') {
+      setFocused(1);
+      return;
+    }
+    if (key.name === 'return') {
+      if (focused() === 0) {
+        props.onEdit();
+      } else {
+        props.onClose();
+      }
       return;
     }
   });
@@ -254,31 +299,50 @@ export function TaskDetail(props: TaskDetailProps) {
       <box height={1} />
 
       {/* Footer keybindings */}
-      <box flexDirection="row" gap={1}>
-        <box
-          border={true}
-          borderStyle="rounded"
-          borderColor={BORDER_DIM}
-          backgroundColor={BG_SELECTED}
-          paddingX={3}
-        >
-          <text fg={COLOR_SUCCESS} attributes={1}>
-            {'e '}
-          </text>
-          <text fg={FG_PRIMARY}>{'Edit'}</text>
-        </box>
-        <box
-          border={true}
-          borderStyle="rounded"
-          borderColor={BORDER_DIM}
-          backgroundColor={BG_SELECTED}
-          paddingX={3}
-        >
-          <text fg={ACCENT_PRIMARY} attributes={1}>
-            {'Esc '}
-          </text>
-          <text fg={FG_PRIMARY}>{'Close'}</text>
-        </box>
+      <box flexDirection="row">
+        <For each={[...DETAIL_BUTTONS]}>
+          {(btn, idx) => {
+            const isFocused = () => focused() === idx();
+            const chars = btn.label.split('');
+            const dimBg = darkenHex(btn.gradStart, 0.3);
+            return (
+              <>
+                {idx() > 0 && <text>{'  '}</text>}
+                <box flexDirection="row">
+                  {isFocused() ? (
+                    <>
+                      <text fg={btn.gradStart}>{'\uE0B6'}</text>
+                      <For each={chars}>
+                        {(char, i) => {
+                          const t =
+                            chars.length > 1 ? i() / (chars.length - 1) : 0;
+                          return (
+                            <text
+                              fg="#ffffff"
+                              bg={lerpHex(btn.gradStart, btn.gradEnd, t)}
+                              attributes={1}
+                            >
+                              {char}
+                            </text>
+                          );
+                        }}
+                      </For>
+                      <text fg={btn.gradEnd}>{'\uE0B4'}</text>
+                    </>
+                  ) : (
+                    <>
+                      <text fg={dimBg}>{'\uE0B6'}</text>
+                      <text fg={btn.gradStart} bg={dimBg}>
+                        {btn.label}
+                      </text>
+                      <text fg={dimBg}>{'\uE0B4'}</text>
+                    </>
+                  )}
+                </box>
+              </>
+            );
+          }}
+        </For>
       </box>
     </box>
   );
