@@ -8,7 +8,6 @@ import {
   FG_PRIMARY,
   FG_NORMAL,
   FG_DIM,
-  FG_MUTED,
 } from '../theme';
 
 interface RepoListProps {
@@ -32,7 +31,7 @@ export function RepoList(props: RepoListProps) {
       {/* Header */}
       <box height={1} width="100%" paddingX={1}>
         <text
-          fg={props.isActivePane ? ACCENT_PRIMARY : FG_DIM}
+          fg={props.isActivePane ? FG_NORMAL : FG_DIM}
           attributes={1}
           truncate
         >
@@ -53,9 +52,9 @@ export function RepoList(props: RepoListProps) {
           when={props.repos.length > 0}
           fallback={
             <box paddingX={1} paddingY={1}>
-              <text fg={FG_MUTED}>No repos configured</text>
+              <text fg={FG_DIM}>No repos configured</text>
               <box height={1} />
-              <text fg={FG_MUTED}>Press 'a' to add a repo</text>
+              <text fg={FG_DIM}>Press 'a' to add a repo</text>
             </box>
           }
         >

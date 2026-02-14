@@ -16,8 +16,6 @@ import {
   FG_PRIMARY,
   FG_NORMAL,
   FG_DIM,
-  FG_MUTED,
-  ACCENT_PRIMARY,
   SEPARATOR_COLOR,
   COLOR_ERROR,
   PRIORITY_H,
@@ -338,7 +336,7 @@ export function ArchiveView(props: ArchiveViewProps) {
     <box flexDirection="column" flexGrow={1} width="100%">
       {/* Archive header */}
       <box height={1} paddingX={1}>
-        <text fg={ACCENT_PRIMARY} attributes={1}>
+        <text fg={FG_NORMAL} attributes={1}>
           {'ARCHIVE'}
         </text>
         <text fg={FG_DIM}>
@@ -370,7 +368,7 @@ export function ArchiveView(props: ArchiveViewProps) {
       {/* Empty state */}
       <Show when={!loading() && !error() && tasks().length === 0}>
         <box paddingX={2} paddingY={1}>
-          <text fg={FG_MUTED}>No archived tasks found.</text>
+          <text fg={FG_DIM}>No archived tasks found.</text>
         </box>
       </Show>
 
@@ -390,7 +388,7 @@ export function ArchiveView(props: ArchiveViewProps) {
                 }
               >
                 <box height={1} paddingX={1} marginTop={flatIdx() > 0 ? 1 : 0}>
-                  <text fg={ACCENT_PRIMARY} attributes={1}>
+                  <text fg={FG_NORMAL} attributes={1}>
                     {(item as { type: 'header'; label: string }).label}
                   </text>
                 </box>
@@ -467,7 +465,7 @@ function ArchiveTaskRow(props: ArchiveTaskRowProps) {
       {/* Second line: completion date, project */}
       <Show when={metaLine()}>
         <box height={1} width="100%">
-          <text fg={FG_MUTED} truncate>
+          <text fg={FG_DIM} truncate>
             {'  ' + metaLine()}
           </text>
         </box>

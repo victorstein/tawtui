@@ -4,10 +4,7 @@ import { ConfigModule } from './modules/config.module';
 import { TuiModule } from './modules/tui.module';
 
 @Module({
-  imports: [
-    ConfigModule,
-    TuiModule,
-  ],
+  imports: [ConfigModule, TuiModule],
   providers: [TuiCommand],
 })
 export class AppModule {}

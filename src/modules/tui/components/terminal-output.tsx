@@ -6,7 +6,6 @@ import {
   SEPARATOR_COLOR,
   FG_NORMAL,
   FG_DIM,
-  FG_MUTED,
 } from '../theme';
 
 interface TerminalOutputProps {
@@ -28,8 +27,8 @@ export function TerminalOutput(props: TerminalOutputProps) {
   };
 
   const headerColor = () => {
-    if (props.isInteractive) return ACCENT_PRIMARY;
-    if (props.isActivePane) return ACCENT_PRIMARY;
+    if (props.isInteractive) return FG_NORMAL;
+    if (props.isActivePane) return FG_NORMAL;
     return FG_DIM;
   };
 
@@ -79,7 +78,7 @@ export function TerminalOutput(props: TerminalOutputProps) {
           when={props.agentName}
           fallback={
             <box paddingX={1} paddingY={1}>
-              <text fg={FG_MUTED}>No agent selected</text>
+              <text fg={FG_DIM}>No agent selected</text>
             </box>
           }
         >
@@ -100,7 +99,7 @@ export function TerminalOutput(props: TerminalOutputProps) {
 
                 {/* Cursor position indicator */}
                 <box height={1} width="100%" paddingX={1}>
-                  <text fg={FG_MUTED}>
+                  <text fg={FG_DIM}>
                     {`cursor: ${capture().cursor.x},${capture().cursor.y}`}
                   </text>
                 </box>

@@ -3,9 +3,9 @@ import {
   BG_BASE,
   BG_SELECTED,
   ACCENT_PRIMARY,
-  ACCENT_TERTIARY,
   BORDER_DIM,
-  FG_MUTED,
+  FG_NORMAL,
+  FG_DIM,
 } from '../theme';
 
 export interface Tab {
@@ -41,7 +41,7 @@ export function TabBar(props: TabBarProps) {
               backgroundColor={isActive() ? BG_SELECTED : BG_BASE}
             >
               <text
-                fg={isActive() ? ACCENT_PRIMARY : FG_MUTED}
+                fg={isActive() ? FG_NORMAL : FG_DIM}
                 attributes={isActive() ? 1 : 0}
               >
                 {label()}

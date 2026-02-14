@@ -8,7 +8,6 @@ import {
   FG_PRIMARY,
   FG_NORMAL,
   FG_DIM,
-  FG_MUTED,
   COLOR_SUCCESS,
   COLOR_ERROR,
 } from '../theme';
@@ -44,7 +43,7 @@ export function AgentList(props: AgentListProps) {
       {/* Header */}
       <box height={1} width="100%" paddingX={1}>
         <text
-          fg={props.isActivePane ? ACCENT_PRIMARY : FG_DIM}
+          fg={props.isActivePane ? FG_NORMAL : FG_DIM}
           attributes={1}
           truncate
         >
@@ -65,9 +64,9 @@ export function AgentList(props: AgentListProps) {
           when={props.agents.length > 0}
           fallback={
             <box paddingX={1} paddingY={1} flexDirection="column">
-              <text fg={FG_MUTED}>No agents running</text>
+              <text fg={FG_DIM}>No agents running</text>
               <box height={1} />
-              <text fg={FG_MUTED}>Press 'n' to spawn a new agent</text>
+              <text fg={FG_DIM}>Press 'n' to spawn a new agent</text>
             </box>
           }
         >
@@ -112,7 +111,7 @@ export function AgentList(props: AgentListProps) {
                   {/* Line 2: metadata (PR / task) if present */}
                   <Show when={metaText()}>
                     <box height={1} width="100%" paddingX={0}>
-                      <text fg={FG_MUTED} truncate>
+                      <text fg={FG_DIM} truncate>
                         {`  ${metaText()}`}
                       </text>
                     </box>

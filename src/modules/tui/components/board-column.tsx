@@ -4,8 +4,8 @@ import { TaskCard } from './task-card';
 import {
   ACCENT_PRIMARY,
   BORDER_DIM,
+  FG_NORMAL,
   FG_DIM,
-  FG_MUTED,
   SEPARATOR_COLOR,
 } from '../theme';
 
@@ -31,7 +31,7 @@ export function BoardColumn(props: BoardColumnProps) {
       {/* Column header */}
       <box height={1} width="100%" paddingX={1}>
         <text
-          fg={props.isActiveColumn ? ACCENT_PRIMARY : FG_DIM}
+          fg={props.isActiveColumn ? FG_NORMAL : FG_DIM}
           attributes={1}
           truncate
         >
@@ -52,7 +52,7 @@ export function BoardColumn(props: BoardColumnProps) {
           when={props.tasks.length > 0}
           fallback={
             <box paddingX={1} paddingY={1}>
-              <text fg={FG_MUTED}>No tasks</text>
+              <text fg={FG_DIM}>No tasks</text>
             </box>
           }
         >

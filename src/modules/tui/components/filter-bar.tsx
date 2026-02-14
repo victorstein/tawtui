@@ -11,7 +11,6 @@ import {
   FG_PRIMARY,
   FG_NORMAL,
   FG_DIM,
-  FG_MUTED,
   FG_FAINT,
   ACCENT_PRIMARY,
   ACCENT_SECONDARY,
@@ -234,7 +233,7 @@ export function FilterBar(props: FilterBarProps) {
           paddingX={1}
           backgroundColor={BG_BASE}
         >
-          <text fg={FG_MUTED}>{'Active: '}</text>
+          <text fg={FG_DIM}>{'Active: '}</text>
           <For each={chips()}>
             {(chip, index) => (
               <>
@@ -260,10 +259,10 @@ export function FilterBar(props: FilterBarProps) {
       >
         <text fg={COLOR_SUCCESS} attributes={1}>{' [Enter] '}</text>
         <text fg={FG_DIM}>{'Apply'}</text>
-        <text fg={FG_MUTED}>{'  |  '}</text>
+        <text fg={FG_DIM}>{'  |  '}</text>
         <text fg={ACCENT_PRIMARY} attributes={1}>{' [Esc] '}</text>
         <text fg={FG_DIM}>{'Clear & Close'}</text>
-        <text fg={FG_MUTED}>{'  |  '}</text>
+        <text fg={FG_DIM}>{'  |  '}</text>
         <text fg={ACCENT_TERTIARY} attributes={1}>{' [Tab] '}</text>
         <text fg={FG_DIM}>{'Suggestions'}</text>
       </box>

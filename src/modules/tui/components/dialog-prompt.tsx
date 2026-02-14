@@ -2,11 +2,12 @@ import { createSignal } from 'solid-js';
 import { useKeyboard } from '@opentui/solid';
 import {
   BG_INPUT_FOCUS,
+  BG_SELECTED,
+  BORDER_DIM,
   FG_NORMAL,
-  FG_DIM,
-  ACCENT_PRIMARY,
-  ACCENT_TERTIARY,
+  FG_PRIMARY,
   COLOR_SUCCESS,
+  ACCENT_PRIMARY,
 } from '../theme';
 
 interface DialogPromptProps {
@@ -46,11 +47,27 @@ export function DialogPrompt(props: DialogPromptProps) {
         onSubmit={(val: string) => handleSubmit(val)}
       />
       <box height={1} />
-      <box flexDirection="row">
-        <text fg={COLOR_SUCCESS} attributes={1}>{' [Enter] '}</text>
-        <text fg={FG_DIM}>{'Submit  '}</text>
-        <text fg={ACCENT_PRIMARY} attributes={1}>{' [Esc] '}</text>
-        <text fg={FG_DIM}>{'Cancel'}</text>
+      <box flexDirection="row" gap={1}>
+        <box
+          border={true}
+          borderStyle="rounded"
+          borderColor={BORDER_DIM}
+          backgroundColor={BG_SELECTED}
+          paddingX={3}
+        >
+          <text fg={COLOR_SUCCESS} attributes={1}>{'Enter '}</text>
+          <text fg={FG_PRIMARY}>{'Submit'}</text>
+        </box>
+        <box
+          border={true}
+          borderStyle="rounded"
+          borderColor={BORDER_DIM}
+          backgroundColor={BG_SELECTED}
+          paddingX={3}
+        >
+          <text fg={ACCENT_PRIMARY} attributes={1}>{'Esc '}</text>
+          <text fg={FG_PRIMARY}>{'Cancel'}</text>
+        </box>
       </box>
     </box>
   );

@@ -90,7 +90,7 @@ export function PrList(props: PrListProps) {
       {/* Header */}
       <box height={1} width="100%" paddingX={1}>
         <text
-          fg={props.isActivePane ? ACCENT_PRIMARY : FG_DIM}
+          fg={props.isActivePane ? FG_NORMAL : FG_DIM}
           attributes={1}
           truncate
         >
@@ -101,7 +101,7 @@ export function PrList(props: PrListProps) {
       {/* Sub-header: repo name */}
       <Show when={subHeaderText()}>
         <box height={1} width="100%" paddingX={1}>
-          <text fg={FG_MUTED} truncate>
+          <text fg={FG_DIM} truncate>
             {subHeaderText()}
           </text>
         </box>
@@ -118,7 +118,7 @@ export function PrList(props: PrListProps) {
       <scrollbox flexGrow={1} width="100%">
         <Show when={!props.repoLabel}>
           <box paddingX={1} paddingY={1}>
-            <text fg={FG_MUTED}>No repo selected</text>
+            <text fg={FG_DIM}>No repo selected</text>
           </box>
         </Show>
 
@@ -139,7 +139,7 @@ export function PrList(props: PrListProps) {
             when={props.prs.length > 0}
             fallback={
               <box paddingX={1} paddingY={1}>
-                <text fg={FG_MUTED}>No open pull requests</text>
+                <text fg={FG_DIM}>No open pull requests</text>
               </box>
             }
           >
@@ -166,7 +166,7 @@ export function PrList(props: PrListProps) {
                         {`#${pr.number} `}
                       </text>
                       <Show when={pr.isDraft}>
-                        <text fg={FG_MUTED}>[DRAFT] </text>
+                        <text fg={FG_DIM}>[DRAFT] </text>
                       </Show>
                       <text
                         fg={isSelected() ? FG_PRIMARY : FG_NORMAL}

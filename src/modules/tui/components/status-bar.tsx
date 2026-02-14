@@ -1,5 +1,5 @@
 import type { Accessor } from 'solid-js';
-import { BG_BASE, FG_FAINT } from '../theme';
+import { BG_BASE, FG_DIM } from '../theme';
 
 interface StatusBarProps {
   activeTab: Accessor<number>;
@@ -30,7 +30,7 @@ export function StatusBar(props: StatusBarProps) {
       width="100%"
       backgroundColor={BG_BASE}
     >
-      <text fg={FG_FAINT} truncate>{` ${hint()}`}</text>
+      <text fg={FG_DIM} truncate>{` ${hint()}`}</text>
     </box>
   );
 }

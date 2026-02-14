@@ -7,16 +7,16 @@ import type {
 import type { ExecResult } from '../shared/types';
 
 const KEY_MAP: Record<string, string> = {
-  'return': 'Enter',
-  'escape': 'Escape',
-  'tab': 'Tab',
-  'backspace': 'BSpace',
-  'up': 'Up',
-  'down': 'Down',
-  'left': 'Left',
-  'right': 'Right',
-  'space': 'Space',
-  'delete': 'DC',
+  return: 'Enter',
+  escape: 'Escape',
+  tab: 'Tab',
+  backspace: 'BSpace',
+  up: 'Up',
+  down: 'Down',
+  left: 'Left',
+  right: 'Right',
+  space: 'Space',
+  delete: 'DC',
 };
 
 /** Set of key names that tmux recognises as special send-keys targets. */
@@ -349,10 +349,7 @@ export class TerminalService implements OnModuleDestroy {
   /**
    * Update the status of an existing session.
    */
-  updateSessionStatus(
-    id: string,
-    status: 'running' | 'done' | 'failed',
-  ): void {
+  updateSessionStatus(id: string, status: 'running' | 'done' | 'failed'): void {
     const session = this.sessions.get(id);
     if (!session) {
       throw new Error(`Session not found: ${id}`);
@@ -389,5 +386,4 @@ export class TerminalService implements OnModuleDestroy {
 
     return { stdout, stderr, exitCode };
   }
-
 }

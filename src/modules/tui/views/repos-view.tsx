@@ -13,7 +13,6 @@ import {
   ACCENT_PRIMARY,
   FG_NORMAL,
   FG_DIM,
-  FG_MUTED,
 } from '../theme';
 
 /**
@@ -279,7 +278,7 @@ export function ReposView() {
                 <text fg={FG_DIM}>{`Author: ${pr.author.login}`}</text>
                 <text fg={FG_DIM}>{`+${pr.additions} -${pr.deletions} (${pr.changedFiles} files)`}</text>
                 <box height={1} />
-                <text fg={FG_MUTED}>Full PR detail view coming soon...</text>
+                <text fg={FG_DIM}>Full PR detail view coming soon...</text>
                 <box height={1} />
                 <box flexDirection="row">
                   <text fg={ACCENT_PRIMARY} attributes={1}>{' [Esc] '}</text>
