@@ -8,7 +8,6 @@ import { FilterBar } from '../components/filter-bar';
 import { ArchiveView } from '../components/archive-view';
 import { useDialog } from '../context/dialog';
 import {
-  BG_BASE,
   FG_DIM,
   ACCENT_PRIMARY,
   ACCENT_SECONDARY,
@@ -410,7 +409,7 @@ export function TasksView(props: TasksViewProps) {
 
         {/* Active filter indicator — shown when a filter is applied but bar is closed */}
         <Show when={!filterActive() && appliedFilter().trim()}>
-          <box height={1} width="100%" paddingX={1} backgroundColor={BG_BASE}>
+          <box height={1} width="100%" paddingX={1}>
             <text fg={ACCENT_PRIMARY} attributes={1}>{'Filter: '}</text>
             <text fg={ACCENT_SECONDARY}>{appliedFilter()}</text>
             <text fg={FG_DIM}>{'  (press / to edit, Esc in filter to clear)'}</text>
