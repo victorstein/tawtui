@@ -1,9 +1,14 @@
 import { Show } from 'solid-js';
 import { useKeyboard } from '@opentui/solid';
-import { SyntaxStyle, type ScrollBoxRenderable } from '@opentui/core';
+import {
+  SyntaxStyle,
+  RGBA,
+  type ScrollBoxRenderable,
+} from '@opentui/core';
 import type { PullRequestDetail } from '../../github.types';
 import {
   ACCENT_PRIMARY,
+  ACCENT_SECONDARY,
   FG_PRIMARY,
   FG_DIM,
   FG_MUTED,
@@ -11,7 +16,21 @@ import {
   COLOR_SUCCESS,
   COLOR_ERROR,
   COLOR_WARNING,
+  P,
 } from '../theme';
+
+const markdownStyle = SyntaxStyle.fromStyles({
+  default: { fg: RGBA.fromHex(FG_DIM) },
+  'markup.heading': { fg: RGBA.fromHex(ACCENT_PRIMARY), bold: true },
+  'markup.strong': { fg: RGBA.fromHex(FG_PRIMARY), bold: true },
+  'markup.italic': { fg: RGBA.fromHex(FG_DIM), italic: true },
+  'markup.strikethrough': { fg: RGBA.fromHex(FG_MUTED), dim: true },
+  'markup.raw': { fg: RGBA.fromHex(P.cream) },
+  'markup.link': { fg: RGBA.fromHex(FG_MUTED) },
+  'markup.link.label': { fg: RGBA.fromHex(ACCENT_SECONDARY), underline: true },
+  'markup.link.url': { fg: RGBA.fromHex(FG_MUTED) },
+  conceal: { fg: RGBA.fromHex(SEPARATOR_COLOR) },
+});
 
 interface DialogPrDetailProps {
   pr: PullRequestDetail;
@@ -60,6 +79,18 @@ function getCiLabel(
   }
 
   return { text: '\u25CF CI pending', color: COLOR_WARNING };
+}
+
+/**
+ * Strip GitHub-internal noise from PR descriptions:
+ * - diffhunk:// reference links: [1] (diffhunk://...)
+ * - Standalone diffhunk URLs in parentheses
+ */
+function cleanPrBody(body: string): string {
+  return body
+    .replace(/\s*\[\d+\]\s*\(diffhunk:\/\/[^)]*\)/g, '')
+    .replace(/\s*\(diffhunk:\/\/[^)]*\)/g, '')
+    .replace(/\n{3,}/g, '\n\n');
 }
 
 export function DialogPrDetail(props: DialogPrDetailProps) {
@@ -182,7 +213,7 @@ export function DialogPrDetail(props: DialogPrDetailProps) {
           when={props.pr.body}
           fallback={<text fg={FG_MUTED}>No description provided.</text>}
         >
-          <markdown content={props.pr.body} syntaxStyle={SyntaxStyle.create()} conceal={true} />
+          <markdown content={cleanPrBody(props.pr.body)} syntaxStyle={markdownStyle} conceal={true} />
         </Show>
       </scrollbox>
 
