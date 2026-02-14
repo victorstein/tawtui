@@ -85,7 +85,7 @@ export class ConfigService {
     );
 
     if (!duplicate) {
-      config.repos.push(repo);
+      config.repos = [...config.repos, repo];
       this.save(config);
     }
   }
