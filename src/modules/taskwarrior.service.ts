@@ -18,10 +18,7 @@ export class TaskwarriorService {
    * Execute `task` with common RC overrides and the given arguments.
    * Uses Bun.spawnSync() for synchronous execution.
    */
-  private execTask(
-    args: string[],
-    stdin?: string,
-  ): ExecResult {
+  private execTask(args: string[], stdin?: string): ExecResult {
     const cmd = ['task', ...this.rcOverrides, ...args];
     this.logger.debug(`Executing: ${cmd.join(' ')}`);
 
@@ -61,7 +58,9 @@ export class TaskwarriorService {
     // Exit code 1 = "no matching tasks" — not an error, just empty.
     // Only treat exit codes >= 2 as real failures.
     if (exitCode > 1) {
-      this.logger.warn(`task export failed (exit ${exitCode}): ${stderr.trim()}`);
+      this.logger.warn(
+        `task export failed (exit ${exitCode}): ${stderr.trim()}`,
+      );
       return [];
     }
 
