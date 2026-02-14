@@ -29,6 +29,7 @@ export class TaskwarriorService {
       stdin: stdin != null ? Buffer.from(stdin) : undefined,
       stdout: 'pipe',
       stderr: 'pipe',
+      env: { ...process.env, HOME: process.env.HOME ?? '' },
     });
 
     const stdout = proc.stdout.toString();
@@ -55,10 +56,13 @@ export class TaskwarriorService {
     }
     args.push('export');
 
-    const { stdout, exitCode } = this.execTask(args);
+    const { stdout, stderr, exitCode } = this.execTask(args);
 
-    if (exitCode !== 0) {
-      throw new Error(`Failed to export tasks (exit ${exitCode})`);
+    // Exit code 1 = "no matching tasks" — not an error, just empty.
+    // Only treat exit codes >= 2 as real failures.
+    if (exitCode > 1) {
+      this.logger.warn(`task export failed (exit ${exitCode}): ${stderr.trim()}`);
+      return [];
     }
 
     const trimmed = stdout.trim();
@@ -69,9 +73,10 @@ export class TaskwarriorService {
     try {
       return JSON.parse(trimmed) as Task[];
     } catch (err) {
-      throw new Error(
+      this.logger.warn(
         `Failed to parse task export JSON: ${err instanceof Error ? err.message : String(err)}`,
       );
+      return [];
     }
   }
 

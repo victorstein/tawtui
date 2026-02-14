@@ -4,7 +4,7 @@ import {
   BG_SELECTED,
   ACCENT_PRIMARY,
   FG_MUTED,
-  SEPARATOR_COLOR,
+  FG_FAINT,
 } from '../theme';
 
 export interface Tab {
@@ -28,11 +28,16 @@ export function TabBar(props: TabBarProps) {
       <Index each={props.tabs}>
         {(tab, index) => {
           const isActive = () => props.activeTab() === index;
-          const label = () => `[${index + 1}] ${tab().name}`;
+          const inner = () => ` ${index + 1} ${tab().name} `;
+          // Rounded pill: ╭ content ╮ for active, ( content ) for inactive
+          const label = () =>
+            isActive()
+              ? `\u256D${inner()}\u256E`
+              : `\u2500${inner()}\u2500`;
 
           return (
             <box
-              width={label().length + 2}
+              width={inner().length + 2}
               height={1}
               backgroundColor={isActive() ? BG_SELECTED : BG_BASE}
             >
@@ -40,7 +45,7 @@ export function TabBar(props: TabBarProps) {
                 fg={isActive() ? ACCENT_PRIMARY : FG_MUTED}
                 attributes={isActive() ? 1 : 0}
               >
-                {` ${label()} `}
+                {label()}
               </text>
             </box>
           );
