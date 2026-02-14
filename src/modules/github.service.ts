@@ -7,22 +7,24 @@ import type {
 
 @Injectable()
 export class GithubService {
-  private execGh(args: string[]): {
+  private async execGh(args: string[]): Promise<{
     stdout: string;
     stderr: string;
     exitCode: number;
-  } {
+  }> {
     try {
-      const proc = Bun.spawnSync(['gh', ...args], {
+      const proc = Bun.spawn(['gh', ...args], {
         stdout: 'pipe',
         stderr: 'pipe',
       });
 
-      return {
-        stdout: proc.stdout.toString(),
-        stderr: proc.stderr.toString(),
-        exitCode: proc.exitCode,
-      };
+      const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+      ]);
+
+      return { stdout, stderr, exitCode };
     } catch {
       return {
         stdout: '',
@@ -33,12 +35,12 @@ export class GithubService {
   }
 
   async isGhInstalled(): Promise<boolean> {
-    const result = this.execGh(['--version']);
+    const result = await this.execGh(['--version']);
     return result.exitCode === 0;
   }
 
   async isAuthenticated(): Promise<boolean> {
-    const result = this.execGh(['auth', 'status']);
+    const result = await this.execGh(['auth', 'status']);
     return result.exitCode === 0;
   }
 
@@ -62,7 +64,7 @@ export class GithubService {
       'labels',
     ].join(',');
 
-    const result = this.execGh([
+    const result = await this.execGh([
       'pr',
       'list',
       '--repo',
@@ -118,7 +120,7 @@ export class GithubService {
       'comments',
     ].join(',');
 
-    const result = this.execGh([
+    const result = await this.execGh([
       'pr',
       'view',
       String(prNumber),
@@ -144,7 +146,7 @@ export class GithubService {
   }
 
   async validateRepo(owner: string, repo: string): Promise<boolean> {
-    const result = this.execGh(['repo', 'view', `${owner}/${repo}`]);
+    const result = await this.execGh(['repo', 'view', `${owner}/${repo}`]);
     return result.exitCode === 0;
   }
 
