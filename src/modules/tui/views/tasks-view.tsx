@@ -10,7 +10,6 @@ import { useDialog } from '../context/dialog';
 import {
   BG_BASE,
   FG_DIM,
-  FG_MUTED,
   ACCENT_PRIMARY,
   ACCENT_SECONDARY,
   COLOR_ERROR,
@@ -295,6 +294,7 @@ export function TasksView(props: TasksViewProps) {
 
     // New task
     if (key.name === 'n') {
+      key.preventDefault();
       dialog.show(
         () => (
           <TaskForm
@@ -413,7 +413,7 @@ export function TasksView(props: TasksViewProps) {
           <box height={1} width="100%" paddingX={1} backgroundColor={BG_BASE}>
             <text fg={ACCENT_PRIMARY} attributes={1}>{'Filter: '}</text>
             <text fg={ACCENT_SECONDARY}>{appliedFilter()}</text>
-            <text fg={FG_MUTED}>{'  (press / to edit, Esc in filter to clear)'}</text>
+            <text fg={FG_DIM}>{'  (press / to edit, Esc in filter to clear)'}</text>
           </box>
         </Show>
 
