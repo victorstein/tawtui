@@ -1,18 +1,19 @@
 import { createSignal, createEffect, onMount } from 'solid-js';
 import { useKeyboard, useTerminalDimensions } from '@opentui/solid';
 import type { RepoConfig } from '../../../shared/types';
-import type { PullRequest } from '../../github.types';
+import type { PullRequest, PullRequestDetail } from '../../github.types';
 import type { GithubService } from '../../github.service';
 import type { ConfigService } from '../../config.service';
 import { RepoList } from '../components/repo-list';
 import { PrList } from '../components/pr-list';
+import { DialogPrDetail } from '../components/dialog-pr-detail';
 import { useDialog } from '../context/dialog';
 import { DialogPrompt } from '../components/dialog-prompt';
 import { DialogConfirm } from '../components/dialog-confirm';
 import {
   ACCENT_PRIMARY,
-  FG_NORMAL,
   FG_DIM,
+  COLOR_ERROR,
 } from '../theme';
 
 /**
@@ -257,38 +258,91 @@ export function ReposView() {
       return;
     }
 
-    // Enter on a PR — placeholder for PR detail view
+    // Enter on a PR — open full PR detail dialog
     if (key.name === 'return') {
       if (pane === 'prs') {
+        const repoList = repos();
+        const repo = repoList[repoIndex()];
         const prList = prs();
-        const idx = prIndex();
-        const pr = prList[idx];
-        if (pr) {
-          // Placeholder: show PR number and title in a dialog
-          dialog.show(
-            () => (
-              <box flexDirection="column" paddingX={1} paddingY={1}>
-                <text fg={ACCENT_PRIMARY} attributes={1}>
-                  {`PR #${pr.number}`}
-                </text>
-                <box height={1} />
-                <text fg={FG_NORMAL}>{pr.title}</text>
-                <box height={1} />
-                <text fg={FG_DIM}>{`${pr.headRefName} -> ${pr.baseRefName}`}</text>
-                <text fg={FG_DIM}>{`Author: ${pr.author.login}`}</text>
-                <text fg={FG_DIM}>{`+${pr.additions} -${pr.deletions} (${pr.changedFiles} files)`}</text>
-                <box height={1} />
-                <text fg={FG_DIM}>Full PR detail view coming soon...</text>
-                <box height={1} />
-                <box flexDirection="row">
-                  <text fg={ACCENT_PRIMARY} attributes={1}>{' [Esc] '}</text>
-                  <text fg={FG_DIM}>Close</text>
+        const pr = prList[prIndex()];
+        if (!pr || !repo) return;
+
+        const gh = getGithubService();
+        if (!gh) return;
+
+        // Show loading dialog
+        dialog.show(
+          () => (
+            <box flexDirection="column" paddingX={1} paddingY={1}>
+              <text fg={FG_DIM}>Loading PR details...</text>
+            </box>
+          ),
+          { size: 'large' },
+        );
+
+        // Fetch full PR details async
+        gh.getPR(repo.owner, repo.repo, pr.number)
+          .then((detail: PullRequestDetail) => {
+            dialog.close();
+            dialog.show(
+              () => (
+                <DialogPrDetail
+                  pr={detail}
+                  onSendToAgent={() => {
+                    dialog.close();
+                    const bridge = (globalThis as Record<string, any>).__tawtui;
+                    if (!bridge?.createPrReviewSession) return;
+                    bridge
+                      .createPrReviewSession(
+                        detail.number,
+                        repo.owner,
+                        repo.repo,
+                        detail.title,
+                      )
+                      .catch(() => {
+                        dialog.show(
+                          () => (
+                            <box flexDirection="column" paddingX={1} paddingY={1}>
+                              <text fg={COLOR_ERROR}>
+                                Failed to create review agent
+                              </text>
+                              <box height={1} />
+                              <box flexDirection="row">
+                                <text fg={ACCENT_PRIMARY} attributes={1}>
+                                  {' [Esc] '}
+                                </text>
+                                <text fg={FG_DIM}>Close</text>
+                              </box>
+                            </box>
+                          ),
+                          { size: 'medium' },
+                        );
+                      });
+                  }}
+                  onClose={() => dialog.close()}
+                />
+              ),
+              { size: 'large' },
+            );
+          })
+          .catch(() => {
+            dialog.close();
+            dialog.show(
+              () => (
+                <box flexDirection="column" paddingX={1} paddingY={1}>
+                  <text fg={COLOR_ERROR}>Failed to load PR details</text>
+                  <box height={1} />
+                  <box flexDirection="row">
+                    <text fg={ACCENT_PRIMARY} attributes={1}>
+                      {' [Esc] '}
+                    </text>
+                    <text fg={FG_DIM}>Close</text>
+                  </box>
                 </box>
-              </box>
-            ),
-            { size: 'large' },
-          );
-        }
+              ),
+              { size: 'medium' },
+            );
+          });
       }
       return;
     }

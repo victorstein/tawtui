@@ -36,6 +36,12 @@ const DIALOG_WIDTHS: Record<DialogSize, number> = {
   large: 80,
 };
 
+const DIALOG_HEIGHT_RATIO: Record<DialogSize, number> = {
+  small: 0.3,
+  medium: 0.5,
+  large: 0.8,
+};
+
 export function DialogProvider(props: ParentProps) {
   const [stack, setStack] = createSignal<DialogEntry[]>([]);
   const dims = useTerminalDimensions();
@@ -75,6 +81,14 @@ export function DialogProvider(props: ParentProps) {
     return Math.min(desired, termWidth - 4);
   };
 
+  const dialogHeight = () => {
+    const entry = topEntry();
+    const size = entry?.options.size ?? 'medium';
+    const ratio = DIALOG_HEIGHT_RATIO[size];
+    const termHeight = dims().height;
+    return Math.min(Math.floor(termHeight * ratio), termHeight - 4);
+  };
+
   const dialogLeft = () => {
     const termWidth = dims().width;
     return Math.max(0, Math.floor((termWidth - dialogWidth()) / 2));
@@ -82,7 +96,7 @@ export function DialogProvider(props: ParentProps) {
 
   const dialogTop = () => {
     const termHeight = dims().height;
-    return Math.max(1, Math.floor(termHeight / 4));
+    return Math.max(1, Math.floor((termHeight - dialogHeight()) / 2));
   };
 
   const contextValue: DialogContextValue = {
@@ -113,6 +127,7 @@ export function DialogProvider(props: ParentProps) {
               top={dialogTop()}
               left={dialogLeft()}
               width={dialogWidth()}
+              height={dialogHeight()}
               flexDirection="column"
               backgroundColor={BG_SURFACE}
               borderStyle="rounded"

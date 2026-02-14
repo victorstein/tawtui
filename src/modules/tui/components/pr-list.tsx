@@ -147,7 +147,7 @@ export function PrList(props: PrListProps) {
               <text fg={FG_DIM}>No repo selected</text>
             </box>
           </Match>
-          <Match when={props.loading}>
+          <Match when={props.loading && props.prs.length === 0}>
             <box paddingX={1} paddingY={1} flexDirection="row">
               <text fg={ACCENT_PRIMARY}>{spinnerFrames[spinnerIdx()]}</text>
               <text fg={FG_DIM}> Loading pull requests...</text>
