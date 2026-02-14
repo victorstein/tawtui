@@ -56,3 +56,17 @@ export const PRIORITY_L = P.surface;      // sage green
 
 // Separator
 export const SEPARATOR_COLOR = '#5a5755';
+
+// Tag colors — distinct hues derived from the palette for visual variety
+export const TAG_COLORS = [
+  P.highlight,  // dusty rose
+  P.surface,    // sage green
+  P.accent,     // warm tan
+  P.primary,    // burnt orange
+  COLOR_WARNING, // warm amber
+  '#a88fa0',    // muted mauve (complement to sage)
+  '#7eb8a8',    // light sage (lighter surface)
+  '#d4a07a',    // light tan (lighter accent)
+] as const;
+
+export const PROJECT_COLOR = P.surface;  // sage green — distinct from tags

@@ -9,6 +9,12 @@ import { PrList } from '../components/pr-list';
 import { useDialog } from '../context/dialog';
 import { DialogPrompt } from '../components/dialog-prompt';
 import { DialogConfirm } from '../components/dialog-confirm';
+import {
+  ACCENT_PRIMARY,
+  FG_NORMAL,
+  FG_DIM,
+  FG_MUTED,
+} from '../theme';
 
 /**
  * Access the GithubService bridged from NestJS DI via globalThis.
@@ -263,21 +269,21 @@ export function ReposView() {
           dialog.show(
             () => (
               <box flexDirection="column" paddingX={1} paddingY={1}>
-                <text fg="#cb6836" attributes={1}>
+                <text fg={ACCENT_PRIMARY} attributes={1}>
                   {`PR #${pr.number}`}
                 </text>
                 <box height={1} />
-                <text fg="#e8e0d8">{pr.title}</text>
+                <text fg={FG_NORMAL}>{pr.title}</text>
                 <box height={1} />
-                <text fg="#be9a87">{`${pr.headRefName} -> ${pr.baseRefName}`}</text>
-                <text fg="#be9a87">{`Author: ${pr.author.login}`}</text>
-                <text fg="#be9a87">{`+${pr.additions} -${pr.deletions} (${pr.changedFiles} files)`}</text>
+                <text fg={FG_DIM}>{`${pr.headRefName} -> ${pr.baseRefName}`}</text>
+                <text fg={FG_DIM}>{`Author: ${pr.author.login}`}</text>
+                <text fg={FG_DIM}>{`+${pr.additions} -${pr.deletions} (${pr.changedFiles} files)`}</text>
                 <box height={1} />
-                <text fg="#85a7a0">Full PR detail view coming soon...</text>
+                <text fg={FG_MUTED}>Full PR detail view coming soon...</text>
                 <box height={1} />
                 <box flexDirection="row">
-                  <text fg="#cb6836" attributes={1}>{' [Esc] '}</text>
-                  <text fg="#be9a87">Close</text>
+                  <text fg={ACCENT_PRIMARY} attributes={1}>{' [Esc] '}</text>
+                  <text fg={FG_DIM}>Close</text>
                 </box>
               </box>
             ),

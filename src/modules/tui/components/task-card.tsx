@@ -5,15 +5,13 @@ import {
   FG_PRIMARY,
   FG_NORMAL,
   FG_DIM,
-  FG_MUTED,
   FG_FAINT,
-  ACCENT_PRIMARY,
-  ACCENT_SECONDARY,
-  ACCENT_TERTIARY,
   PRIORITY_H,
   PRIORITY_M,
   PRIORITY_L,
   COLOR_ERROR,
+  TAG_COLORS,
+  PROJECT_COLOR,
 } from '../theme';
 
 interface TaskCardProps {
@@ -28,20 +26,7 @@ const PRIORITY_COLORS: Record<string, string> = {
   L: PRIORITY_L,
 };
 
-/** Palette of distinct colors for tag rendering. */
-const TAG_COLORS = [
-  ACCENT_SECONDARY,  // #c334ec — bright purple
-  '#55efc4',         // green
-  '#f0a500',         // amber
-  ACCENT_TERTIARY,   // #8e3cd9 — medium purple
-  '#00cec9',         // teal
-  ACCENT_PRIMARY,    // #f72cff — neon pink
-  '#74b9ff',         // sky blue
-  '#fd79a8',         // rose
-];
-
-/** Color used specifically for project tags. */
-const PROJECT_COLOR = '#74b9ff';
+// TAG_COLORS and PROJECT_COLOR imported from theme
 
 /**
  * Simple djb2 hash — maps a string to a consistent non-negative integer.
