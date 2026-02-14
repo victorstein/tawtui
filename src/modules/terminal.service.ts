@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { TaskwarriorService } from './taskwarrior.service';
 import type {
   TerminalSession,
   CaptureResult,
@@ -47,6 +48,8 @@ export class TerminalService implements OnModuleDestroy {
 
   /** Content hashes keyed by session ID, used for change detection. */
   private readonly contentHashes = new Map<string, number | bigint>();
+
+  constructor(private readonly taskwarriorService: TaskwarriorService) {}
 
   // ---------------------------------------------------------------------------
   // Lifecycle
@@ -344,6 +347,44 @@ export class TerminalService implements OnModuleDestroy {
    */
   listSessions(): TerminalSession[] {
     return Array.from(this.sessions.values());
+  }
+
+  /**
+   * Create a Taskwarrior task for reviewing a PR and spin up a terminal
+   * session to run the review agent.  Returns the task UUID and session ID.
+   */
+  async createPrReviewSession(
+    prNumber: number,
+    repoOwner: string,
+    repoName: string,
+    prTitle: string,
+  ): Promise<{ taskUuid: string; sessionId: string }> {
+    // Create a Taskwarrior task for the review
+    const task = await this.taskwarriorService.createTask({
+      description: `Review PR #${prNumber}: ${prTitle}`,
+      project: `${repoOwner}/${repoName}`,
+      tags: ['pr-review'],
+    });
+
+    // Start the task so it's marked as "in progress"
+    await this.taskwarriorService.startTask(task.uuid);
+
+    // Create a terminal session for the review agent
+    const session = this.createSession({
+      name: `PR #${prNumber} Review`,
+      cwd: process.cwd(),
+      command: `echo "Reviewing PR #${prNumber} for ${repoOwner}/${repoName}..." && sleep 5`,
+      prNumber,
+      repoOwner,
+      repoName,
+      taskUuid: task.uuid,
+    });
+
+    this.logger.log(
+      `Created PR review session: task=${task.uuid}, session=${session.id}`,
+    );
+
+    return { taskUuid: task.uuid, sessionId: session.id };
   }
 
   /**
