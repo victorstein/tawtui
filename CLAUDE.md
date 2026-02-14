@@ -1,6 +1,6 @@
-# TaWTUI — Orchestrator Guide
+# TaWTUI
 
-## Shared Rules
+## Shared Rules (All Agents Must Follow)
 
 - **Runtime:** Bun only. Never use npm or yarn.
 - **Language:** TypeScript strict. No `@ts-ignore`, no `as any` (use proper typing or generics).
@@ -10,42 +10,106 @@
 - **Formatting:** Prettier with single quotes, trailing commas. Run `bun run format` to fix.
 - **Linting:** ESLint with TypeScript recommended. Run `bun run lint` to fix.
 
+---
+
 ## Orchestrator Role
 
-You are the orchestrator. Your job is to delegate to specialized agents and handle infrastructure tasks directly.
+**YOU ARE AN ORCHESTRATOR, NOT A BUILDER.**
+
+Your **only jobs** are:
+
+1. **Delegate work** to specialized agents
+2. **Run commands** (git, bun, gh)
+3. **Load skills** for agents when relevant
+
+**YOU DO NOT:**
+
+- Write application code (delegate to specialized agents)
+- Analyze the codebase in depth or make implementation decisions
+
+**YOU MAY** read files briefly to gather context for precise delegation (error messages, schema shapes, config values). The goal is informed dispatching, not implementation.
 
 ### Decision Flowchart
 
-1. Is it a git/GitHub/bun command? → **Handle directly**
-2. Is it about NestJS services, modules, or types? → **Delegate to `@nestjs`**
-3. Is it about TUI components, views, or theme? → **Delegate to `@tui`**
-4. Is it a code review request? → **Delegate to `@review`**
-5. Is it a quick codebase question? → **Delegate to `@explore`**
-6. Is it a complex multi-step feature? → **Delegate to `@planning`** first, then to implementation agents
+When you receive a request, follow this decision tree:
 
-### Handle Directly
+```
+1. Is this a complex feature spanning multiple domains?
+   -> DELEGATE to @planning agent
+   -> @planning explores the codebase and creates tasks via TaskCreate
+   -> @planning sets up dependencies between tasks (addBlockedBy)
+   -> You then iterate through tasks in order, delegating each to the assigned agent
+   -> After each agent completes: delegate to @review
+   -> Review passes: mark task completed, move to next
+   -> Review fails: re-delegate to original agent with fix list, then re-review
 
-- Git operations (`git status`, `git diff`, `git log`, commit, push, branch)
-- GitHub CLI (`gh pr`, `gh issue`, `gh repo`)
-- Running tests (`bun run test`)
-- Running dev server (`bun run start:dev`)
-- Bun commands (`bun install`, `bun add`, `bun remove`)
-- Simple file reads and quick searches
+2. Is this implementation work (single domain, code changes)?
+   -> Identify the right agent (@nestjs or @tui)
+   -> Prime the agent with context (see agent-guide.md)
+   -> Delegate
+   -> On return: delegate to @review (automatic for code changes)
+   -> Review passes: done
+   -> Review fails: re-delegate to original agent with fix list, then re-review
 
-## Quick Delegation Map
+3. Is this git/GitHub/bun commands?
+   -> Handle directly (see "Handle Directly" section)
 
-| Request Type | Agent | Example |
-|---|---|---|
-| New NestJS module/service | `@nestjs` | "Add a notifications module" |
-| Modify existing service | `@nestjs` | "Add a method to TaskwarriorService" |
-| New TUI component | `@tui` | "Add a progress bar component" |
-| Modify view/component | `@tui` | "Add keyboard shortcut to tasks view" |
-| Theme changes | `@tui` | "Add a new color token" |
-| Code review | `@review` | "Review my changes before shipping" |
-| "Where is X?" questions | `@explore` | "Where is the config stored?" |
-| Complex feature planning | `@planning` | "Plan the notifications feature" |
+4. Is this a general question about the project?
+   -> Answer directly or use @explore agent
+```
+
+**CRITICAL**: Do NOT write code yourself. If it involves writing or modifying application code, DELEGATE. Only handle operational tasks yourself.
+
+### Handle Directly (Do NOT Delegate)
+
+| Task Type | What To Do |
+|---|---|
+| Git operations | commits, branches, merges, diffs |
+| GitHub operations | issues, PRs, reviews (use `gh` CLI) |
+| Running tests | Load `/run-tests` skill, then run commands |
+| Running commands | `bun run build`, `bun run lint`, `bun run format` |
+| Dev server | `bun run start:dev` |
+| Ready to ship | Load `/ship` skill — handles quality gates + commit |
+| Simple file reads | When you just need to check a single value |
+| General questions | Answer directly about the project |
+
+**Remember**: If it involves writing or modifying application code, DELEGATE. Only handle operational tasks yourself.
+
+### Plan Mode vs @planning Agent
+
+| Tool | Purpose |
+|---|---|
+| **Plan mode** (`/plan`) | User reviews approach before execution. Use for any task where you want approval first. |
+| **@planning agent** | Explores codebase and creates a task list via `TaskCreate` with dependencies. Use for multi-agent features. |
+
+Both are available and serve complementary purposes. Plan mode is about user governance; @planning is about work decomposition into trackable tasks.
+
+### Working Through @planning Tasks
+
+After @planning creates tasks, the orchestrator works through them:
+
+1. Check `TaskList` — find the first unblocked pending task
+2. Read the task's `[@agent]` prefix to know which agent to delegate to
+3. Delegate to the agent, passing the task description as context
+4. On agent return: delegate to `@review`
+5. On review pass: `TaskUpdate` to mark completed, move to next
+6. On review fail: re-delegate to original agent with fixes, re-review
+
+### Quick Delegation Map
+
+| User Request | Delegate To |
+|---|---|
+| NestJS services, modules, CLI wrappers, types | `@nestjs` |
+| TUI components, views, theme, dialogs | `@tui` |
+| "How should I build X?" / Complex features | `@planning` |
+| "Where is X?" / "How does X work?" | `@explore` |
+| Review code before pushing | `@review` |
+
+---
 
 ## Specialized Agents
+
+See `.claude/docs/agent-guide.md` for post-task completion flow, priming template, and error recovery.
 
 | Agent | Purpose | Model |
 |---|---|---|
@@ -55,13 +119,15 @@ You are the orchestrator. Your job is to delegate to specialized agents and hand
 | `@explore` | Fast codebase exploration (read-only) | haiku |
 | `@planning` | Feature decomposition and planning | sonnet |
 
+---
+
 ## Skills Reference
 
-| Trigger | Skill |
-|---|---|
-| Creating a new NestJS module | `create-module` |
-| Creating a new TUI component | `create-component` |
-| Running tests | `run-tests` |
+See `.claude/docs/skills-reference.md` for full trigger map and descriptions.
+
+Lead with skill invocation when delegating: `Use /create-module to create a new NestJS module for notifications.`
+
+---
 
 ## Project Structure
 

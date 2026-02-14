@@ -4,5 +4,18 @@
       "Bash(npm:*)",
       "Bash(yarn:*)"
     ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo \"$CLAUDE_FILE_PATHS\" | grep -qE '^src/' && echo 'Reminder: Orchestrator should delegate app code changes to specialized agents (@nestjs for src/modules/*.ts, @tui for src/modules/tui/).' || true"
+          }
+        ]
+      }
+    ]
   }
 }
