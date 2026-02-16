@@ -182,15 +182,24 @@ export function TaskForm(props: TaskFormProps) {
 
     const dto: CreateTaskDto = { description: desc };
     const ann = annotation().trim();
-    if (ann) dto.annotation = ann;
-    const proj = allProjects()[projectIndex()];
-    if (proj) dto.project = proj;
+    const proj = allProjects()[projectIndex()] ?? '';
     const pri = priority();
-    if (pri) dto.priority = pri;
     const tagArr = [...selectedTags()];
-    if (tagArr.length > 0) dto.tags = tagArr;
     const dueVal = due().trim();
-    if (dueVal) dto.due = dueVal;
+
+    if (props.mode === 'edit') {
+      dto.annotation = ann;
+      dto.project = proj;
+      dto.priority = pri || undefined;
+      dto.tags = tagArr;
+      dto.due = dueVal;
+    } else {
+      if (ann) dto.annotation = ann;
+      if (proj) dto.project = proj;
+      if (pri) dto.priority = pri;
+      if (tagArr.length > 0) dto.tags = tagArr;
+      if (dueVal) dto.due = dueVal;
+    }
 
     props.onSubmit(dto);
   };

@@ -129,6 +129,7 @@ export function TaskDetail(props: TaskDetailProps) {
 
   useKeyboard((key) => {
     if (key.name === 'e') {
+      key.preventDefault();
       props.onEdit();
       return;
     }

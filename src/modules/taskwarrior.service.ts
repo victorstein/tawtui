@@ -196,12 +196,7 @@ export class TaskwarriorService {
       modifications.push(`depends:${dto.depends}`);
     }
     if (dto.tags !== undefined) {
-      // Clear existing tags and set new ones.
-      // Taskwarrior supports +tag to add and -tag to remove.
-      // We use the tag array directly via modify.
-      for (const tag of dto.tags) {
-        modifications.push(`+${tag}`);
-      }
+      modifications.push(`tags:${dto.tags.join(',')}`);
     }
 
     if (modifications.length > 0) {
