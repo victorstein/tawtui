@@ -1,4 +1,4 @@
-import { createSignal, Show, onMount } from 'solid-js';
+import { createSignal, Show, onMount, For } from 'solid-js';
 import { useKeyboard } from '@opentui/solid';
 import type { CreateTaskDto } from '../../taskwarrior.types';
 import {
@@ -7,16 +7,40 @@ import {
   FG_PRIMARY,
   FG_NORMAL,
   FG_DIM,
-  ACCENT_PRIMARY,
-  ACCENT_TERTIARY,
+  FG_MUTED,
   COLOR_ERROR,
-  COLOR_SUCCESS,
   PRIORITY_H,
   PRIORITY_M,
   PRIORITY_L,
   PROJECT_COLOR,
   TAG_COLORS,
 } from '../theme';
+
+function darkenHex(hex: string, factor: number): string {
+  const r = Math.round(parseInt(hex.slice(1, 3), 16) * factor);
+  const g = Math.round(parseInt(hex.slice(3, 5), 16) * factor);
+  const b = Math.round(parseInt(hex.slice(5, 7), 16) * factor);
+  const clamp = (v: number) => Math.min(255, Math.max(0, v));
+  return `#${clamp(r).toString(16).padStart(2, '0')}${clamp(g).toString(16).padStart(2, '0')}${clamp(b).toString(16).padStart(2, '0')}`;
+}
+
+function lerpHex(a: string, b: string, t: number): string {
+  const ar = parseInt(a.slice(1, 3), 16);
+  const ag = parseInt(a.slice(3, 5), 16);
+  const ab = parseInt(a.slice(5, 7), 16);
+  const br = parseInt(b.slice(1, 3), 16);
+  const bg = parseInt(b.slice(3, 5), 16);
+  const bb = parseInt(b.slice(5, 7), 16);
+  const r = Math.round(ar + (br - ar) * t);
+  const g = Math.round(ag + (bg - ag) * t);
+  const blue = Math.round(ab + (bb - ab) * t);
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${blue.toString(16).padStart(2, '0')}`;
+}
+
+const FORM_BUTTONS = [
+  { label: ' [Enter] Save ', shortcut: 'return', gradStart: '#5aaa6a', gradEnd: '#2a7a8a' },
+  { label: ' [Esc] Cancel ', shortcut: 'escape', gradStart: '#e05555', gradEnd: '#8a2a2a' },
+] as const;
 
 interface TaskFormProps {
   mode: 'create' | 'edit';
@@ -25,11 +49,19 @@ interface TaskFormProps {
   onCancel: () => void;
 }
 
-const FIELDS = ['description', 'project', 'priority', 'tags', 'due'] as const;
+const FIELDS = [
+  'description',
+  'annotation',
+  'project',
+  'priority',
+  'tags',
+  'due',
+] as const;
 type FieldName = (typeof FIELDS)[number];
 
 const FIELD_LABELS: Record<FieldName, string> = {
-  description: 'Description',
+  description: 'Title',
+  annotation: 'Description',
   project: 'Project',
   priority: 'Priority',
   tags: 'Tags',
@@ -50,6 +82,12 @@ export function TaskForm(props: TaskFormProps) {
   const [description, setDescription] = createSignal(
     props.initialValues?.description ?? '',
   );
+  const [annotation, setAnnotation] = createSignal(
+    props.initialValues?.annotation ?? '',
+  );
+  // Ref to the textarea renderable so we can read plainText on content change
+  // (OpenTUI's onContentChange passes an empty object, not the text content)
+  let annotationRef: any = null;
   const [priority, setPriority] = createSignal<'' | 'L' | 'M' | 'H'>(
     props.initialValues?.priority ?? '',
   );
@@ -65,6 +103,9 @@ export function TaskForm(props: TaskFormProps) {
     new Set(props.initialValues?.tags ?? []),
   );
   const [tagCursor, setTagCursor] = createSignal(0);
+
+  // Button row focus: null means focus is on a form field, number is button index
+  const [buttonFocus, setButtonFocus] = createSignal<number | null>(null);
 
   // New input mode for inline creation
   const [newInputMode, setNewInputMode] = createSignal<
@@ -140,14 +181,25 @@ export function TaskForm(props: TaskFormProps) {
     if (!desc) return;
 
     const dto: CreateTaskDto = { description: desc };
-    const proj = allProjects()[projectIndex()];
-    if (proj) dto.project = proj;
+    const ann = annotation().trim();
+    const proj = allProjects()[projectIndex()] ?? '';
     const pri = priority();
-    if (pri) dto.priority = pri;
     const tagArr = [...selectedTags()];
-    if (tagArr.length > 0) dto.tags = tagArr;
     const dueVal = due().trim();
-    if (dueVal) dto.due = dueVal;
+
+    if (props.mode === 'edit') {
+      dto.annotation = ann;
+      dto.project = proj;
+      dto.priority = pri || undefined;
+      dto.tags = tagArr;
+      dto.due = dueVal;
+    } else {
+      if (ann) dto.annotation = ann;
+      if (proj) dto.project = proj;
+      if (pri) dto.priority = pri;
+      if (tagArr.length > 0) dto.tags = tagArr;
+      if (dueVal) dto.due = dueVal;
+    }
 
     props.onSubmit(dto);
   };
@@ -169,19 +221,87 @@ export function TaskForm(props: TaskFormProps) {
       return; // Let input handle all other keys
     }
 
+    // Escape always cancels
+    if (key.name === 'escape') {
+      key.preventDefault();
+      key.stopPropagation();
+      props.onCancel();
+      return;
+    }
+
+    // Button row focus handling
+    if (buttonFocus() !== null) {
+      if (key.name === 'left') {
+        key.preventDefault();
+        key.stopPropagation();
+        setButtonFocus((prev) =>
+          prev !== null
+            ? (prev - 1 + FORM_BUTTONS.length) % FORM_BUTTONS.length
+            : 0,
+        );
+        return;
+      }
+      if (key.name === 'right') {
+        key.preventDefault();
+        key.stopPropagation();
+        setButtonFocus((prev) =>
+          prev !== null ? (prev + 1) % FORM_BUTTONS.length : 0,
+        );
+        return;
+      }
+      if (key.name === 'tab' && !key.shift) {
+        key.preventDefault();
+        key.stopPropagation();
+        if (buttonFocus()! < FORM_BUTTONS.length - 1) {
+          setButtonFocus((prev) => prev! + 1);
+        } else {
+          setButtonFocus(null);
+          setFocusedField(0);
+        }
+        return;
+      }
+      if (key.name === 'tab' && key.shift) {
+        key.preventDefault();
+        key.stopPropagation();
+        if (buttonFocus()! > 0) {
+          setButtonFocus((prev) => prev! - 1);
+        } else {
+          setButtonFocus(null);
+          setFocusedField(FIELDS.length - 1);
+        }
+        return;
+      }
+      if (key.name === 'return') {
+        key.preventDefault();
+        key.stopPropagation();
+        const btn = FORM_BUTTONS[buttonFocus()!];
+        if (btn.shortcut === 'return') handleSubmit();
+        if (btn.shortcut === 'escape') props.onCancel();
+        return;
+      }
+      key.stopPropagation();
+      return;
+    }
+
+    // Form field navigation
     if (key.name === 'tab' && !key.shift) {
       key.preventDefault();
-      setFocusedField((prev) => (prev + 1) % FIELDS.length);
+      key.stopPropagation();
+      if (focusedField() === FIELDS.length - 1) {
+        setButtonFocus(0);
+      } else {
+        setFocusedField((prev) => prev + 1);
+      }
       return;
     }
     if (key.name === 'tab' && key.shift) {
       key.preventDefault();
-      setFocusedField((prev) => (prev - 1 + FIELDS.length) % FIELDS.length);
-      return;
-    }
-    if (key.name === 'return') {
-      key.preventDefault();
-      handleSubmit();
+      key.stopPropagation();
+      if (focusedField() === 0) {
+        setButtonFocus(FORM_BUTTONS.length - 1);
+      } else {
+        setFocusedField((prev) => prev - 1);
+      }
       return;
     }
 
@@ -267,7 +387,10 @@ export function TaskForm(props: TaskFormProps) {
   });
 
   const labelColor = (idx: number) =>
-    focusedField() === idx ? FG_NORMAL : FG_DIM;
+    buttonFocus() === null && focusedField() === idx ? FG_NORMAL : FG_DIM;
+
+  const isFieldFocused = (idx: number) =>
+    buttonFocus() === null && focusedField() === idx;
 
   const priInfo = () => PRIORITY_DISPLAY[priority()] ?? PRIORITY_DISPLAY[''];
 
@@ -294,19 +417,48 @@ export function TaskForm(props: TaskFormProps) {
       {/* Description */}
       <box height={1} flexDirection="row">
         <box width={14}>
-          <text fg={labelColor(0)} attributes={focusedField() === 0 ? 1 : 0}>
-            {focusedField() === 0 ? '> ' : '  '}
+          <text fg={labelColor(0)} attributes={isFieldFocused(0) ? 1 : 0}>
+            {isFieldFocused(0) ? '> ' : '  '}
             {FIELD_LABELS.description}
           </text>
         </box>
         <input
+            width={60}
+            value={description()}
+            placeholder="Task title (required)"
+            focused={isFieldFocused(0)}
+            backgroundColor={isFieldFocused(0) ? BG_INPUT_FOCUS : BG_INPUT}
+            textColor={FG_NORMAL}
+            onInput={(val: string) => setDescription(val)}
+          />
+      </box>
+      <box height={1} />
+
+      {/* Body / Notes */}
+      <box flexDirection="row">
+        <box width={14} height={1}>
+          <text fg={labelColor(1)} attributes={isFieldFocused(1) ? 1 : 0}>
+            {isFieldFocused(1) ? '> ' : '  '}
+            {FIELD_LABELS.annotation}
+          </text>
+        </box>
+        <textarea
+          ref={(el: any) => { annotationRef = el; }}
           width={60}
-          value={description()}
-          placeholder="Task description (required)"
-          focused={focusedField() === 0}
-          backgroundColor={focusedField() === 0 ? BG_INPUT_FOCUS : BG_INPUT}
+          height={5}
+          initialValue={annotation()}
+          placeholder="Optional notes or body text (supports markdown)"
+          placeholderColor={FG_DIM}
+          focused={isFieldFocused(1)}
+          backgroundColor={isFieldFocused(1) ? BG_INPUT_FOCUS : BG_INPUT}
+          focusedBackgroundColor={BG_INPUT_FOCUS}
+          focusedTextColor={FG_NORMAL}
           textColor={FG_NORMAL}
-          onInput={(val: string) => setDescription(val)}
+          onContentChange={() => {
+            if (annotationRef) {
+              setAnnotation(annotationRef.plainText ?? '');
+            }
+          }}
         />
       </box>
       <box height={1} />
@@ -314,13 +466,13 @@ export function TaskForm(props: TaskFormProps) {
       {/* Project */}
       <box flexDirection="row">
         <box width={14} height={1}>
-          <text fg={labelColor(1)} attributes={focusedField() === 1 ? 1 : 0}>
-            {focusedField() === 1 ? '> ' : '  '}
+          <text fg={labelColor(2)} attributes={isFieldFocused(2) ? 1 : 0}>
+            {isFieldFocused(2) ? '> ' : '  '}
             {FIELD_LABELS.project}
           </text>
         </box>
         <Show
-          when={focusedField() === 1}
+          when={isFieldFocused(2)}
           fallback={
             <box height={1}>
               <text
@@ -368,13 +520,13 @@ export function TaskForm(props: TaskFormProps) {
       {/* Priority */}
       <box flexDirection="row">
         <box width={14} height={1}>
-          <text fg={labelColor(2)} attributes={focusedField() === 2 ? 1 : 0}>
-            {focusedField() === 2 ? '> ' : '  '}
+          <text fg={labelColor(3)} attributes={isFieldFocused(3) ? 1 : 0}>
+            {isFieldFocused(3) ? '> ' : '  '}
             {FIELD_LABELS.priority}
           </text>
         </box>
         <Show
-          when={focusedField() === 2}
+          when={isFieldFocused(3)}
           fallback={
             <box height={1}>
               <text fg={priInfo().color}>{priInfo().label}</text>
@@ -398,13 +550,13 @@ export function TaskForm(props: TaskFormProps) {
       {/* Tags */}
       <box flexDirection="row">
         <box width={14} height={1}>
-          <text fg={labelColor(3)} attributes={focusedField() === 3 ? 1 : 0}>
-            {focusedField() === 3 ? '> ' : '  '}
+          <text fg={labelColor(4)} attributes={isFieldFocused(4) ? 1 : 0}>
+            {isFieldFocused(4) ? '> ' : '  '}
             {FIELD_LABELS.tags}
           </text>
         </box>
         <Show
-          when={focusedField() === 3}
+          when={isFieldFocused(4)}
           fallback={
             <box height={1}>
               <text fg={selectedTags().size > 0 ? FG_NORMAL : FG_DIM}>
@@ -481,20 +633,20 @@ export function TaskForm(props: TaskFormProps) {
       {/* Due */}
       <box height={1} flexDirection="row">
         <box width={14}>
-          <text fg={labelColor(4)} attributes={focusedField() === 4 ? 1 : 0}>
-            {focusedField() === 4 ? '> ' : '  '}
+          <text fg={labelColor(5)} attributes={isFieldFocused(5) ? 1 : 0}>
+            {isFieldFocused(5) ? '> ' : '  '}
             {FIELD_LABELS.due}
           </text>
         </box>
         <input
-          width={60}
-          value={due()}
-          placeholder="e.g. tomorrow, eow, 2026-03-01"
-          focused={focusedField() === 4}
-          backgroundColor={focusedField() === 4 ? BG_INPUT_FOCUS : BG_INPUT}
-          textColor={FG_NORMAL}
-          onInput={(val: string) => setDue(val)}
-        />
+            width={60}
+            value={due()}
+            placeholder="e.g. tomorrow, eow, 2026-03-01"
+            focused={isFieldFocused(5)}
+            backgroundColor={isFieldFocused(5) ? BG_INPUT_FOCUS : BG_INPUT}
+            textColor={FG_NORMAL}
+            onInput={(val: string) => setDue(val)}
+          />
       </box>
 
       {/* Spacer */}
@@ -503,19 +655,60 @@ export function TaskForm(props: TaskFormProps) {
       {/* Validation hint */}
       <Show when={!description().trim()}>
         <box height={1}>
-          <text fg={COLOR_ERROR}>{'  * Description is required'}</text>
+          <text fg={COLOR_ERROR}>{'  * Title is required'}</text>
         </box>
       </Show>
 
-      {/* Key hints */}
+      {/* Action buttons */}
+      <box height={1} />
+      <box height={1} marginLeft={-2}>
+        <text fg={FG_MUTED}>{'[Tab] Next field'}</text>
+      </box>
       <box height={1} />
       <box height={1} flexDirection="row">
-        <text fg={ACCENT_TERTIARY} attributes={1}>{' [Tab] '}</text>
-        <text fg={FG_DIM}>{'Next field  '}</text>
-        <text fg={COLOR_SUCCESS} attributes={1}>{' [Enter] '}</text>
-        <text fg={FG_DIM}>{'Save  '}</text>
-        <text fg={ACCENT_PRIMARY} attributes={1}>{' [Esc] '}</text>
-        <text fg={FG_DIM}>{'Cancel'}</text>
+        <For each={[...FORM_BUTTONS]}>
+          {(btn, idx) => {
+            const isFocused = () => buttonFocus() === idx();
+            const chars = btn.label.split('');
+            const dimBg = darkenHex(btn.gradStart, 0.3);
+            return (
+              <>
+                {idx() > 0 && <text>{'  '}</text>}
+                <box flexDirection="row">
+                  {isFocused() ? (
+                    <>
+                      <text fg={btn.gradStart}>{'\uE0B6'}</text>
+                      <For each={chars}>
+                        {(char, i) => {
+                          const t =
+                            chars.length > 1 ? i() / (chars.length - 1) : 0;
+                          return (
+                            <text
+                              fg="#ffffff"
+                              bg={lerpHex(btn.gradStart, btn.gradEnd, t)}
+                              attributes={1}
+                            >
+                              {char}
+                            </text>
+                          );
+                        }}
+                      </For>
+                      <text fg={btn.gradEnd}>{'\uE0B4'}</text>
+                    </>
+                  ) : (
+                    <>
+                      <text fg={dimBg}>{'\uE0B6'}</text>
+                      <text fg={btn.gradStart} bg={dimBg}>
+                        {btn.label}
+                      </text>
+                      <text fg={dimBg}>{'\uE0B4'}</text>
+                    </>
+                  )}
+                </box>
+              </>
+            );
+          }}
+        </For>
       </box>
     </box>
   );

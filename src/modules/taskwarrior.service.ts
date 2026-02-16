@@ -138,6 +138,9 @@ export class TaskwarriorService {
     );
 
     if (uuidMatch) {
+      if (dto.annotation) {
+        await this.addAnnotation(uuidMatch[1], dto.annotation);
+      }
       const created = await this.getTask(uuidMatch[1]);
       if (created) return created;
     }
@@ -146,11 +149,19 @@ export class TaskwarriorService {
     const tasks = await this.getTasks(`description:${dto.description}`);
     if (tasks.length > 0) {
       // Return the most recently entered one
-      return tasks.sort((a, b) => {
+      const task = tasks.sort((a, b) => {
         const aEntry = a.entry ?? '';
         const bEntry = b.entry ?? '';
         return bEntry.localeCompare(aEntry);
       })[0];
+
+      if (dto.annotation) {
+        await this.addAnnotation(task.uuid, dto.annotation);
+        const refreshed = await this.getTask(task.uuid);
+        if (refreshed) return refreshed;
+      }
+
+      return task;
     }
 
     throw new Error('Task was created but could not be retrieved');
@@ -185,28 +196,37 @@ export class TaskwarriorService {
       modifications.push(`depends:${dto.depends}`);
     }
     if (dto.tags !== undefined) {
-      // Clear existing tags and set new ones.
-      // Taskwarrior supports +tag to add and -tag to remove.
-      // We use the tag array directly via modify.
-      for (const tag of dto.tags) {
-        modifications.push(`+${tag}`);
+      modifications.push(`tags:${dto.tags.join(',')}`);
+    }
+
+    if (modifications.length > 0) {
+      const { stderr, exitCode } = this.execTask([
+        uuid,
+        'modify',
+        ...modifications,
+      ]);
+
+      if (exitCode !== 0) {
+        throw new Error(
+          `Failed to update task ${uuid} (exit ${exitCode}): ${stderr.trim()}`,
+        );
       }
     }
 
-    if (modifications.length === 0) {
-      return;
-    }
-
-    const { stderr, exitCode } = this.execTask([
-      uuid,
-      'modify',
-      ...modifications,
-    ]);
-
-    if (exitCode !== 0) {
-      throw new Error(
-        `Failed to update task ${uuid} (exit ${exitCode}): ${stderr.trim()}`,
-      );
+    // Annotations are managed separately via annotate/denotate commands
+    if (dto.annotation !== undefined) {
+      const task = await this.getTask(uuid);
+      if (!task) {
+        throw new Error(`Task ${uuid} not found`);
+      }
+      if (task.annotations?.length) {
+        for (const ann of task.annotations) {
+          await this.removeAnnotation(uuid, ann.description);
+        }
+      }
+      if (dto.annotation) {
+        await this.addAnnotation(uuid, dto.annotation);
+      }
     }
   }
 
@@ -262,6 +282,34 @@ export class TaskwarriorService {
     if (exitCode !== 0) {
       throw new Error(
         `Failed to stop task ${uuid} (exit ${exitCode}): ${stderr.trim()}`,
+      );
+    }
+  }
+
+  /**
+   * Add an annotation to a task.
+   * Runs: task <uuid> annotate <text>
+   */
+  async addAnnotation(uuid: string, text: string): Promise<void> {
+    const { stderr, exitCode } = this.execTask([uuid, 'annotate', text]);
+
+    if (exitCode !== 0) {
+      throw new Error(
+        `Failed to annotate task ${uuid} (exit ${exitCode}): ${stderr.trim()}`,
+      );
+    }
+  }
+
+  /**
+   * Remove an annotation from a task matching the given pattern.
+   * Runs: task <uuid> denotate <pattern>
+   */
+  async removeAnnotation(uuid: string, pattern: string): Promise<void> {
+    const { stderr, exitCode } = this.execTask([uuid, 'denotate', pattern]);
+
+    if (exitCode !== 0) {
+      throw new Error(
+        `Failed to denotate task ${uuid} (exit ${exitCode}): ${stderr.trim()}`,
       );
     }
   }
