@@ -2,7 +2,6 @@ import { createSignal, Show, For, onMount } from 'solid-js';
 import { useKeyboard } from '@opentui/solid';
 import type { TaskwarriorService } from '../../taskwarrior.service';
 import {
-  BG_BASE,
   BG_SURFACE,
   BG_INPUT,
   BG_INPUT_FOCUS,
@@ -204,7 +203,7 @@ export function FilterBar(props: FilterBarProps) {
         height={1}
         width="100%"
         flexDirection="row"
-        backgroundColor={BG_BASE}
+
         paddingX={1}
       >
         {/* Filter icon / label */}
@@ -231,7 +230,7 @@ export function FilterBar(props: FilterBarProps) {
           width="100%"
           flexDirection="row"
           paddingX={1}
-          backgroundColor={BG_BASE}
+  
         >
           <text fg={FG_DIM}>{'Active: '}</text>
           <For each={chips()}>
@@ -255,7 +254,7 @@ export function FilterBar(props: FilterBarProps) {
         width="100%"
         flexDirection="row"
         paddingX={1}
-        backgroundColor={BG_BASE}
+
       >
         <text fg={COLOR_SUCCESS} attributes={1}>{' [Enter] '}</text>
         <text fg={FG_DIM}>{'Apply'}</text>

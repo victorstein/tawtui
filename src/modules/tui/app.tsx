@@ -7,7 +7,6 @@ import { ReposView } from './views/repos-view';
 import { AgentsView } from './views/agents-view';
 import { DialogProvider, useDialog } from './context/dialog';
 import { DialogConfirm } from './components/dialog-confirm';
-import { BG_BASE } from './theme';
 
 const TABS = [
   { name: 'Tasks' },
@@ -87,7 +86,6 @@ function AppContent() {
       flexDirection="column"
       width="100%"
       height="100%"
-      backgroundColor={BG_BASE}
     >
       <TabBar activeTab={activeTab} tabs={TABS} />
 
