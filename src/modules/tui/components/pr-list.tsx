@@ -8,6 +8,7 @@ import {
 import type { PullRequest } from '../../github.types';
 import {
   PR_GRAD,
+  ACCENT_PRIMARY,
   ACCENT_TERTIARY,
   BORDER_DIM,
   BG_SELECTED,
@@ -205,8 +206,13 @@ export function PrList(props: PrListProps) {
         </box>
       </Show>
       <Show when={props.repoLabel && !!props.error}>
-        <box paddingX={1} paddingY={1}>
+        <box paddingX={1} paddingY={1} flexDirection="column">
           <text fg={COLOR_ERROR}>Error: {props.error}</text>
+          <box flexDirection="row">
+            <text fg={FG_DIM}>{'Press '}</text>
+            <text fg={ACCENT_PRIMARY} attributes={1}>{'s'}</text>
+            <text fg={FG_DIM}>{' to configure dependencies'}</text>
+          </box>
         </box>
       </Show>
       <Show when={props.repoLabel && !props.loading && !props.error && props.prs.length === 0}>

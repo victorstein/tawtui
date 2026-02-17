@@ -1,4 +1,4 @@
-import { createSignal, createEffect, onMount } from 'solid-js';
+import { createSignal, createEffect, on, onMount } from 'solid-js';
 import { useKeyboard, useTerminalDimensions } from '@opentui/solid';
 import type { RepoConfig } from '../../../shared/types';
 import type { PullRequest, PullRequestDetail } from '../../github.types';
@@ -10,7 +10,10 @@ import { DialogPrDetail } from '../components/dialog-pr-detail';
 import { useDialog } from '../context/dialog';
 import { DialogPrompt } from '../components/dialog-prompt';
 import { DialogConfirm } from '../components/dialog-confirm';
+import { DialogSetupWizard } from '../components/dialog-setup-wizard';
 import { ACCENT_PRIMARY, FG_DIM, COLOR_ERROR } from '../theme';
+import type { DependencyService } from '../../dependency.service';
+import type { DependencyStatus } from '../../dependency.types';
 
 /**
  * Access the GithubService bridged from NestJS DI via globalThis.
@@ -26,10 +29,21 @@ function getConfigService(): ConfigService | null {
   return (globalThis as any).__tawtui?.configService ?? null;
 }
 
+/**
+ * Access the DependencyService bridged from NestJS DI via globalThis.
+ */
+function getDependencyService(): DependencyService | null {
+  return (globalThis as any).__tawtui?.dependencyService ?? null;
+}
+
 /** Pane identifiers for the split-pane layout. */
 type Pane = 'repos' | 'prs';
 
-export function ReposView() {
+interface ReposViewProps {
+  refreshTrigger?: () => number;
+}
+
+export function ReposView(props: ReposViewProps) {
   const dimensions = useTerminalDimensions();
   const dialog = useDialog();
 
@@ -202,6 +216,28 @@ export function ReposView() {
     // Don't handle keys when a dialog is open
     if (dialog.isOpen()) return;
 
+    // Setup wizard (when error is showing)
+    if (key.name === 's' && prError()) {
+      const depService = getDependencyService();
+      if (!depService) return;
+      void depService.checkAll().then((depStatus: DependencyStatus) => {
+        dialog.show(
+          () => (
+            <DialogSetupWizard
+              status={depStatus}
+              onCheckAgain={() => depService.checkAll()}
+              onContinue={() => {
+                dialog.close();
+                loadPRs();
+              }}
+            />
+          ),
+          { size: 'large' },
+        );
+      });
+      return;
+    }
+
     const pane = activePane();
 
     // Pane switching: h/l or Left/Right
@@ -356,6 +392,14 @@ export function ReposView() {
   onMount(() => {
     loadRepos();
   });
+
+  // Reload when parent bumps refreshTrigger (e.g. after setup wizard)
+  createEffect(
+    on(() => props.refreshTrigger?.(), () => {
+      loadRepos();
+      loadPRs();
+    }, { defer: true }),
+  );
 
   // Calculate pane widths from terminal dimensions.
   const repoPaneWidth = () => {

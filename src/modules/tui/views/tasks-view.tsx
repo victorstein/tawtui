@@ -8,6 +8,7 @@ import { TaskDetail } from '../components/task-detail';
 import { FilterBar } from '../components/filter-bar';
 import { ArchiveView } from '../components/archive-view';
 import { DialogConfirm } from '../components/dialog-confirm';
+import { DialogSetupWizard } from '../components/dialog-setup-wizard';
 import { useDialog } from '../context/dialog';
 import {
   FG_DIM,
@@ -15,6 +16,8 @@ import {
   ACCENT_SECONDARY,
   COLOR_ERROR,
 } from '../theme';
+import type { DependencyService } from '../../dependency.service';
+import type { DependencyStatus } from '../../dependency.types';
 
 /** Column definitions for the kanban board. */
 const COLUMNS = ['TODO', 'IN PROGRESS', 'DONE'] as const;
@@ -28,6 +31,13 @@ const DIALOG_GRAD_END = '#2a4a7a';
  */
 function getTaskwarriorService(): TaskwarriorService | null {
   return (globalThis as any).__tawtui?.taskwarriorService ?? null;
+}
+
+/**
+ * Access the DependencyService bridged from NestJS DI via globalThis.
+ */
+function getDependencyService(): DependencyService | null {
+  return (globalThis as any).__tawtui?.dependencyService ?? null;
 }
 
 /**
@@ -80,6 +90,7 @@ function categoriseTasks(tasks: Task[]): [Task[], Task[], Task[]] {
 interface TasksViewProps {
   onArchiveModeChange?: (active: boolean) => void;
   onInputCapturedChange?: (captured: boolean) => void;
+  refreshTrigger?: () => number;
 }
 
 export function TasksView(props: TasksViewProps) {
@@ -228,6 +239,28 @@ export function TasksView(props: TasksViewProps) {
   useKeyboard((key) => {
     // Don't handle keys when a dialog is open
     if (dialog.isOpen()) return;
+
+    // Setup wizard (when error is showing)
+    if (key.name === 's' && error()) {
+      const depService = getDependencyService();
+      if (!depService) return;
+      void depService.checkAll().then((depStatus: DependencyStatus) => {
+        dialog.show(
+          () => (
+            <DialogSetupWizard
+              status={depStatus}
+              onCheckAgain={() => depService.checkAll()}
+              onContinue={() => {
+                dialog.close();
+                loadTasks();
+              }}
+            />
+          ),
+          { size: 'large' },
+        );
+      });
+      return;
+    }
 
     // Don't handle board keys when filter is active (FilterBar owns input)
     if (filterActive()) return;
@@ -485,6 +518,13 @@ export function TasksView(props: TasksViewProps) {
     loadTasks();
   });
 
+  // Reload when parent bumps refreshTrigger (e.g. after setup wizard)
+  createEffect(
+    on(() => props.refreshTrigger?.(), () => {
+      loadTasks();
+    }, { defer: true }),
+  );
+
   // Calculate column width from terminal dimensions.
   // Each column gets roughly 1/3 of the available width.
   const columnWidth = () => {
@@ -551,8 +591,13 @@ export function TasksView(props: TasksViewProps) {
 
         {/* Error message */}
         <Show when={error()}>
-          <box height={1} paddingX={1}>
+          <box height={2} paddingX={1} flexDirection="column">
             <text fg={COLOR_ERROR}>Error: {error()}</text>
+            <box flexDirection="row">
+              <text fg={FG_DIM}>{'Press '}</text>
+              <text fg={ACCENT_PRIMARY} attributes={1}>{'s'}</text>
+              <text fg={FG_DIM}>{' to configure dependencies'}</text>
+            </box>
           </box>
         </Show>
 
