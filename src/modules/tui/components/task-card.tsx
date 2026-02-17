@@ -148,7 +148,7 @@ export function TaskCard(props: TaskCardProps) {
 
       {/* Line 2: project (rectangular) + tag pills (rounded caps) */}
       <Show when={hasMetaParts()}>
-        <box height={1} width="100%" flexDirection="row">
+        <box width="100%" flexDirection="row" flexWrap="wrap">
           <text fg={FG_FAINT}>{'  '}</text>
           {/* Project pill — rectangular */}
           <Show when={projectPart()}>
@@ -163,7 +163,7 @@ export function TaskCard(props: TaskCardProps) {
             {(part, index) => {
               const chars = (' ' + part.text.toUpperCase() + ' ').split('');
               return (
-                <>
+                <box flexDirection="row">
                   <Show when={index() > 0 || !!projectPart()}>
                     <text> </text>
                   </Show>
@@ -182,7 +182,7 @@ export function TaskCard(props: TaskCardProps) {
                     }}
                   </For>
                   <text fg={part.grad.end}>{'\uE0B4'}</text>
-                </>
+                </box>
               );
             }}
           </For>

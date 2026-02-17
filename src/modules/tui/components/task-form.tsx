@@ -615,7 +615,7 @@ export function TaskForm(props: TaskFormProps) {
         <Show
           when={isFieldFocused(4)}
           fallback={
-            <box height={1}>
+            <box>
               <text fg={selectedTags().size > 0 ? FG_NORMAL : FG_DIM}>
                 {selectedTagsDisplay()}
               </text>

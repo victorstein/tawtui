@@ -192,7 +192,7 @@ export function TaskDetail(props: TaskDetailProps) {
       </box>
 
       {/* Tags */}
-      <box height={1} flexDirection="row">
+      <box flexDirection="row" flexWrap="wrap">
         <text fg={FG_DIM}>{'Tags: '}</text>
         <Show
           when={task().tags && task().tags!.length > 0}
