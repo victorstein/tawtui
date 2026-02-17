@@ -55,7 +55,9 @@ export function DialogPrompt(props: DialogPromptProps) {
           backgroundColor={BG_SELECTED}
           paddingX={3}
         >
-          <text fg={COLOR_SUCCESS} attributes={1}>{'Enter '}</text>
+          <text fg={COLOR_SUCCESS} attributes={1}>
+            {'Enter '}
+          </text>
           <text fg={FG_PRIMARY}>{'Submit'}</text>
         </box>
         <box
@@ -65,7 +67,9 @@ export function DialogPrompt(props: DialogPromptProps) {
           backgroundColor={BG_SELECTED}
           paddingX={3}
         >
-          <text fg={ACCENT_PRIMARY} attributes={1}>{'Esc '}</text>
+          <text fg={ACCENT_PRIMARY} attributes={1}>
+            {'Esc '}
+          </text>
           <text fg={FG_PRIMARY}>{'Cancel'}</text>
         </box>
       </box>

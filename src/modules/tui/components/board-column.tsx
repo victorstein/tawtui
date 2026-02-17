@@ -2,30 +2,7 @@ import { For, Show } from 'solid-js';
 import type { Task } from '../../taskwarrior.types';
 import { TaskCard } from './task-card';
 import { BORDER_DIM, FG_DIM } from '../theme';
-
-const LEFT_CAP = '\uE0B6';
-const RIGHT_CAP = '\uE0B4';
-
-function lerpHex(a: string, b: string, t: number): string {
-  const ar = parseInt(a.slice(1, 3), 16);
-  const ag = parseInt(a.slice(3, 5), 16);
-  const ab = parseInt(a.slice(5, 7), 16);
-  const br = parseInt(b.slice(1, 3), 16);
-  const bg = parseInt(b.slice(3, 5), 16);
-  const bb = parseInt(b.slice(5, 7), 16);
-  const r = Math.round(ar + (br - ar) * t);
-  const g = Math.round(ag + (bg - ag) * t);
-  const blue = Math.round(ab + (bb - ab) * t);
-  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${blue.toString(16).padStart(2, '0')}`;
-}
-
-function darkenHex(hex: string, factor: number): string {
-  const r = Math.round(parseInt(hex.slice(1, 3), 16) * factor);
-  const g = Math.round(parseInt(hex.slice(3, 5), 16) * factor);
-  const b = Math.round(parseInt(hex.slice(5, 7), 16) * factor);
-  const clamp = (v: number) => Math.min(255, Math.max(0, v));
-  return `#${clamp(r).toString(16).padStart(2, '0')}${clamp(g).toString(16).padStart(2, '0')}${clamp(b).toString(16).padStart(2, '0')}`;
-}
+import { lerpHex, darkenHex, LEFT_CAP, RIGHT_CAP } from '../utils';
 
 const COLUMN_GRADIENTS: Record<string, [string, string]> = {
   TODO: ['#8a7aaa', '#445f80'],
@@ -58,9 +35,7 @@ export function BoardColumn(props: BoardColumnProps) {
   const innerWidth = () => Math.max(props.width - 2, 1);
 
   const borderColor = () =>
-    props.isActiveColumn
-      ? lerpHex(gradStart(), gradEnd(), 0.5)
-      : BORDER_DIM;
+    props.isActiveColumn ? lerpHex(gradStart(), gradEnd(), 0.5) : BORDER_DIM;
 
   return (
     <box
@@ -74,8 +49,7 @@ export function BoardColumn(props: BoardColumnProps) {
       <box height={1} width="100%" flexDirection="row">
         <For each={Array.from({ length: innerWidth() }, (_, i) => i)}>
           {(i) => {
-            const t = () =>
-              innerWidth() > 1 ? i / (innerWidth() - 1) : 0;
+            const t = () => (innerWidth() > 1 ? i / (innerWidth() - 1) : 0);
             return (
               <text fg={lerpHex(colorStart(), colorEnd(), t())}>
                 {'\u2500'}
@@ -91,9 +65,7 @@ export function BoardColumn(props: BoardColumnProps) {
         <For each={headerLabel().split('')}>
           {(char, i) => {
             const t = () =>
-              headerLabel().length > 1
-                ? i() / (headerLabel().length - 1)
-                : 0;
+              headerLabel().length > 1 ? i() / (headerLabel().length - 1) : 0;
             return (
               <text
                 fg="#ffffff"
@@ -112,8 +84,7 @@ export function BoardColumn(props: BoardColumnProps) {
       <box height={1} width="100%" flexDirection="row">
         <For each={Array.from({ length: innerWidth() }, (_, i) => i)}>
           {(i) => {
-            const t = () =>
-              innerWidth() > 1 ? i / (innerWidth() - 1) : 0;
+            const t = () => (innerWidth() > 1 ? i / (innerWidth() - 1) : 0);
             return (
               <text fg={lerpHex(colorStart(), colorEnd(), t())}>
                 {'\u2500'}

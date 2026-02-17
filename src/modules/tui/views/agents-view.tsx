@@ -90,7 +90,7 @@ export function AgentsView() {
     const termHeight = dimensions().height;
     const outputWidth = termWidth - Math.floor(termWidth * 0.3);
     const cols = Math.max(outputWidth - 4, 10); // subtract borders and padding
-    const rows = Math.max(termHeight - 8, 5);   // subtract chrome
+    const rows = Math.max(termHeight - 8, 5); // subtract chrome
 
     try {
       ts.resize(agent.id, cols, rows);
@@ -261,9 +261,7 @@ export function AgentsView() {
     // Within-pane navigation: j/k or Down/Up (only in agents pane)
     if (key.name === 'j' || key.name === 'down') {
       if (activePane() === 'agents') {
-        setAgentIndex((i) =>
-          Math.min(i + 1, Math.max(agents().length - 1, 0)),
-        );
+        setAgentIndex((i) => Math.min(i + 1, Math.max(agents().length - 1, 0)));
       }
       return;
     }

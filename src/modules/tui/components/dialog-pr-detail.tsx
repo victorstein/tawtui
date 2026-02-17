@@ -1,10 +1,6 @@
 import { Show } from 'solid-js';
 import { useKeyboard } from '@opentui/solid';
-import {
-  SyntaxStyle,
-  RGBA,
-  type ScrollBoxRenderable,
-} from '@opentui/core';
+import { SyntaxStyle, RGBA, type ScrollBoxRenderable } from '@opentui/core';
 import type { PullRequestDetail } from '../../github.types';
 import {
   ACCENT_PRIMARY,
@@ -213,7 +209,11 @@ export function DialogPrDetail(props: DialogPrDetailProps) {
           when={props.pr.body}
           fallback={<text fg={FG_MUTED}>No description provided.</text>}
         >
-          <markdown content={cleanPrBody(props.pr.body)} syntaxStyle={markdownStyle} conceal={true} />
+          <markdown
+            content={cleanPrBody(props.pr.body)}
+            syntaxStyle={markdownStyle}
+            conceal={true}
+          />
         </Show>
       </scrollbox>
 

@@ -42,10 +42,8 @@ export function TabBar(props: TabBarProps) {
           const pillBg = () => (isActive() ? ACCENT_PRIMARY : BORDER_DIM);
           const label = () => `  ${index + 1} ${tab().name}  `;
 
-          const bgStart = () =>
-            isActive() ? ACCENT_PRIMARY : BORDER_DIM;
-          const bgEnd = () =>
-            isActive() ? '#d43535' : '#0e2a3d';
+          const bgStart = () => (isActive() ? ACCENT_PRIMARY : BORDER_DIM);
+          const bgEnd = () => (isActive() ? '#d43535' : '#0e2a3d');
           const fgColor = () => (isActive() ? '#ffffff' : '#c0bab0');
 
           return (

@@ -37,8 +37,18 @@ const PRIORITY_COLORS: Record<string, string> = {
 };
 
 const MONTH_NAMES = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
 ];
 
 /**
@@ -217,9 +227,7 @@ export function ArchiveView(props: ArchiveViewProps) {
       const completed = await tw.getTasks('status:completed end.before:today');
       setTasks(completed);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Failed to load archive',
-      );
+      setError(err instanceof Error ? err.message : 'Failed to load archive');
     } finally {
       setLoading(false);
     }

@@ -10,6 +10,7 @@ import {
 import { useKeyboard, useTerminalDimensions } from '@opentui/solid';
 import { RGBA } from '@opentui/core';
 import { BG_SURFACE, BORDER_DIALOG } from '../theme';
+import { lerpHex } from '../utils';
 
 export type DialogSize = 'small' | 'medium' | 'large';
 
@@ -18,19 +19,6 @@ export interface DialogOptions {
   onClose?: () => void;
   gradStart?: string;
   gradEnd?: string;
-}
-
-function lerpHex(a: string, b: string, t: number): string {
-  const ar = parseInt(a.slice(1, 3), 16);
-  const ag = parseInt(a.slice(3, 5), 16);
-  const ab = parseInt(a.slice(5, 7), 16);
-  const br = parseInt(b.slice(1, 3), 16);
-  const bg = parseInt(b.slice(3, 5), 16);
-  const bb = parseInt(b.slice(5, 7), 16);
-  const r = Math.round(ar + (br - ar) * t);
-  const g = Math.round(ag + (bg - ag) * t);
-  const blue = Math.round(ab + (bb - ab) * t);
-  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${blue.toString(16).padStart(2, '0')}`;
 }
 
 interface DialogEntry {
@@ -164,10 +152,7 @@ export function DialogProvider(props: ParentProps) {
                 <Show when={hasGradient()}>
                   <box height={1} width="100%" flexDirection="row">
                     <For
-                      each={Array.from(
-                        { length: innerWidth() },
-                        (_, i) => i,
-                      )}
+                      each={Array.from({ length: innerWidth() }, (_, i) => i)}
                     >
                       {(i) => {
                         const t = () =>
@@ -194,10 +179,7 @@ export function DialogProvider(props: ParentProps) {
                 <Show when={hasGradient()}>
                   <box height={1} width="100%" flexDirection="row">
                     <For
-                      each={Array.from(
-                        { length: innerWidth() },
-                        (_, i) => i,
-                      )}
+                      each={Array.from({ length: innerWidth() }, (_, i) => i)}
                     >
                       {(i) => {
                         const t = () =>

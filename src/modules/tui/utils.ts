@@ -1,5 +1,11 @@
 // src/modules/tui/utils.ts
 
+/** Powerline left cap (right-facing half-circle). */
+export const LEFT_CAP = '\uE0B6';
+
+/** Powerline right cap (left-facing half-circle). */
+export const RIGHT_CAP = '\uE0B4';
+
 /** Simple djb2 hash — maps a string to a consistent non-negative integer. */
 export function djb2(str: string): number {
   let hash = 5381;
@@ -84,4 +90,13 @@ function generateTagGradient(tag: string): { start: string; end: string } {
 
 export function getTagGradient(tag: string): { start: string; end: string } {
   return TAG_GRADIENT_MAP[tag] ?? generateTagGradient(tag);
+}
+
+/** Generate a gradient pair for a PR author name using HSL color space. */
+export function getAuthorGradient(author: string): { start: string; end: string } {
+  const hash = djb2(author);
+  const hue = (hash * 137) % 360; // different multiplier than tags to avoid collisions
+  const start = hslToHex(hue, 50, 45);
+  const end = hslToHex((hue + 25) % 360, 35, 30);
+  return { start, end };
 }
