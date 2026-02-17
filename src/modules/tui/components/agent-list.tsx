@@ -74,8 +74,7 @@ export function AgentList(props: AgentListProps) {
             {(agent, index) => {
               const isSelected = () =>
                 props.isActivePane && index() === props.selectedIndex;
-              const statusColor = () =>
-                STATUS_COLORS[agent.status] ?? FG_DIM;
+              const statusColor = () => STATUS_COLORS[agent.status] ?? FG_DIM;
 
               /** Build the metadata line (PR or task association). */
               const metaText = () => {
