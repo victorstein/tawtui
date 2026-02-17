@@ -192,6 +192,9 @@ export class TaskwarriorService {
     if (dto.recur !== undefined) {
       modifications.push(`recur:${dto.recur}`);
     }
+    if (dto.until !== undefined) {
+      modifications.push(`until:${dto.until}`);
+    }
     if (dto.depends !== undefined) {
       modifications.push(`depends:${dto.depends}`);
     }

@@ -36,4 +36,4 @@ export interface CreateTaskDto {
   annotation?: string;
 }
 
-export type UpdateTaskDto = Partial<CreateTaskDto>;
+export type UpdateTaskDto = Partial<CreateTaskDto> & { until?: string };

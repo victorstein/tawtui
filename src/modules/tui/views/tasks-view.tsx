@@ -343,6 +343,8 @@ export function TasksView(props: TasksViewProps) {
                       priority: task.priority,
                       tags: task.tags,
                       due: task.due,
+                      recur: task.recur,
+                      parent: task.parent,
                     }}
                     onSubmit={async (dto: CreateTaskDto) => {
                       const tw = getTaskwarriorService();
@@ -357,6 +359,16 @@ export function TasksView(props: TasksViewProps) {
                       dialog.close();
                     }}
                     onCancel={() => dialog.close()}
+                    onStopRecurrence={async (parentUuid: string) => {
+                      const tw = getTaskwarriorService();
+                      if (tw) {
+                        try {
+                          await tw.updateTask(parentUuid, { until: 'now' });
+                        } catch {
+                          // Ignore errors; refresh will show current state
+                        }
+                      }
+                    }}
                   />
                 ),
                 { size: 'large', gradStart: DIALOG_GRAD_START, gradEnd: DIALOG_GRAD_END },

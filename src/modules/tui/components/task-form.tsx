@@ -8,6 +8,7 @@ import {
   FG_NORMAL,
   FG_DIM,
   FG_MUTED,
+  ACCENT_PRIMARY,
   COLOR_ERROR,
   PRIORITY_H,
   PRIORITY_M,
@@ -44,9 +45,10 @@ const FORM_BUTTONS = [
 
 interface TaskFormProps {
   mode: 'create' | 'edit';
-  initialValues?: Partial<CreateTaskDto>;
+  initialValues?: Partial<CreateTaskDto> & { parent?: string };
   onSubmit: (dto: CreateTaskDto) => void;
   onCancel: () => void;
+  onStopRecurrence?: (parentUuid: string) => void;
 }
 
 const FIELDS = [
@@ -56,6 +58,7 @@ const FIELDS = [
   'priority',
   'tags',
   'due',
+  'recur',
 ] as const;
 type FieldName = (typeof FIELDS)[number];
 
@@ -66,6 +69,7 @@ const FIELD_LABELS: Record<FieldName, string> = {
   priority: 'Priority',
   tags: 'Tags',
   due: 'Due',
+  recur: 'Recurrence',
 };
 
 const PRIORITY_CYCLE: ('' | 'L' | 'M' | 'H')[] = ['', 'L', 'M', 'H'];
@@ -109,9 +113,23 @@ export function TaskForm(props: TaskFormProps) {
 
   // New input mode for inline creation
   const [newInputMode, setNewInputMode] = createSignal<
-    'project' | 'tags' | null
+    'project' | 'tags' | 'recur' | null
   >(null);
   const [newInputValue, setNewInputValue] = createSignal('');
+
+  // Predefined recurrence options
+  const RECURRENCE_OPTIONS = [
+    'daily', 'weekdays', 'weekly', 'biweekly',
+    'monthly', 'quarterly', 'semiannual', 'yearly',
+  ];
+
+  const [availableRecurrences, setAvailableRecurrences] = createSignal<string[]>(RECURRENCE_OPTIONS);
+  const [selectedRecurrence, setSelectedRecurrence] = createSignal<string | null>(
+    props.initialValues?.recur ?? null,
+  );
+  const [recurrenceCursor, setRecurrenceCursor] = createSignal(0);
+
+  const initialRecur = props.initialValues?.recur ?? null;
 
   // Derived merged lists
   const allProjects = (): string[] => {
@@ -146,6 +164,15 @@ export function TaskForm(props: TaskFormProps) {
         const idx = all.indexOf(props.initialValues.project);
         if (idx >= 0) setProjectIndex(idx);
       }
+      // Initialize recurrence cursor
+      if (props.initialValues?.recur) {
+        const recur = props.initialValues.recur;
+        if (!RECURRENCE_OPTIONS.includes(recur)) {
+          setAvailableRecurrences((prev) => [recur, ...prev]);
+        }
+        const idx = availableRecurrences().indexOf(recur);
+        if (idx >= 0) setRecurrenceCursor(idx);
+      }
     } catch {
       // Silently fail — will show empty lists
     }
@@ -171,6 +198,15 @@ export function TaskForm(props: TaskFormProps) {
         setAvailableTags((prev) => [...prev, val]);
       }
       setSelectedTags((prev) => new Set([...prev, val]));
+    } else if (newInputMode() === 'recur') {
+      let newRecurrences = availableRecurrences();
+      if (!newRecurrences.includes(val)) {
+        newRecurrences = [...newRecurrences, val];
+        setAvailableRecurrences(newRecurrences);
+      }
+      setSelectedRecurrence(val);
+      const idx = newRecurrences.indexOf(val);
+      if (idx >= 0) setRecurrenceCursor(idx);
     }
     setNewInputMode(null);
     setNewInputValue('');
@@ -199,6 +235,17 @@ export function TaskForm(props: TaskFormProps) {
       if (pri) dto.priority = pri;
       if (tagArr.length > 0) dto.tags = tagArr;
       if (dueVal) dto.due = dueVal;
+    }
+
+    // Validate: recur requires due date
+    const recurVal = selectedRecurrence();
+    if (recurVal && !due().trim()) return;
+
+    if (recurVal) dto.recur = recurVal;
+
+    // If recurrence was removed on a child task, stop the parent
+    if (initialRecur && !recurVal && props.initialValues?.parent) {
+      props.onStopRecurrence?.(props.initialValues.parent);
     }
 
     props.onSubmit(dto);
@@ -380,6 +427,34 @@ export function TaskForm(props: TaskFormProps) {
       if (key.name === 'n') {
         key.preventDefault();
         setNewInputMode('tags');
+        setNewInputValue('');
+        return;
+      }
+    }
+
+    // Recurrence single-select
+    if (currentField() === 'recur') {
+      const recurrences = availableRecurrences();
+      if (key.name === 'left' && recurrences.length > 0) {
+        key.preventDefault();
+        setRecurrenceCursor((c) => (c - 1 + recurrences.length) % recurrences.length);
+        return;
+      }
+      if (key.name === 'right' && recurrences.length > 0) {
+        key.preventDefault();
+        setRecurrenceCursor((c) => (c + 1) % recurrences.length);
+        return;
+      }
+      if (key.name === 'space' && recurrences.length > 0) {
+        key.preventDefault();
+        const cursor = Math.min(recurrenceCursor(), recurrences.length - 1);
+        const recur = recurrences[cursor];
+        setSelectedRecurrence((prev) => (prev === recur ? null : recur));
+        return;
+      }
+      if (key.name === 'n') {
+        key.preventDefault();
+        setNewInputMode('recur');
         setNewInputValue('');
         return;
       }
@@ -648,6 +723,86 @@ export function TaskForm(props: TaskFormProps) {
             onInput={(val: string) => setDue(val)}
           />
       </box>
+      <box height={1} />
+
+      {/* Recurrence */}
+      <box flexDirection="row">
+        <box width={14} height={1}>
+          <text fg={labelColor(6)} attributes={isFieldFocused(6) ? 1 : 0}>
+            {isFieldFocused(6) ? '> ' : '  '}
+            {FIELD_LABELS.recur}
+          </text>
+        </box>
+        <Show
+          when={isFieldFocused(6)}
+          fallback={
+            <box height={1}>
+              <text fg={selectedRecurrence() ? FG_NORMAL : FG_DIM}>
+                {selectedRecurrence() ?? 'None'}
+              </text>
+            </box>
+          }
+        >
+          <Show
+            when={newInputMode() === 'recur'}
+            fallback={
+              <box flexDirection="column" width={60}>
+                <box
+                  height={1}
+                  backgroundColor={BG_INPUT_FOCUS}
+                  paddingX={1}
+                  flexDirection="row"
+                >
+                  <Show
+                    when={availableRecurrences().length > 0}
+                    fallback={
+                      <text fg={FG_DIM}>{'None  [n] add custom'}</text>
+                    }
+                  >
+                    {(() => {
+                      const cursor = () =>
+                        Math.min(recurrenceCursor(), availableRecurrences().length - 1);
+                      const recur = () => availableRecurrences()[cursor()];
+                      const isSelected = () => selectedRecurrence() === recur();
+                      return (
+                        <>
+                          <text fg={isSelected() ? ACCENT_PRIMARY : FG_NORMAL} attributes={1}>
+                            {'▸ '}
+                            {isSelected() ? '●' : '○'}{' '}
+                            {recur()}
+                          </text>
+                          <box flexGrow={1} />
+                          <text fg={FG_DIM}>
+                            {cursor() + 1}{' of '}{availableRecurrences().length}
+                          </text>
+                        </>
+                      );
+                    })()}
+                  </Show>
+                </box>
+                <box height={1} paddingX={1}>
+                  <text fg={FG_DIM}>
+                    {props.initialValues?.parent
+                      ? '[←/→] move  [space] select  [n] custom  (deselect to stop)'
+                      : '[←/→] move  [space] select  [n] custom'}
+                  </text>
+                </box>
+              </box>
+            }
+          >
+            <input
+              width={60}
+              value={newInputValue()}
+              placeholder="e.g., 2weeks, 3months, P14D"
+              focused={true}
+              backgroundColor={BG_INPUT_FOCUS}
+              textColor={FG_NORMAL}
+              onInput={(val: string) => setNewInputValue(val)}
+            />
+          </Show>
+        </Show>
+      </box>
+      <box height={1} />
 
       {/* Spacer */}
       <box height={1} />
@@ -656,6 +811,11 @@ export function TaskForm(props: TaskFormProps) {
       <Show when={!description().trim()}>
         <box height={1}>
           <text fg={COLOR_ERROR}>{'  * Title is required'}</text>
+        </box>
+      </Show>
+      <Show when={selectedRecurrence() && !due().trim()}>
+        <box height={1}>
+          <text fg={COLOR_ERROR}>{'  * Due date required for recurring tasks'}</text>
         </box>
       </Show>
 
