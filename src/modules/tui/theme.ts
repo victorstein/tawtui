@@ -82,3 +82,9 @@ export const PRIORITY_L = P.green;
 export const SEPARATOR_COLOR = P.border;
 
 export const PROJECT_COLOR = P.tealGreen;
+
+// Repo pane gradient (cool teal)
+export const REPO_GRAD: [string, string] = [P.tertiary, P.surface];
+
+// PR pane gradient (warm orange → tan)
+export const PR_GRAD: [string, string] = [P.primary, P.tan];

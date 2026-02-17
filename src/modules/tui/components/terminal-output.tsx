@@ -54,21 +54,18 @@ export function TerminalOutput(props: TerminalOutputProps) {
     >
       {/* Header */}
       <box height={1} width="100%" paddingX={1} flexDirection="row">
-        <text
-          fg={headerColor()}
-          attributes={1}
-          truncate
-        >
+        <text fg={headerColor()} attributes={1} truncate>
           {headerText()}
         </text>
       </box>
 
       {/* Separator */}
       <box height={1} width="100%">
-        <text fg={props.isInteractive ? ACCENT_PRIMARY : SEPARATOR_COLOR} truncate>
-          {props.isInteractive
-            ? '\u2550'.repeat(200)
-            : '\u2500'.repeat(200)}
+        <text
+          fg={props.isInteractive ? ACCENT_PRIMARY : SEPARATOR_COLOR}
+          truncate
+        >
+          {props.isInteractive ? '\u2550'.repeat(200) : '\u2500'.repeat(200)}
         </text>
       </box>
 

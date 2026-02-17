@@ -8,11 +8,7 @@ import { AgentsView } from './views/agents-view';
 import { DialogProvider, useDialog } from './context/dialog';
 import { DialogConfirm } from './components/dialog-confirm';
 
-const TABS = [
-  { name: 'Tasks' },
-  { name: 'Repos' },
-  { name: 'Agents' },
-];
+const TABS = [{ name: 'Tasks' }, { name: 'Repos' }, { name: 'Agents' }];
 
 export function App() {
   return (
@@ -82,11 +78,7 @@ function AppContent() {
   });
 
   return (
-    <box
-      flexDirection="column"
-      width="100%"
-      height="100%"
-    >
+    <box flexDirection="column" width="100%" height="100%">
       <TabBar activeTab={activeTab} tabs={TABS} />
 
       <box flexGrow={1} flexDirection="column">

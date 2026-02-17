@@ -68,8 +68,7 @@ function categoriseTasks(tasks: Task[]): [Task[], Task[], Task[]] {
   }
 
   // Sort by urgency descending within each column
-  const byUrgency = (a: Task, b: Task) =>
-    (b.urgency ?? 0) - (a.urgency ?? 0);
+  const byUrgency = (a: Task, b: Task) => (b.urgency ?? 0) - (a.urgency ?? 0);
   todo.sort(byUrgency);
   inProgress.sort(byUrgency);
   done.sort(byUrgency);
@@ -155,9 +154,7 @@ export function TasksView(props: TasksViewProps) {
       setInProgressTasks(ip);
       setDoneTasks(dn);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Failed to load tasks',
-      );
+      setError(err instanceof Error ? err.message : 'Failed to load tasks');
     } finally {
       setLoading(false);
     }
@@ -317,7 +314,11 @@ export function TasksView(props: TasksViewProps) {
             onCancel={() => dialog.close()}
           />
         ),
-        { size: 'large', gradStart: DIALOG_GRAD_START, gradEnd: DIALOG_GRAD_END },
+        {
+          size: 'large',
+          gradStart: DIALOG_GRAD_START,
+          gradEnd: DIALOG_GRAD_END,
+        },
       );
       return;
     }
@@ -371,13 +372,21 @@ export function TasksView(props: TasksViewProps) {
                     }}
                   />
                 ),
-                { size: 'large', gradStart: DIALOG_GRAD_START, gradEnd: DIALOG_GRAD_END },
+                {
+                  size: 'large',
+                  gradStart: DIALOG_GRAD_START,
+                  gradEnd: DIALOG_GRAD_END,
+                },
               );
             }}
             onClose={() => dialog.close()}
           />
         ),
-        { size: 'large', gradStart: DIALOG_GRAD_START, gradEnd: DIALOG_GRAD_END },
+        {
+          size: 'large',
+          gradStart: DIALOG_GRAD_START,
+          gradEnd: DIALOG_GRAD_END,
+        },
       );
       return;
     }
@@ -439,14 +448,20 @@ export function TasksView(props: TasksViewProps) {
         {/* Active filter indicator — shown when a filter is applied but bar is closed */}
         <Show when={!filterActive() && appliedFilter().trim()}>
           <box height={1} width="100%" paddingX={1}>
-            <text fg={ACCENT_PRIMARY} attributes={1}>{'Filter: '}</text>
+            <text fg={ACCENT_PRIMARY} attributes={1}>
+              {'Filter: '}
+            </text>
             <text fg={ACCENT_SECONDARY}>{appliedFilter()}</text>
-            <text fg={FG_DIM}>{'  (press / to edit, Esc in filter to clear)'}</text>
+            <text fg={FG_DIM}>
+              {'  (press / to edit, Esc in filter to clear)'}
+            </text>
           </box>
         </Show>
 
         {/* Loading indicator */}
-        <Show when={loading() && !todoTasks().length && !inProgressTasks().length}>
+        <Show
+          when={loading() && !todoTasks().length && !inProgressTasks().length}
+        >
           <box height={1} paddingX={1}>
             <text fg={FG_DIM}>Loading tasks...</text>
           </box>

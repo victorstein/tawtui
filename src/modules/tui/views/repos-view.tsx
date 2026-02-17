@@ -10,11 +10,7 @@ import { DialogPrDetail } from '../components/dialog-pr-detail';
 import { useDialog } from '../context/dialog';
 import { DialogPrompt } from '../components/dialog-prompt';
 import { DialogConfirm } from '../components/dialog-confirm';
-import {
-  ACCENT_PRIMARY,
-  FG_DIM,
-  COLOR_ERROR,
-} from '../theme';
+import { ACCENT_PRIMARY, FG_DIM, COLOR_ERROR } from '../theme';
 
 /**
  * Access the GithubService bridged from NestJS DI via globalThis.
@@ -85,6 +81,8 @@ export function ReposView() {
     const version = ++prLoadVersion;
     setPrLoading(true);
     setPrError(null);
+    setPrs([]);
+    setPrIndex(0);
 
     try {
       const prList = await gh.listPRs(repo.owner, repo.repo);
@@ -96,9 +94,7 @@ export function ReposView() {
       }
     } catch (err) {
       if (version !== prLoadVersion) return;
-      setPrError(
-        err instanceof Error ? err.message : 'Failed to load PRs',
-      );
+      setPrError(err instanceof Error ? err.message : 'Failed to load PRs');
       setPrs([]);
     } finally {
       if (version === prLoadVersion) {
@@ -306,7 +302,11 @@ export function ReposView() {
                       .catch(() => {
                         dialog.show(
                           () => (
-                            <box flexDirection="column" paddingX={1} paddingY={1}>
+                            <box
+                              flexDirection="column"
+                              paddingX={1}
+                              paddingY={1}
+                            >
                               <text fg={COLOR_ERROR}>
                                 Failed to create review agent
                               </text>

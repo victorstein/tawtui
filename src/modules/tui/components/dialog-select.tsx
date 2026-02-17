@@ -80,7 +80,9 @@ export function DialogSelect(props: DialogSelectProps) {
           backgroundColor={BG_SELECTED}
           paddingX={3}
         >
-          <text fg={COLOR_SUCCESS} attributes={1}>{'Enter '}</text>
+          <text fg={COLOR_SUCCESS} attributes={1}>
+            {'Enter '}
+          </text>
           <text fg={FG_PRIMARY}>{'Select'}</text>
         </box>
         <box
@@ -90,7 +92,9 @@ export function DialogSelect(props: DialogSelectProps) {
           backgroundColor={BG_SELECTED}
           paddingX={3}
         >
-          <text fg={ACCENT_PRIMARY} attributes={1}>{'Esc '}</text>
+          <text fg={ACCENT_PRIMARY} attributes={1}>
+            {'Esc '}
+          </text>
           <text fg={FG_PRIMARY}>{'Cancel'}</text>
         </box>
       </box>

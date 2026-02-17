@@ -1,14 +1,16 @@
 import { For, Show } from 'solid-js';
 import type { RepoConfig } from '../../github.types';
 import {
-  ACCENT_PRIMARY,
   BORDER_DIM,
-  SEPARATOR_COLOR,
   BG_SELECTED,
   FG_PRIMARY,
   FG_NORMAL,
   FG_DIM,
+  REPO_GRAD,
 } from '../theme';
+import { lerpHex, darkenHex, LEFT_CAP, RIGHT_CAP } from '../utils/color';
+
+const DIM_FACTOR = 0.5;
 
 interface RepoListProps {
   repos: RepoConfig[];
@@ -18,32 +20,76 @@ interface RepoListProps {
 }
 
 export function RepoList(props: RepoListProps) {
-  const headerText = () => `REPOS (${props.repos.length})`;
+  const headerLabel = () => ` REPOS (${props.repos.length}) `;
+
+  const gradStart = () => REPO_GRAD[0];
+  const gradEnd = () => REPO_GRAD[1];
+
+  const colorStart = () =>
+    props.isActivePane ? gradStart() : darkenHex(gradStart(), DIM_FACTOR);
+  const colorEnd = () =>
+    props.isActivePane ? gradEnd() : darkenHex(gradEnd(), DIM_FACTOR);
+
+  const innerWidth = () => Math.max(props.width - 2, 1);
+
+  const borderColor = () =>
+    props.isActivePane ? lerpHex(gradStart(), gradEnd(), 0.5) : BORDER_DIM;
 
   return (
     <box
       flexDirection="column"
       width={props.width}
       height="100%"
-      borderStyle={props.isActivePane ? 'double' : 'single'}
-      borderColor={props.isActivePane ? ACCENT_PRIMARY : BORDER_DIM}
+      borderStyle="single"
+      borderColor={borderColor()}
     >
-      {/* Header */}
-      <box height={1} width="100%" paddingX={1}>
-        <text
-          fg={props.isActivePane ? FG_NORMAL : FG_DIM}
-          attributes={1}
-          truncate
-        >
-          {headerText()}
-        </text>
+      {/* Gradient top separator */}
+      <box height={1} width="100%" flexDirection="row">
+        <For each={Array.from({ length: innerWidth() }, (_, i) => i)}>
+          {(i) => {
+            const t = () => (innerWidth() > 1 ? i / (innerWidth() - 1) : 0);
+            return (
+              <text fg={lerpHex(colorStart(), colorEnd(), t())}>
+                {'\u2500'}
+              </text>
+            );
+          }}
+        </For>
       </box>
 
-      {/* Separator */}
-      <box height={1} width="100%">
-        <text fg={SEPARATOR_COLOR} truncate>
-          {'\u2500'.repeat(Math.max(props.width - 2, 1))}
-        </text>
+      {/* Pill header */}
+      <box height={1} width="100%" paddingX={1} flexDirection="row">
+        <text fg={gradStart()}>{LEFT_CAP}</text>
+        <For each={headerLabel().split('')}>
+          {(char, i) => {
+            const t = () =>
+              headerLabel().length > 1 ? i() / (headerLabel().length - 1) : 0;
+            return (
+              <text
+                fg="#ffffff"
+                bg={lerpHex(gradStart(), gradEnd(), t())}
+                attributes={1}
+              >
+                {char}
+              </text>
+            );
+          }}
+        </For>
+        <text fg={gradEnd()}>{RIGHT_CAP}</text>
+      </box>
+
+      {/* Gradient separator below header */}
+      <box height={1} width="100%" flexDirection="row">
+        <For each={Array.from({ length: innerWidth() }, (_, i) => i)}>
+          {(i) => {
+            const t = () => (innerWidth() > 1 ? i / (innerWidth() - 1) : 0);
+            return (
+              <text fg={lerpHex(colorStart(), colorEnd(), t())}>
+                {'\u2500'}
+              </text>
+            );
+          }}
+        </For>
       </box>
 
       {/* Repo list */}
@@ -65,16 +111,26 @@ export function RepoList(props: RepoListProps) {
               return (
                 <box
                   width="100%"
-                  height={1}
                   paddingX={1}
+                  paddingBottom={1}
                   backgroundColor={isSelected() ? BG_SELECTED : undefined}
+                  flexDirection="row"
                 >
+                  {/* Owner pill — rectangular, solid background */}
+                  <box backgroundColor={REPO_GRAD[0]} paddingX={1}>
+                    <text fg={FG_PRIMARY} attributes={1}>
+                      {repo.owner}
+                    </text>
+                  </box>
+                  {/* Separator */}
+                  <text fg={FG_DIM}>{' / '}</text>
+                  {/* Repo name */}
                   <text
                     fg={isSelected() ? FG_PRIMARY : FG_NORMAL}
                     attributes={isSelected() ? 1 : 0}
                     truncate
                   >
-                    {`${repo.owner}/${repo.repo}`}
+                    {repo.repo}
                   </text>
                 </box>
               );

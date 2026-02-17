@@ -25,10 +25,7 @@ export function StatusBar(props: StatusBarProps) {
   };
 
   return (
-    <box
-      height={1}
-      width="100%"
-    >
+    <box height={1} width="100%">
       <text fg={FG_DIM} truncate>{` ${hint()}`}</text>
     </box>
   );
