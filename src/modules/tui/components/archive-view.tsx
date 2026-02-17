@@ -278,22 +278,11 @@ export function ArchiveView(props: ArchiveViewProps) {
       const task = selectedTask();
       if (!task) return;
 
-      // The updateTask DTO doesn't support status changes, so we spawn
-      // `task <uuid> modify status:pending` directly via Bun.
       (async () => {
+        const tw = getTaskwarriorService();
+        if (!tw) return;
         try {
-          Bun.spawnSync(
-            [
-              'task',
-              'rc.confirmation=off',
-              'rc.bulk=0',
-              'rc.verbose=nothing',
-              task.uuid,
-              'modify',
-              'status:pending',
-            ],
-            { stdout: 'pipe', stderr: 'pipe' },
-          );
+          await tw.undoComplete(task.uuid);
         } catch {
           // Silently ignore; refresh will show current state
         }

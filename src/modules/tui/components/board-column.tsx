@@ -95,15 +95,15 @@ export function BoardColumn(props: BoardColumnProps) {
       </box>
 
       {/* Scrollable task list */}
-      <scrollbox flexGrow={1} width="100%">
-        <Show
-          when={props.tasks.length > 0}
-          fallback={
-            <box paddingX={1} paddingY={1}>
-              <text fg={FG_DIM}>No tasks</text>
-            </box>
-          }
-        >
+      <Show
+        when={props.tasks.length > 0}
+        fallback={
+          <box flexGrow={1} width="100%" paddingX={1} paddingY={1}>
+            <text fg={FG_DIM}>No tasks</text>
+          </box>
+        }
+      >
+        <scrollbox flexGrow={1} width="100%">
           <For each={props.tasks}>
             {(task, index) => (
               <box width="100%" flexDirection="column">
@@ -121,8 +121,8 @@ export function BoardColumn(props: BoardColumnProps) {
               </box>
             )}
           </For>
-        </Show>
-      </scrollbox>
+        </scrollbox>
+      </Show>
     </box>
   );
 }
