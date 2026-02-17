@@ -1,4 +1,4 @@
-import { createSignal, createEffect, onMount, onCleanup } from 'solid-js';
+import { createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js';
 import { useKeyboard, useTerminalDimensions } from '@opentui/solid';
 import type { TerminalSession, CaptureResult } from '../../terminal.types';
 import type { TerminalService } from '../../terminal.service';
@@ -6,7 +6,8 @@ import { AgentList } from '../components/agent-list';
 import { TerminalOutput } from '../components/terminal-output';
 import { useDialog } from '../context/dialog';
 import { DialogConfirm } from '../components/dialog-confirm';
-import { DialogPrompt } from '../components/dialog-prompt';
+import { AgentForm } from '../components/agent-form';
+import { COLOR_ERROR } from '../theme';
 
 /**
  * Access the TerminalService bridged from NestJS DI via globalThis.
@@ -18,7 +19,11 @@ function getTerminalService(): TerminalService | null {
 /** Pane identifiers for the split-pane layout. */
 type Pane = 'agents' | 'terminal';
 
-export function AgentsView() {
+interface AgentsViewProps {
+  onInputCapturedChange?: (captured: boolean) => void;
+}
+
+export function AgentsView(props: AgentsViewProps) {
   const dimensions = useTerminalDimensions();
   const dialog = useDialog();
 
@@ -34,6 +39,21 @@ export function AgentsView() {
 
   // Interactive mode state
   const [interactive, setInteractive] = createSignal(false);
+
+  // Error display state
+  const [error, setError] = createSignal<string | null>(null);
+  let errorTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function showError(message: string): void {
+    setError(message);
+    if (errorTimer) clearTimeout(errorTimer);
+    errorTimer = setTimeout(() => setError(null), 5000);
+  }
+
+  // Propagate interactive state to parent
+  createEffect(() => {
+    props.onInputCapturedChange?.(interactive());
+  });
 
   // ------------------------------------------------------------------
   // Data loading
@@ -59,7 +79,7 @@ export function AgentsView() {
   }
 
   /** Capture terminal output for the selected agent. */
-  function refreshCapture(): void {
+  async function refreshCapture(): Promise<void> {
     const ts = getTerminalService();
     const agent = selectedAgent();
     if (!ts || !agent) {
@@ -67,76 +87,133 @@ export function AgentsView() {
       return;
     }
     try {
-      const result = ts.captureOutput(agent.id);
+      const result = await ts.captureOutput(agent.id);
       if (result.changed || capture() === null) {
         setCapture(result);
       }
     } catch {
-      // Session may have been destroyed; refresh agent list
       loadAgents();
       setCapture(null);
     }
   }
 
   /** Resize the tmux pane to match the output pane dimensions. */
-  function resizeTmuxPane(): void {
+  async function resizeTmuxPane(): Promise<void> {
     const ts = getTerminalService();
     const agent = selectedAgent();
     if (!ts || !agent) return;
 
-    // Terminal output pane: 70% of terminal width minus borders (2 chars for border)
-    // Height: full height minus tab bar (1), status bar (1), header (1), separator (1), cursor line (1), borders (2)
     const termWidth = dimensions().width;
     const termHeight = dimensions().height;
     const outputWidth = termWidth - Math.floor(termWidth * 0.3);
-    const cols = Math.max(outputWidth - 4, 10); // subtract borders and padding
-    const rows = Math.max(termHeight - 8, 5); // subtract chrome
+    const cols = Math.max(outputWidth - 4, 10);
+    const rows = Math.max(termHeight - 8, 5);
 
     try {
-      ts.resize(agent.id, cols, rows);
+      await ts.resize(agent.id, cols, rows);
     } catch {
-      // Ignore resize errors (session may be gone)
+      // Ignore resize errors
     }
+  }
+
+  // ------------------------------------------------------------------
+  // Poll overlap guard
+  // ------------------------------------------------------------------
+
+  let isPolling = false;
+
+  async function doPoll(): Promise<void> {
+    if (isPolling) return;
+    isPolling = true;
+    try {
+      await refreshCapture();
+    } finally {
+      isPolling = false;
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Adaptive polling
+  // ------------------------------------------------------------------
+
+  let pollTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function getPollInterval(): number {
+    if (agents().length === 0) return 2000;
+    if (interactive()) return 80;
+    if (activePane() === 'terminal') return 200;
+    return 500;
+  }
+
+  function schedulePoll(): void {
+    pollTimer = setTimeout(() => {
+      void doPoll().then(() => schedulePoll());
+    }, getPollInterval());
   }
 
   // ------------------------------------------------------------------
   // Effects and lifecycle
   // ------------------------------------------------------------------
 
-  // When the selected agent changes, reset capture and resize
+  // Consolidated resize effect with debounce
+  let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+
   createEffect(() => {
+    // Track all relevant reactive dependencies
     const list = agents();
     const idx = agentIndex();
+    dimensions(); // re-run on terminal resize
+
+    if (resizeTimer !== null) {
+      clearTimeout(resizeTimer);
+    }
+
     if (list.length > 0 && idx < list.length) {
       setCapture(null);
-      refreshCapture();
-      resizeTmuxPane();
+      void refreshCapture();
+      // Debounce resize by 50ms
+      resizeTimer = setTimeout(() => {
+        void resizeTmuxPane();
+      }, 50);
     } else {
       setCapture(null);
     }
   });
 
-  // Resize tmux pane when terminal dimensions change
+  // Restart polling when relevant state changes
   createEffect(() => {
-    // Track dimensions so the effect re-runs on resize
-    dimensions();
-    resizeTmuxPane();
+    // Track reactive dependencies
+    interactive();
+    activePane();
+    void agents().length;
+    // Restart polling with new interval
+    if (pollTimer !== null) {
+      clearTimeout(pollTimer);
+    }
+    schedulePoll();
   });
-
-  // Polling timer for terminal output (200ms)
-  let pollTimer: ReturnType<typeof setInterval> | null = null;
 
   onMount(() => {
     loadAgents();
-    pollTimer = setInterval(() => {
-      refreshCapture();
-    }, 200);
+    schedulePoll();
   });
 
   onCleanup(() => {
     if (pollTimer !== null) {
-      clearInterval(pollTimer);
+      clearTimeout(pollTimer);
       pollTimer = null;
+    }
+    if (resizeTimer !== null) {
+      clearTimeout(resizeTimer);
+      resizeTimer = null;
+    }
+    if (errorTimer !== null) {
+      clearTimeout(errorTimer);
+      errorTimer = null;
+    }
+    if (escTimer) {
+      clearTimeout(escTimer);
+      escTimer = null;
     }
   });
 
@@ -151,34 +228,42 @@ export function AgentsView() {
 
     dialog.show(
       () => (
-        <DialogPrompt
-          title="New Agent - Enter command (or leave empty for shell)"
-          placeholder="e.g. htop, npm run dev, bash"
-          onSubmit={(value: string) => {
+        <AgentForm
+          onSubmit={async (data) => {
             dialog.close();
-            const command = value.trim() || undefined;
-            const name = command ?? 'shell';
             try {
-              const session = ts.createSession({
-                name,
+              const session = await ts.createSession({
+                name: data.name,
                 cwd: process.cwd(),
-                command,
+                command: data.command || undefined,
               });
+
+              // If a task was linked, start it in Taskwarrior
+              if (data.taskUuid) {
+                const tw = (globalThis as any).__tawtui?.taskwarriorService;
+                if (tw) {
+                  try {
+                    await tw.startTask(data.taskUuid);
+                  } catch {
+                    // Non-fatal — session was still created
+                  }
+                }
+              }
+
               loadAgents();
-              // Select the newly created agent
               const updated = ts.listSessions();
               const newIdx = updated.findIndex((s) => s.id === session.id);
               if (newIdx >= 0) {
                 setAgentIndex(newIdx);
               }
             } catch {
-              // Session creation failed — ignore for now
+              showError('Session creation failed');
             }
           }}
           onCancel={() => dialog.close()}
         />
       ),
-      { size: 'medium' },
+      { size: 'large' },
     );
   }
 
@@ -193,12 +278,12 @@ export function AgentsView() {
       () => (
         <DialogConfirm
           message={`Kill agent "${agent.name}"?`}
-          onConfirm={() => {
+          onConfirm={async () => {
             dialog.close();
             try {
-              ts.destroySession(agent.id);
+              await ts.destroySession(agent.id);
             } catch {
-              // Already gone
+              showError('Failed to destroy session');
             }
             loadAgents();
           }}
@@ -213,11 +298,33 @@ export function AgentsView() {
   // Keyboard handling
   // ------------------------------------------------------------------
 
+  let lastEscTime = 0;
+  let escTimer: ReturnType<typeof setTimeout> | null = null;
+
   useKeyboard((key) => {
     // When in interactive mode, forward everything to tmux except ESC
     if (interactive()) {
       if (key.name === 'escape') {
-        setInteractive(false);
+        const now = Date.now();
+        if (now - lastEscTime < 300) {
+          // Double-ESC: exit interactive mode
+          if (escTimer) clearTimeout(escTimer);
+          escTimer = null;
+          lastEscTime = 0;
+          setInteractive(false);
+          return;
+        }
+
+        lastEscTime = now;
+        // Start timer: if no second ESC within 300ms, forward ESC to tmux
+        escTimer = setTimeout(() => {
+          const ts = getTerminalService();
+          const agent = selectedAgent();
+          if (ts && agent) {
+            ts.sendInput(agent.id, 'escape').catch(() => {});
+          }
+          escTimer = null;
+        }, 300);
         return;
       }
 
@@ -225,21 +332,26 @@ export function AgentsView() {
       const agent = selectedAgent();
       if (!ts || !agent) return;
 
-      try {
-        // Handle ctrl combinations
-        if (key.ctrl && key.name) {
-          const ctrlKey = `C-${key.name}`;
-          ts.sendInput(agent.id, ctrlKey);
-          return;
-        }
+      // Handle ctrl combinations
+      if (key.ctrl && key.name) {
+        const ctrlKey = `C-${key.name}`;
+        ts.sendInput(agent.id, ctrlKey).catch(() => {
+          setInteractive(false);
+          loadAgents();
+        });
+        return;
+      }
 
-        // Forward the key name (sendInput handles key mapping internally)
-        ts.sendInput(agent.id, key.name ?? key.sequence ?? '');
-      } catch {
-        // Session gone; exit interactive mode
+      // Forward the key — prefer key.sequence for printable chars to preserve
+      // case and special characters (e.g. '@', '!', uppercase letters).
+      const input =
+        key.sequence && key.sequence.length === 1 && !key.ctrl && !key.meta
+          ? key.sequence
+          : (key.name ?? key.sequence ?? '');
+      ts.sendInput(agent.id, input).catch(() => {
         setInteractive(false);
         loadAgents();
-      }
+      });
       return;
     }
 
@@ -265,7 +377,7 @@ export function AgentsView() {
       }
       return;
     }
-    if (key.name === 'k' || key.name === 'up') {
+    if ((key.name === 'k' && !key.shift) || key.name === 'up') {
       if (activePane() === 'agents') {
         setAgentIndex((i) => Math.max(i - 1, 0));
       }
@@ -291,12 +403,13 @@ export function AgentsView() {
     // Refresh
     if (key.name === 'r') {
       loadAgents();
-      refreshCapture();
+      void refreshCapture();
       return;
     }
 
     // New agent
     if (key.name === 'n') {
+      key.stopPropagation();
       showNewAgentDialog();
       return;
     }
@@ -317,6 +430,11 @@ export function AgentsView() {
 
   return (
     <box flexDirection="column" flexGrow={1} width="100%">
+      <Show when={error()}>
+        <box height={1}>
+          <text fg={COLOR_ERROR}> {error()}</text>
+        </box>
+      </Show>
       <box flexDirection="row" flexGrow={1} width="100%">
         <AgentList
           agents={agents()}
