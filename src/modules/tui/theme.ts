@@ -81,16 +81,4 @@ export const PRIORITY_L = P.green;
 // Separator
 export const SEPARATOR_COLOR = P.border;
 
-// Tag colors
-export const TAG_COLORS = [
-  P.secondaryLight,
-  P.tealGreen,
-  P.cream,
-  P.primary,
-  P.amber,
-  P.purple,
-  P.tealBright,
-  P.tan,
-] as const;
-
 export const PROJECT_COLOR = P.tealGreen;

@@ -1,6 +1,7 @@
 import { createSignal, Show, For, onMount } from 'solid-js';
 import { useKeyboard } from '@opentui/solid';
 import type { TaskwarriorService } from '../../taskwarrior.service';
+import { ALLOWED_TAGS } from '../utils';
 import {
   BG_SURFACE,
   BG_INPUT,
@@ -61,10 +62,7 @@ export function FilterBar(props: FilterBarProps) {
     if (!tw) return;
 
     try {
-      const [tags, projects] = await Promise.all([
-        tw.getTags(),
-        tw.getProjects(),
-      ]);
+      const projects = await tw.getProjects();
 
       const items: string[] = [];
 
@@ -74,8 +72,8 @@ export function FilterBar(props: FilterBarProps) {
       }
 
       // Tags as `+<name>`
-      for (const tag of tags) {
-        if (tag) items.push(`+${tag}`);
+      for (const tag of ALLOWED_TAGS) {
+        items.push(`+${tag}`);
       }
 
       // Priority shortcuts
@@ -119,9 +117,7 @@ export function FilterBar(props: FilterBarProps) {
         // Cycle through visible suggestions (clamped to 10)
         const maxVisible = Math.min(filteredSuggestions().length, 10);
         if (maxVisible > 0) {
-          setSelectedSuggestion(
-            (prev) => (prev + 1) % maxVisible,
-          );
+          setSelectedSuggestion((prev) => (prev + 1) % maxVisible);
         }
       }
       return;
@@ -132,9 +128,7 @@ export function FilterBar(props: FilterBarProps) {
       if (showSuggestions()) {
         const maxVisible = Math.min(filteredSuggestions().length, 10);
         if (maxVisible > 0) {
-          setSelectedSuggestion(
-            (prev) => (prev - 1 + maxVisible) % maxVisible,
-          );
+          setSelectedSuggestion((prev) => (prev - 1 + maxVisible) % maxVisible);
         }
       }
       return;
@@ -181,9 +175,7 @@ export function FilterBar(props: FilterBarProps) {
       if (key.name === 'down' || key.name === 'j') {
         const maxVisible = Math.min(filteredSuggestions().length, 10);
         if (maxVisible > 0) {
-          setSelectedSuggestion(
-            (prev) => Math.min(prev + 1, maxVisible - 1),
-          );
+          setSelectedSuggestion((prev) => Math.min(prev + 1, maxVisible - 1));
         }
         return;
       }
@@ -199,13 +191,7 @@ export function FilterBar(props: FilterBarProps) {
   return (
     <box flexDirection="column" width="100%">
       {/* Main filter bar row */}
-      <box
-        height={1}
-        width="100%"
-        flexDirection="row"
-
-        paddingX={1}
-      >
+      <box height={1} width="100%" flexDirection="row" paddingX={1}>
         {/* Filter icon / label */}
         <text fg={ACCENT_PRIMARY} attributes={1}>
           {'/ Filter: '}
@@ -225,19 +211,13 @@ export function FilterBar(props: FilterBarProps) {
 
       {/* Active filter chips */}
       <Show when={chips().length > 0}>
-        <box
-          height={1}
-          width="100%"
-          flexDirection="row"
-          paddingX={1}
-  
-        >
+        <box height={1} width="100%" flexDirection="row" paddingX={1}>
           <text fg={FG_DIM}>{'Active: '}</text>
           <For each={chips()}>
             {(chip, index) => (
               <>
                 <Show when={index() > 0}>
-                  <text fg={FG_FAINT}>{' '}</text>
+                  <text fg={FG_FAINT}> </text>
                 </Show>
                 <text fg={ACCENT_SECONDARY} attributes={1}>
                   {`[${chip}]`}
@@ -249,20 +229,20 @@ export function FilterBar(props: FilterBarProps) {
       </Show>
 
       {/* Key hints */}
-      <box
-        height={1}
-        width="100%"
-        flexDirection="row"
-        paddingX={1}
-
-      >
-        <text fg={COLOR_SUCCESS} attributes={1}>{' [Enter] '}</text>
+      <box height={1} width="100%" flexDirection="row" paddingX={1}>
+        <text fg={COLOR_SUCCESS} attributes={1}>
+          {' [Enter] '}
+        </text>
         <text fg={FG_DIM}>{'Apply'}</text>
         <text fg={FG_DIM}>{'  |  '}</text>
-        <text fg={ACCENT_PRIMARY} attributes={1}>{' [Esc] '}</text>
+        <text fg={ACCENT_PRIMARY} attributes={1}>
+          {' [Esc] '}
+        </text>
         <text fg={FG_DIM}>{'Clear & Close'}</text>
         <text fg={FG_DIM}>{'  |  '}</text>
-        <text fg={ACCENT_TERTIARY} attributes={1}>{' [Tab] '}</text>
+        <text fg={ACCENT_TERTIARY} attributes={1}>
+          {' [Tab] '}
+        </text>
         <text fg={FG_DIM}>{'Suggestions'}</text>
       </box>
 
@@ -286,17 +266,11 @@ export function FilterBar(props: FilterBarProps) {
                 height={1}
                 paddingX={1}
                 backgroundColor={
-                  index() === selectedSuggestion()
-                    ? BG_SELECTED
-                    : undefined
+                  index() === selectedSuggestion() ? BG_SELECTED : undefined
                 }
               >
                 <text
-                  fg={
-                    index() === selectedSuggestion()
-                      ? FG_PRIMARY
-                      : FG_DIM
-                  }
+                  fg={index() === selectedSuggestion() ? FG_PRIMARY : FG_DIM}
                   attributes={index() === selectedSuggestion() ? 1 : 0}
                 >
                   {index() === selectedSuggestion() ? '> ' : '  '}
