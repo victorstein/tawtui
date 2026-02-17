@@ -15,33 +15,22 @@ import {
   PRIORITY_L,
   PROJECT_COLOR,
   SEPARATOR_COLOR,
-  TAG_COLORS,
 } from '../theme';
-
-function darkenHex(hex: string, factor: number): string {
-  const r = Math.round(parseInt(hex.slice(1, 3), 16) * factor);
-  const g = Math.round(parseInt(hex.slice(3, 5), 16) * factor);
-  const b = Math.round(parseInt(hex.slice(5, 7), 16) * factor);
-  const clamp = (v: number) => Math.min(255, Math.max(0, v));
-  return `#${clamp(r).toString(16).padStart(2, '0')}${clamp(g).toString(16).padStart(2, '0')}${clamp(b).toString(16).padStart(2, '0')}`;
-}
-
-function lerpHex(a: string, b: string, t: number): string {
-  const ar = parseInt(a.slice(1, 3), 16);
-  const ag = parseInt(a.slice(3, 5), 16);
-  const ab = parseInt(a.slice(5, 7), 16);
-  const br = parseInt(b.slice(1, 3), 16);
-  const bg = parseInt(b.slice(3, 5), 16);
-  const bb = parseInt(b.slice(5, 7), 16);
-  const r = Math.round(ar + (br - ar) * t);
-  const g = Math.round(ag + (bg - ag) * t);
-  const blue = Math.round(ab + (bb - ab) * t);
-  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${blue.toString(16).padStart(2, '0')}`;
-}
+import { getTagGradient, darkenHex, lerpHex } from '../utils';
 
 const DETAIL_BUTTONS = [
-  { label: ' [e] Edit ', shortcut: 'e', gradStart: '#5aaa6a', gradEnd: '#2a7a8a' },
-  { label: ' [Esc] Close ', shortcut: 'escape', gradStart: '#e05555', gradEnd: '#8a2a2a' },
+  {
+    label: ' [e] Edit ',
+    shortcut: 'e',
+    gradStart: '#5aaa6a',
+    gradEnd: '#2a7a8a',
+  },
+  {
+    label: ' [Esc] Close ',
+    shortcut: 'escape',
+    gradStart: '#e05555',
+    gradEnd: '#8a2a2a',
+  },
 ] as const;
 
 interface TaskDetailProps {
@@ -55,18 +44,6 @@ const PRIORITY_LABELS: Record<string, { label: string; color: string }> = {
   M: { label: 'Medium', color: PRIORITY_M },
   L: { label: 'Low', color: PRIORITY_L },
 };
-
-function djb2(str: string): number {
-  let hash = 5381;
-  for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) + hash + str.charCodeAt(i)) | 0;
-  }
-  return Math.abs(hash);
-}
-
-function tagColor(tag: string): string {
-  return TAG_COLORS[djb2(tag) % TAG_COLORS.length];
-}
 
 function formatTwDate(raw: string): string {
   try {
@@ -227,7 +204,7 @@ export function TaskDetail(props: TaskDetailProps) {
                 <Show when={index() > 0}>
                   <text fg={FG_MUTED}>{', '}</text>
                 </Show>
-                <text fg={tagColor(tag)}>{tag}</text>
+                <text fg={getTagGradient(tag).start}>{tag.toUpperCase()}</text>
               </>
             )}
           </For>
