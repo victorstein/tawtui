@@ -8,7 +8,12 @@ import {
 } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
-import type { AppConfig, RepoConfig, UserPreferences } from './config.types';
+import type {
+  AgentDefinition,
+  AppConfig,
+  RepoConfig,
+  UserPreferences,
+} from './config.types';
 
 const DEFAULT_CONFIG: AppConfig = {
   repos: [],
@@ -18,6 +23,21 @@ const DEFAULT_CONFIG: AppConfig = {
     defaultFilter: 'status:pending',
   },
 };
+
+const DEFAULT_AGENT_TYPES: AgentDefinition[] = [
+  {
+    id: 'claude-code',
+    label: 'Claude Code',
+    command: 'claude',
+    autoApproveFlag: '--dangerously-skip-permissions',
+  },
+  { id: 'codex-cli', label: 'Codex CLI', command: 'codex' },
+  { id: 'gemini-cli', label: 'Gemini CLI', command: 'gemini' },
+  { id: 'cursor-agent', label: 'Cursor Agent', command: 'cursor-agent' },
+  { id: 'opencode', label: 'OpenCode', command: 'opencode' },
+  { id: 'pi-agent', label: 'Pi Agent', command: 'pi-agent' },
+  { id: 'shell', label: 'Shell Only', command: '' },
+];
 
 @Injectable()
 export class ConfigService {
@@ -107,5 +127,10 @@ export class ConfigService {
     const config = this.load();
     config.preferences = { ...config.preferences, ...prefs };
     this.save(config);
+  }
+
+  getAgentTypes(): AgentDefinition[] {
+    const config = this.load();
+    return config.agents?.types ?? DEFAULT_AGENT_TYPES;
   }
 }

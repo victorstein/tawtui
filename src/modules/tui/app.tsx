@@ -126,7 +126,7 @@ function AppContent() {
             <ReposView refreshTrigger={refreshTrigger} />
           </Match>
           <Match when={activeTab() === 2}>
-            <AgentsView />
+            <AgentsView onInputCapturedChange={(captured) => setInputCaptured(captured)} />
           </Match>
         </Switch>
       </box>

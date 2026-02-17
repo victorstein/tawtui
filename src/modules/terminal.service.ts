@@ -1,4 +1,12 @@
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
 import { TaskwarriorService } from './taskwarrior.service';
 import type {
   TerminalSession,
@@ -40,7 +48,7 @@ const SPECIAL_KEYS = new Set([
 ]);
 
 @Injectable()
-export class TerminalService implements OnModuleDestroy {
+export class TerminalService implements OnModuleDestroy, OnModuleInit {
   private readonly logger = new Logger(TerminalService.name);
 
   /** Active terminal sessions keyed by their unique ID. */
@@ -49,21 +57,30 @@ export class TerminalService implements OnModuleDestroy {
   /** Content hashes keyed by session ID, used for change detection. */
   private readonly contentHashes = new Map<string, number | bigint>();
 
+  private readonly sessionsDir = join(homedir(), '.config', 'tawtui');
+  private readonly sessionsPath = join(this.sessionsDir, 'sessions.json');
+
   constructor(private readonly taskwarriorService: TaskwarriorService) {}
 
   // ---------------------------------------------------------------------------
   // Lifecycle
   // ---------------------------------------------------------------------------
 
-  onModuleDestroy(): void {
+  async onModuleInit(): Promise<void> {
+    await this.discoverExistingSessions();
+  }
+
+  async onModuleDestroy(): Promise<void> {
     this.logger.log('Cleaning up all tmux sessions');
-    for (const [id] of this.sessions) {
+    const cleanups = Array.from(this.sessions.keys()).map(async (id) => {
       try {
-        this.destroySession(id);
+        await this.destroySession(id);
       } catch {
         // best-effort cleanup
       }
-    }
+    });
+    await Promise.allSettled(cleanups);
+    this.persistSessions();
   }
 
   // ---------------------------------------------------------------------------
@@ -73,13 +90,10 @@ export class TerminalService implements OnModuleDestroy {
   /**
    * Check whether the `tmux` binary is available on the system.
    */
-  isTmuxInstalled(): boolean {
+  async isTmuxInstalled(): Promise<boolean> {
     try {
-      const proc = Bun.spawnSync(['tmux', '-V'], {
-        stdout: 'pipe',
-        stderr: 'pipe',
-      });
-      return proc.exitCode === 0;
+      const result = await this.execTmux(['-V']);
+      return result.exitCode === 0;
     } catch {
       return false;
     }
@@ -88,7 +102,7 @@ export class TerminalService implements OnModuleDestroy {
   /**
    * Create a new detached tmux session and return its metadata.
    */
-  createSession(opts: {
+  async createSession(opts: {
     name: string;
     cwd: string;
     command?: string;
@@ -96,8 +110,8 @@ export class TerminalService implements OnModuleDestroy {
     repoOwner?: string;
     repoName?: string;
     taskUuid?: string;
-  }): TerminalSession {
-    if (!this.isTmuxInstalled()) {
+  }): Promise<TerminalSession> {
+    if (!(await this.isTmuxInstalled())) {
       throw new Error('tmux is not installed or not available on PATH');
     }
 
@@ -105,7 +119,7 @@ export class TerminalService implements OnModuleDestroy {
     const tmuxSessionName = id;
 
     // Create a detached tmux session with the given working directory and size.
-    const createResult = this.execTmux([
+    const createResult = await this.execTmux([
       'new-session',
       '-d',
       '-s',
@@ -125,7 +139,7 @@ export class TerminalService implements OnModuleDestroy {
     }
 
     // Determine the pane ID for this session (the first — and only — pane).
-    const paneResult = this.execTmux([
+    const paneResult = await this.execTmux([
       'list-panes',
       '-t',
       tmuxSessionName,
@@ -140,7 +154,7 @@ export class TerminalService implements OnModuleDestroy {
 
     // If an initial command was provided, send it to the session.
     if (opts.command) {
-      const sendResult = this.execTmux([
+      const sendResult = await this.execTmux([
         'send-keys',
         '-t',
         tmuxSessionName,
@@ -171,6 +185,7 @@ export class TerminalService implements OnModuleDestroy {
     };
 
     this.sessions.set(id, session);
+    this.persistSessions();
     this.logger.log(`Created tmux session "${tmuxSessionName}" (id=${id})`);
 
     return session;
@@ -179,13 +194,13 @@ export class TerminalService implements OnModuleDestroy {
   /**
    * Kill a tmux session and remove it from the internal registry.
    */
-  destroySession(id: string): void {
+  async destroySession(id: string): Promise<void> {
     const session = this.sessions.get(id);
     if (!session) {
       throw new Error(`Session not found: ${id}`);
     }
 
-    const result = this.execTmux([
+    const result = await this.execTmux([
       'kill-session',
       '-t',
       session.tmuxSessionName,
@@ -199,6 +214,7 @@ export class TerminalService implements OnModuleDestroy {
 
     this.sessions.delete(id);
     this.contentHashes.delete(id);
+    this.persistSessions();
     this.logger.log(
       `Destroyed tmux session "${session.tmuxSessionName}" (id=${id})`,
     );
@@ -211,7 +227,7 @@ export class TerminalService implements OnModuleDestroy {
    * DC, C-c, C-d, C-z, C-l) are sent without the `-l` flag so that tmux
    * interprets them as key names.  Everything else is sent literally.
    */
-  sendInput(id: string, input: string): void {
+  async sendInput(id: string, input: string): Promise<void> {
     const session = this.sessions.get(id);
     if (!session) {
       throw new Error(`Session not found: ${id}`);
@@ -222,7 +238,7 @@ export class TerminalService implements OnModuleDestroy {
 
     if (SPECIAL_KEYS.has(mapped)) {
       // Send as a named key (no -l flag).
-      const result = this.execTmux([
+      const result = await this.execTmux([
         'send-keys',
         '-t',
         session.tmuxPaneId,
@@ -236,7 +252,7 @@ export class TerminalService implements OnModuleDestroy {
       }
     } else {
       // Send as literal text.
-      const result = this.execTmux([
+      const result = await this.execTmux([
         'send-keys',
         '-t',
         session.tmuxPaneId,
@@ -257,14 +273,14 @@ export class TerminalService implements OnModuleDestroy {
    * cursor position.  The `changed` flag indicates whether the content differs
    * from the previous capture for the same session.
    */
-  captureOutput(id: string): CaptureResult {
+  async captureOutput(id: string): Promise<CaptureResult> {
     const session = this.sessions.get(id);
     if (!session) {
       throw new Error(`Session not found: ${id}`);
     }
 
-    // Capture pane content (with ANSI escape sequences preserved).
-    const captureResult = this.execTmux([
+    // Capture pane content (with ANSI color sequences preserved).
+    const captureResult = await this.execTmux([
       'capture-pane',
       '-p',
       '-e',
@@ -278,10 +294,10 @@ export class TerminalService implements OnModuleDestroy {
       );
     }
 
-    const content = captureResult.stdout;
+    const content = this.sanitizeOutput(captureResult.stdout);
 
     // Query cursor position.
-    const cursorResult = this.execTmux([
+    const cursorResult = await this.execTmux([
       'display-message',
       '-t',
       session.tmuxPaneId,
@@ -312,13 +328,13 @@ export class TerminalService implements OnModuleDestroy {
   /**
    * Resize the tmux window associated with the given session.
    */
-  resize(id: string, cols: number, rows: number): void {
+  async resize(id: string, cols: number, rows: number): Promise<void> {
     const session = this.sessions.get(id);
     if (!session) {
       throw new Error(`Session not found: ${id}`);
     }
 
-    const result = this.execTmux([
+    const result = await this.execTmux([
       'resize-window',
       '-t',
       session.tmuxSessionName,
@@ -370,7 +386,7 @@ export class TerminalService implements OnModuleDestroy {
     await this.taskwarriorService.startTask(task.uuid);
 
     // Create a terminal session for the review agent
-    const session = this.createSession({
+    const session = await this.createSession({
       name: `PR #${prNumber} Review`,
       cwd: process.cwd(),
       command: `echo "Reviewing PR #${prNumber} for ${repoOwner}/${repoName}..." && sleep 5`,
@@ -397,6 +413,7 @@ export class TerminalService implements OnModuleDestroy {
     }
 
     session.status = status;
+    this.persistSessions();
   }
 
   // ---------------------------------------------------------------------------
@@ -404,27 +421,177 @@ export class TerminalService implements OnModuleDestroy {
   // ---------------------------------------------------------------------------
 
   /**
-   * Execute a tmux command synchronously via Bun.spawnSync().
+   * Strip terminal escape sequences that interfere with TUI rendering.
    */
-  private execTmux(args: string[]): ExecResult {
+
+  /* eslint-disable no-control-regex */
+  private static readonly RE_MOUSE_TRACKING =
+    /\x1b\[\?(1000|1002|1003|1006)[hl]/g;
+  private static readonly RE_BRACKETED_PASTE = /\x1b\[\?2004[hl]/g;
+  private static readonly RE_ALT_SCREEN = /\x1b\[\?(1049|47)[hl]/g;
+  private static readonly RE_SGR_MOUSE = /\x1b\[<[\d;]+[Mm]/g;
+  private static readonly RE_OSC = /\x1b\][^\x07]*(?:\x07|\x1b\\)/g;
+  /* eslint-enable no-control-regex */
+
+  private sanitizeOutput(raw: string): string {
+    return raw
+      .replace(TerminalService.RE_MOUSE_TRACKING, '')
+      .replace(TerminalService.RE_BRACKETED_PASTE, '')
+      .replace(TerminalService.RE_ALT_SCREEN, '')
+      .replace(TerminalService.RE_SGR_MOUSE, '')
+      .replace(TerminalService.RE_OSC, '');
+  }
+
+  /**
+   * Discover existing tawtui tmux sessions on startup to prevent zombies.
+   */
+  private async discoverExistingSessions(): Promise<void> {
+    const result = await this.execTmux([
+      'list-sessions',
+      '-F',
+      '#{session_name}',
+    ]);
+
+    if (result.exitCode !== 0) {
+      // No tmux server running or no sessions — that's fine
+      return;
+    }
+
+    const sessionNames = result.stdout
+      .trim()
+      .split('\n')
+      .filter((name) => name.startsWith('tawtui-'));
+
+    const persisted = this.loadPersistedSessions();
+
+    for (const tmuxSessionName of sessionNames) {
+      // Get the pane ID
+      const paneResult = await this.execTmux([
+        'list-panes',
+        '-t',
+        tmuxSessionName,
+        '-F',
+        '#{pane_id}',
+      ]);
+
+      const tmuxPaneId =
+        paneResult.exitCode === 0 && paneResult.stdout.trim()
+          ? paneResult.stdout.trim().split('\n')[0]
+          : `${tmuxSessionName}:0.0`;
+
+      const meta = persisted.get(tmuxSessionName);
+
+      const session: TerminalSession = {
+        id: meta?.id ?? tmuxSessionName,
+        tmuxSessionName,
+        tmuxPaneId,
+        name: meta?.name ?? tmuxSessionName.replace('tawtui-', ''),
+        cwd: meta?.cwd ?? process.cwd(),
+        command: meta?.command,
+        status: 'running',
+        createdAt: new Date(),
+        prNumber: meta?.prNumber,
+        repoOwner: meta?.repoOwner,
+        repoName: meta?.repoName,
+        taskUuid: meta?.taskUuid,
+      };
+
+      this.sessions.set(session.id, session);
+      this.logger.log(`Discovered existing session: ${tmuxSessionName}`);
+    }
+
+    if (sessionNames.length > 0) {
+      this.logger.log(`Recovered ${sessionNames.length} existing session(s)`);
+    }
+
+    this.persistSessions();
+  }
+
+  /** Persist all session metadata to disk. */
+  private persistSessions(): void {
+    try {
+      if (!existsSync(this.sessionsDir)) {
+        mkdirSync(this.sessionsDir, { recursive: true });
+      }
+      const data = Array.from(this.sessions.values()).map((s) => ({
+        id: s.id,
+        tmuxSessionName: s.tmuxSessionName,
+        tmuxPaneId: s.tmuxPaneId,
+        name: s.name,
+        cwd: s.cwd,
+        command: s.command,
+        status: s.status,
+        createdAt: s.createdAt.toISOString(),
+        prNumber: s.prNumber,
+        repoOwner: s.repoOwner,
+        repoName: s.repoName,
+        taskUuid: s.taskUuid,
+      }));
+      writeFileSync(this.sessionsPath, JSON.stringify(data, null, 2), 'utf-8');
+    } catch {
+      this.logger.warn('Failed to persist session metadata');
+    }
+  }
+
+  /** Load persisted session metadata from disk. */
+  private loadPersistedSessions(): Map<string, Partial<TerminalSession>> {
+    const map = new Map<string, Partial<TerminalSession>>();
+    try {
+      if (!existsSync(this.sessionsPath)) return map;
+      const text = readFileSync(this.sessionsPath, 'utf-8');
+      const data = JSON.parse(text) as Array<Record<string, unknown>>;
+      for (const item of data) {
+        if (typeof item.tmuxSessionName === 'string') {
+          map.set(item.tmuxSessionName, {
+            id: item.id as string,
+            name: item.name as string,
+            cwd: item.cwd as string,
+            command: item.command as string | undefined,
+            prNumber: item.prNumber as number | undefined,
+            repoOwner: item.repoOwner as string | undefined,
+            repoName: item.repoName as string | undefined,
+            taskUuid: item.taskUuid as string | undefined,
+          });
+        }
+      }
+    } catch {
+      this.logger.warn('Failed to load persisted session metadata');
+    }
+    return map;
+  }
+
+  /**
+   * Execute a tmux command asynchronously via Bun.spawn().
+   */
+  private async execTmux(args: string[]): Promise<ExecResult> {
     const cmd = ['tmux', ...args];
     this.logger.debug(`Executing: ${cmd.join(' ')}`);
 
-    const proc = Bun.spawnSync(cmd, {
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
+    try {
+      const proc = Bun.spawn(cmd, {
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
 
-    const stdout = proc.stdout.toString();
-    const stderr = proc.stderr.toString();
-    const exitCode = proc.exitCode;
+      const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+      ]);
 
-    if (exitCode !== 0) {
-      this.logger.warn(
-        `tmux exited with code ${exitCode}: ${stderr.trim() || stdout.trim()}`,
-      );
+      if (exitCode !== 0) {
+        this.logger.warn(
+          `tmux exited with code ${exitCode}: ${stderr.trim() || stdout.trim()}`,
+        );
+      }
+
+      return { stdout, stderr, exitCode };
+    } catch {
+      return {
+        stdout: '',
+        stderr: 'tmux binary not found',
+        exitCode: 1,
+      };
     }
-
-    return { stdout, stderr, exitCode };
   }
 }

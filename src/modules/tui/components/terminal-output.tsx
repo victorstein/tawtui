@@ -1,4 +1,4 @@
-import { Show } from 'solid-js';
+import { For, Show } from 'solid-js';
 import type { CaptureResult } from '../../terminal.types';
 import {
   ACCENT_PRIMARY,
@@ -7,6 +7,7 @@ import {
   FG_NORMAL,
   FG_DIM,
 } from '../theme';
+import { parseAnsiText } from '../utils/ansi-parser';
 
 interface TerminalOutputProps {
   capture: CaptureResult | null;
@@ -87,21 +88,41 @@ export function TerminalOutput(props: TerminalOutputProps) {
               </box>
             }
           >
-            {(capture) => (
-              <box flexDirection="column" flexGrow={1} width="100%">
-                {/* Terminal content — ANSI escape sequences rendered natively */}
-                <box flexGrow={1} width="100%">
-                  <text fg={FG_NORMAL}>{capture().content}</text>
-                </box>
+            {(capture) => {
+              const parsedLines = () => parseAnsiText(capture().content);
 
-                {/* Cursor position indicator */}
-                <box height={1} width="100%" paddingX={1}>
-                  <text fg={FG_DIM}>
-                    {`cursor: ${capture().cursor.x},${capture().cursor.y}`}
-                  </text>
+              return (
+                <box flexDirection="column" flexGrow={1} width="100%">
+                  {/* Terminal content — ANSI escape sequences rendered as styled text */}
+                  <box flexDirection="column" flexGrow={1} width="100%">
+                    <For each={parsedLines()}>
+                      {(line) => (
+                        <box height={1} flexDirection="row">
+                          <For each={line}>
+                            {(seg) => (
+                              <text
+                                fg={seg.fg ?? FG_NORMAL}
+                                bg={seg.bg}
+                                attributes={seg.attrs}
+                              >
+                                {seg.text}
+                              </text>
+                            )}
+                          </For>
+                        </box>
+                      )}
+                    </For>
+                  </box>
+
+                  {/* Cursor position indicator */}
+                  <box height={1} width="100%" paddingX={1}>
+                    <text fg={FG_DIM}>
+                      {`cursor: ${capture().cursor.x},${capture().cursor.y}`}
+                    </text>
+                  </box>
                 </box>
-              </box>
-            )}
+              );
+            }}
           </Show>
         </Show>
       </box>
