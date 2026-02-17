@@ -248,6 +248,47 @@ export class TaskwarriorService {
   }
 
   /**
+   * Restore a completed task back to pending status.
+   * Runs: task <uuid> modify status:pending
+   */
+  async undoComplete(uuid: string): Promise<void> {
+    const { stderr, exitCode } = this.execTask([
+      uuid,
+      'modify',
+      'status:pending',
+    ]);
+
+    if (exitCode !== 0) {
+      throw new Error(
+        `Failed to undo complete task ${uuid} (exit ${exitCode}): ${stderr.trim()}`,
+      );
+    }
+  }
+
+  /**
+   * Archive a task by completing it with a backdated end date.
+   * Uses two separate modify calls so the end-date change applies
+   * even when the task is already in completed status.
+   */
+  async archiveTask(uuid: string): Promise<void> {
+    // Ensure the task is marked completed (no-op if already done)
+    this.execTask([uuid, 'modify', 'status:completed']);
+
+    // Backdate the end date so the task moves to the archive
+    const { stderr, exitCode } = this.execTask([
+      uuid,
+      'modify',
+      'end:yesterday',
+    ]);
+
+    if (exitCode !== 0) {
+      throw new Error(
+        `Failed to archive task ${uuid} (exit ${exitCode}): ${stderr.trim()}`,
+      );
+    }
+  }
+
+  /**
    * Delete a task.
    * Runs: task rc.confirmation=off <uuid> delete
    */

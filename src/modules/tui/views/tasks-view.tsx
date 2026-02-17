@@ -1,4 +1,4 @@
-import { createSignal, createEffect, onMount, Show } from 'solid-js';
+import { createSignal, createEffect, on, onMount, Show } from 'solid-js';
 import { useKeyboard, useTerminalDimensions } from '@opentui/solid';
 import type { Task, CreateTaskDto } from '../../taskwarrior.types';
 import type { TaskwarriorService } from '../../taskwarrior.service';
@@ -7,6 +7,7 @@ import { TaskForm } from '../components/task-form';
 import { TaskDetail } from '../components/task-detail';
 import { FilterBar } from '../components/filter-bar';
 import { ArchiveView } from '../components/archive-view';
+import { DialogConfirm } from '../components/dialog-confirm';
 import { useDialog } from '../context/dialog';
 import {
   FG_DIM,
@@ -57,7 +58,7 @@ function categoriseTasks(tasks: Task[]): [Task[], Task[], Task[]] {
         const y = t.end.slice(0, 4);
         const m = t.end.slice(4, 6);
         const d = t.end.slice(6, 8);
-        const endDate = new Date(`${y}-${m}-${d}`);
+        const endDate = new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10));
         if (endDate >= todayMidnight) {
           done.push(t);
         }
@@ -113,6 +114,15 @@ export function TasksView(props: TasksViewProps) {
     const active = archiveMode();
     props.onArchiveModeChange?.(active);
   });
+
+  // Reload kanban data when returning from archive mode
+  createEffect(
+    on(archiveMode, (active, prev) => {
+      if (prev && !active) {
+        loadTasks();
+      }
+    }),
+  );
 
   // Notify parent when filter bar captures input
   createEffect(() => {
@@ -265,30 +275,102 @@ export function TasksView(props: TasksViewProps) {
       return;
     }
 
-    // Start task: move from TODO -> IN PROGRESS
-    if (key.name === 's' && !key.shift) {
+    // Move task forward: TODO → IN PROGRESS → DONE
+    if (key.name === 'm' && !key.shift) {
       const task = selectedTask();
-      if (task && activeColumn() === 0) {
-        taskAction((uuid) => getTaskwarriorService()!.startTask(uuid), task);
+      if (!task) return;
+      const col = activeColumn();
+      if (col === 0) {
+        const uuid = task.uuid;
+        taskAction((u) => getTaskwarriorService()!.startTask(u), task).then(() => {
+          setActiveColumn(1);
+          const idx = inProgressTasks().findIndex((t) => t.uuid === uuid);
+          if (idx >= 0) {
+            const indices = [...selectedIndices()] as [number, number, number];
+            indices[1] = idx;
+            setSelectedIndices(indices);
+          }
+        });
+      } else if (col === 1) {
+        const uuid = task.uuid;
+        taskAction((u) => getTaskwarriorService()!.completeTask(u), task).then(() => {
+          setActiveColumn(2);
+          const idx = doneTasks().findIndex((t) => t.uuid === uuid);
+          if (idx >= 0) {
+            const indices = [...selectedIndices()] as [number, number, number];
+            indices[2] = idx;
+            setSelectedIndices(indices);
+          }
+        });
       }
       return;
     }
 
-    // Stop task: move from IN PROGRESS -> TODO
-    if (key.name === 's' && key.shift) {
+    // Move task backward: DONE → IN PROGRESS → TODO
+    if (key.name === 'm' && key.shift) {
       const task = selectedTask();
-      if (task && activeColumn() === 1) {
-        taskAction((uuid) => getTaskwarriorService()!.stopTask(uuid), task);
+      if (!task) return;
+      const col = activeColumn();
+      if (col === 1) {
+        const uuid = task.uuid;
+        taskAction((u) => getTaskwarriorService()!.stopTask(u), task).then(() => {
+          setActiveColumn(0);
+          const idx = todoTasks().findIndex((t) => t.uuid === uuid);
+          if (idx >= 0) {
+            const indices = [...selectedIndices()] as [number, number, number];
+            indices[0] = idx;
+            setSelectedIndices(indices);
+          }
+        });
+      } else if (col === 2) {
+        const uuid = task.uuid;
+        const tw = getTaskwarriorService();
+        if (!tw) return;
+        (async () => {
+          try {
+            await tw.undoComplete(task.uuid);
+            await tw.startTask(task.uuid);
+          } catch {
+            // Silently ignore; refresh will show current state
+          }
+          await loadTasks();
+          setActiveColumn(1);
+          const idx = inProgressTasks().findIndex((t) => t.uuid === uuid);
+          if (idx >= 0) {
+            const indices = [...selectedIndices()] as [number, number, number];
+            indices[1] = idx;
+            setSelectedIndices(indices);
+          }
+        })();
       }
       return;
     }
 
-    // Complete task: move to DONE
-    if (key.name === 'd' && !key.shift) {
+    // Delete task with confirmation
+    if (key.name === 'x' && !key.shift) {
       const task = selectedTask();
-      if (task && (activeColumn() === 0 || activeColumn() === 1)) {
-        taskAction((uuid) => getTaskwarriorService()!.completeTask(uuid), task);
-      }
+      if (!task) return;
+      dialog.show(
+        () => (
+          <DialogConfirm
+            message={`Archive "${task.description}"?`}
+            onConfirm={async () => {
+              const tw = getTaskwarriorService();
+              if (tw) {
+                try {
+                  await tw.archiveTask(task.uuid);
+                } catch {
+                  // Silently ignore
+                }
+                await loadTasks();
+              }
+              dialog.close();
+            }}
+            onCancel={() => dialog.close()}
+          />
+        ),
+        { size: 'medium' },
+      );
       return;
     }
 
