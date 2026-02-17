@@ -10,9 +10,9 @@ import {
   PRIORITY_M,
   PRIORITY_L,
   COLOR_ERROR,
-  TAG_COLORS,
   PROJECT_COLOR,
 } from '../theme';
+import { getTagGradient, lerpHex } from '../utils';
 
 interface TaskCardProps {
   task: Task;
@@ -46,32 +46,6 @@ const MONTHS = [
   'Nov',
   'Dec',
 ];
-
-/**
- * Simple djb2 hash — maps a string to a consistent non-negative integer.
- * Used to assign a stable color to every tag name.
- */
-function djb2(str: string): number {
-  let hash = 5381;
-  for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) + hash + str.charCodeAt(i)) | 0;
-  }
-  return Math.abs(hash);
-}
-
-/** Return a consistent color for a given tag name. */
-function tagColor(tag: string): string {
-  return TAG_COLORS[djb2(tag) % TAG_COLORS.length];
-}
-
-/** Darken a hex color by multiplying each RGB channel by the given factor. */
-function darkenHex(hex: string, factor: number): string {
-  const r = Math.round(parseInt(hex.slice(1, 3), 16) * factor);
-  const g = Math.round(parseInt(hex.slice(3, 5), 16) * factor);
-  const b = Math.round(parseInt(hex.slice(5, 7), 16) * factor);
-  const clamp = (v: number) => Math.min(255, Math.max(0, v));
-  return `#${clamp(r).toString(16).padStart(2, '0')}${clamp(g).toString(16).padStart(2, '0')}${clamp(b).toString(16).padStart(2, '0')}`;
-}
 
 function isOverdue(due: string): boolean {
   try {
@@ -129,16 +103,23 @@ export function TaskCard(props: TaskCardProps) {
   /** Tag pills (rounded with powerline caps). */
   const tagParts = () => {
     if (!task().tags || task().tags!.length === 0) return [];
-    return task().tags!.map((tag) => {
-      const bright = tagColor(tag);
-      return { text: tag, fg: FG_NORMAL, bg: darkenHex(bright, 0.35) };
-    });
+    return task().tags!.map((tag) => ({
+      text: tag,
+      grad: getTagGradient(tag),
+    }));
   };
 
   const hasMetaParts = () => !!projectPart() || tagParts().length > 0;
 
-  /** Due date + BLOCKED indicator for line 3. */
-  const hasDueLine = () => !!task().due || !!task().depends;
+  const recurrenceText = () => {
+    if (task().recur) return task().recur!;
+    if (task().parent) return 'recurring';
+    return null;
+  };
+
+  /** Due date + recurrence + BLOCKED indicator for line 3. */
+  const hasDueLine = () =>
+    !!task().due || !!task().depends || !!recurrenceText();
 
   return (
     <box
@@ -179,26 +160,45 @@ export function TaskCard(props: TaskCardProps) {
           </Show>
           {/* Tag pills — rounded with powerline caps */}
           <For each={tagParts()}>
-            {(part, index) => (
-              <box flexDirection="row">
-                <Show when={index() > 0 || !!projectPart()}>
-                  <text>{' '}</text>
-                </Show>
-                <text fg={part.bg}>{'\uE0B6'}</text>
-                <box backgroundColor={part.bg}>
-                  <text fg={part.fg}>{' ' + part.text + ' '}</text>
+            {(part, index) => {
+              const chars = (' ' + part.text.toUpperCase() + ' ').split('');
+              return (
+                <box flexDirection="row">
+                  <Show when={index() > 0 || !!projectPart()}>
+                    <text> </text>
+                  </Show>
+                  <text fg={part.grad.start}>{'\uE0B6'}</text>
+                  <For each={chars}>
+                    {(char, i) => {
+                      const t = chars.length > 1 ? i() / (chars.length - 1) : 0;
+                      return (
+                        <text
+                          fg="#ffffff"
+                          bg={lerpHex(part.grad.start, part.grad.end, t)}
+                        >
+                          {char}
+                        </text>
+                      );
+                    }}
+                  </For>
+                  <text fg={part.grad.end}>{'\uE0B4'}</text>
                 </box>
-                <text fg={part.bg}>{'\uE0B4'}</text>
-              </box>
-            )}
+              );
+            }}
           </For>
         </box>
       </Show>
 
-      {/* Line 3: due date + BLOCKED indicator */}
+      {/* Line 3: recurrence + due date + BLOCKED indicator */}
       <Show when={hasDueLine()}>
         <box height={1} width="100%" flexDirection="row">
           <text fg={FG_FAINT}>{'  '}</text>
+          <Show when={recurrenceText()}>
+            <text fg="#8a7aaa">{'↻ ' + recurrenceText()}</text>
+            <Show when={task().due}>
+              <text fg={FG_FAINT}>{'  '}</text>
+            </Show>
+          </Show>
           <Show when={task().due}>
             {(() => {
               const overdue = isOverdue(task().due!);

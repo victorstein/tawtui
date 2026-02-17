@@ -14,33 +14,22 @@ import {
   PRIORITY_M,
   PRIORITY_L,
   PROJECT_COLOR,
-  TAG_COLORS,
 } from '../theme';
-
-function darkenHex(hex: string, factor: number): string {
-  const r = Math.round(parseInt(hex.slice(1, 3), 16) * factor);
-  const g = Math.round(parseInt(hex.slice(3, 5), 16) * factor);
-  const b = Math.round(parseInt(hex.slice(5, 7), 16) * factor);
-  const clamp = (v: number) => Math.min(255, Math.max(0, v));
-  return `#${clamp(r).toString(16).padStart(2, '0')}${clamp(g).toString(16).padStart(2, '0')}${clamp(b).toString(16).padStart(2, '0')}`;
-}
-
-function lerpHex(a: string, b: string, t: number): string {
-  const ar = parseInt(a.slice(1, 3), 16);
-  const ag = parseInt(a.slice(3, 5), 16);
-  const ab = parseInt(a.slice(5, 7), 16);
-  const br = parseInt(b.slice(1, 3), 16);
-  const bg = parseInt(b.slice(3, 5), 16);
-  const bb = parseInt(b.slice(5, 7), 16);
-  const r = Math.round(ar + (br - ar) * t);
-  const g = Math.round(ag + (bg - ag) * t);
-  const blue = Math.round(ab + (bb - ab) * t);
-  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${blue.toString(16).padStart(2, '0')}`;
-}
+import { darkenHex, lerpHex, ALLOWED_TAGS, getTagGradient } from '../utils';
 
 const FORM_BUTTONS = [
-  { label: ' [Enter] Save ', shortcut: 'return', gradStart: '#5aaa6a', gradEnd: '#2a7a8a' },
-  { label: ' [Esc] Cancel ', shortcut: 'escape', gradStart: '#e05555', gradEnd: '#8a2a2a' },
+  {
+    label: ' [Enter] Save ',
+    shortcut: 'return',
+    gradStart: '#5aaa6a',
+    gradEnd: '#2a7a8a',
+  },
+  {
+    label: ' [Esc] Cancel ',
+    shortcut: 'escape',
+    gradStart: '#e05555',
+    gradEnd: '#8a2a2a',
+  },
 ] as const;
 
 interface TaskFormProps {
@@ -113,20 +102,27 @@ export function TaskForm(props: TaskFormProps) {
 
   // New input mode for inline creation
   const [newInputMode, setNewInputMode] = createSignal<
-    'project' | 'tags' | 'recur' | null
+    'project' | 'recur' | null
   >(null);
   const [newInputValue, setNewInputValue] = createSignal('');
 
   // Predefined recurrence options
   const RECURRENCE_OPTIONS = [
-    'daily', 'weekdays', 'weekly', 'biweekly',
-    'monthly', 'quarterly', 'semiannual', 'yearly',
+    'daily',
+    'weekdays',
+    'weekly',
+    'biweekly',
+    'monthly',
+    'quarterly',
+    'semiannual',
+    'yearly',
   ];
 
-  const [availableRecurrences, setAvailableRecurrences] = createSignal<string[]>(RECURRENCE_OPTIONS);
-  const [selectedRecurrence, setSelectedRecurrence] = createSignal<string | null>(
-    props.initialValues?.recur ?? null,
-  );
+  const [availableRecurrences, setAvailableRecurrences] =
+    createSignal<string[]>(RECURRENCE_OPTIONS);
+  const [selectedRecurrence, setSelectedRecurrence] = createSignal<
+    string | null
+  >(props.initialValues?.recur ?? null);
   const [recurrenceCursor, setRecurrenceCursor] = createSignal(0);
 
   const initialRecur = props.initialValues?.recur ?? null;
@@ -149,11 +145,8 @@ export function TaskForm(props: TaskFormProps) {
     const tw = (globalThis as any).__tawtui?.taskwarriorService;
     if (!tw) return;
     try {
-      const [tags, projects] = await Promise.all([
-        tw.getTags() as Promise<string[]>,
-        tw.getProjects() as Promise<string[]>,
-      ]);
-      setAvailableTags(tags);
+      const projects = await (tw.getProjects() as Promise<string[]>);
+      setAvailableTags([...ALLOWED_TAGS]);
       setAvailableProjects(projects);
       // Set initial project index
       if (props.initialValues?.project) {
@@ -193,11 +186,6 @@ export function TaskForm(props: TaskFormProps) {
       }
       const newAll = ['', ...new Set([...availableProjects(), val])];
       setProjectIndex(newAll.indexOf(val));
-    } else if (newInputMode() === 'tags') {
-      if (!availableTags().includes(val)) {
-        setAvailableTags((prev) => [...prev, val]);
-      }
-      setSelectedTags((prev) => new Set([...prev, val]));
     } else if (newInputMode() === 'recur') {
       let newRecurrences = availableRecurrences();
       if (!newRecurrences.includes(val)) {
@@ -424,12 +412,6 @@ export function TaskForm(props: TaskFormProps) {
         });
         return;
       }
-      if (key.name === 'n') {
-        key.preventDefault();
-        setNewInputMode('tags');
-        setNewInputValue('');
-        return;
-      }
     }
 
     // Recurrence single-select
@@ -437,7 +419,9 @@ export function TaskForm(props: TaskFormProps) {
       const recurrences = availableRecurrences();
       if (key.name === 'left' && recurrences.length > 0) {
         key.preventDefault();
-        setRecurrenceCursor((c) => (c - 1 + recurrences.length) % recurrences.length);
+        setRecurrenceCursor(
+          (c) => (c - 1 + recurrences.length) % recurrences.length,
+        );
         return;
       }
       if (key.name === 'right' && recurrences.length > 0) {
@@ -476,7 +460,7 @@ export function TaskForm(props: TaskFormProps) {
 
   const selectedTagsDisplay = () => {
     const sel = [...selectedTags()];
-    return sel.length > 0 ? sel.join(', ') : 'None';
+    return sel.length > 0 ? sel.map((t) => t.toUpperCase()).join(', ') : 'None';
   };
 
   return (
@@ -498,14 +482,14 @@ export function TaskForm(props: TaskFormProps) {
           </text>
         </box>
         <input
-            width={60}
-            value={description()}
-            placeholder="Task title (required)"
-            focused={isFieldFocused(0)}
-            backgroundColor={isFieldFocused(0) ? BG_INPUT_FOCUS : BG_INPUT}
-            textColor={FG_NORMAL}
-            onInput={(val: string) => setDescription(val)}
-          />
+          width={60}
+          value={description()}
+          placeholder="Task title (required)"
+          focused={isFieldFocused(0)}
+          backgroundColor={isFieldFocused(0) ? BG_INPUT_FOCUS : BG_INPUT}
+          textColor={FG_NORMAL}
+          onInput={(val: string) => setDescription(val)}
+        />
       </box>
       <box height={1} />
 
@@ -518,7 +502,9 @@ export function TaskForm(props: TaskFormProps) {
           </text>
         </box>
         <textarea
-          ref={(el: any) => { annotationRef = el; }}
+          ref={(el: any) => {
+            annotationRef = el;
+          }}
           width={60}
           height={5}
           initialValue={annotation()}
@@ -550,9 +536,7 @@ export function TaskForm(props: TaskFormProps) {
           when={isFieldFocused(2)}
           fallback={
             <box height={1}>
-              <text
-                fg={allProjects()[projectIndex()] ? PROJECT_COLOR : FG_DIM}
-              >
+              <text fg={allProjects()[projectIndex()] ? PROJECT_COLOR : FG_DIM}>
                 {projectDisplayName()}
               </text>
             </box>
@@ -564,9 +548,7 @@ export function TaskForm(props: TaskFormProps) {
               <box flexDirection="column" width={60}>
                 <box height={1} backgroundColor={BG_INPUT_FOCUS} paddingX={1}>
                   <text
-                    fg={
-                      allProjects()[projectIndex()] ? PROJECT_COLOR : FG_DIM
-                    }
+                    fg={allProjects()[projectIndex()] ? PROJECT_COLOR : FG_DIM}
                     attributes={1}
                   >
                     {projectDisplayName()}
@@ -640,67 +622,49 @@ export function TaskForm(props: TaskFormProps) {
             </box>
           }
         >
-          <Show
-            when={newInputMode() === 'tags'}
-            fallback={
-              <box flexDirection="column" width={60}>
-                <box
-                  height={1}
-                  backgroundColor={BG_INPUT_FOCUS}
-                  paddingX={1}
-                  flexDirection="row"
-                >
-                  <Show
-                    when={allTags().length > 0}
-                    fallback={
-                      <text fg={FG_DIM}>{'None  [n] add new'}</text>
-                    }
-                  >
-                    {(() => {
-                      const cursor = () =>
-                        Math.min(tagCursor(), allTags().length - 1);
-                      const tag = () => allTags()[cursor()];
-                      const isSelected = () => selectedTags().has(tag());
-                      const color = () =>
-                        TAG_COLORS[cursor() % TAG_COLORS.length];
-                      const selectedCount = () =>
-                        [...allTags()].filter((t) => selectedTags().has(t)).length;
-                      return (
-                        <>
-                          <text fg={color()} attributes={1}>
-                            {'▸ '}
-                            {isSelected() ? '●' : '○'}{' '}
-                            {tag()}
-                          </text>
-                          <box flexGrow={1} />
-                          <text fg={FG_DIM}>
-                            {selectedCount()}{' of '}{allTags().length}{' selected'}
-                          </text>
-                        </>
-                      );
-                    })()}
-                  </Show>
-                </box>
-                <Show when={allTags().length > 0}>
-                  <box height={1} paddingX={1}>
-                    <text fg={FG_DIM}>
-                      {'[←/→] move  [space] toggle  [n] new'}
-                    </text>
-                  </box>
-                </Show>
-              </box>
-            }
-          >
-            <input
-              width={60}
-              value={newInputValue()}
-              placeholder="New tag name"
-              focused={true}
+          <box flexDirection="column" width={60}>
+            <box
+              height={1}
               backgroundColor={BG_INPUT_FOCUS}
-              textColor={FG_NORMAL}
-              onInput={(val: string) => setNewInputValue(val)}
-            />
-          </Show>
+              paddingX={1}
+              flexDirection="row"
+            >
+              <Show
+                when={allTags().length > 0}
+                fallback={<text fg={FG_DIM}>{'None'}</text>}
+              >
+                {(() => {
+                  const cursor = () =>
+                    Math.min(tagCursor(), allTags().length - 1);
+                  const tag = () => allTags()[cursor()];
+                  const isSelected = () => selectedTags().has(tag());
+                  const color = () => getTagGradient(tag()).start;
+                  const selectedCount = () =>
+                    [...allTags()].filter((t) => selectedTags().has(t)).length;
+                  return (
+                    <>
+                      <text fg={color()} attributes={1}>
+                        {'▸ '}
+                        {isSelected() ? '●' : '○'} {tag().toUpperCase()}
+                      </text>
+                      <box flexGrow={1} />
+                      <text fg={FG_DIM}>
+                        {selectedCount()}
+                        {' of '}
+                        {allTags().length}
+                        {' selected'}
+                      </text>
+                    </>
+                  );
+                })()}
+              </Show>
+            </box>
+            <Show when={allTags().length > 0}>
+              <box height={1} paddingX={1}>
+                <text fg={FG_DIM}>{'[←/→] move  [space] toggle'}</text>
+              </box>
+            </Show>
+          </box>
         </Show>
       </box>
       <box height={1} />
@@ -714,14 +678,14 @@ export function TaskForm(props: TaskFormProps) {
           </text>
         </box>
         <input
-            width={60}
-            value={due()}
-            placeholder="e.g. tomorrow, eow, 2026-03-01"
-            focused={isFieldFocused(5)}
-            backgroundColor={isFieldFocused(5) ? BG_INPUT_FOCUS : BG_INPUT}
-            textColor={FG_NORMAL}
-            onInput={(val: string) => setDue(val)}
-          />
+          width={60}
+          value={due()}
+          placeholder="e.g. tomorrow, eow, 2026-03-01"
+          focused={isFieldFocused(5)}
+          backgroundColor={isFieldFocused(5) ? BG_INPUT_FOCUS : BG_INPUT}
+          textColor={FG_NORMAL}
+          onInput={(val: string) => setDue(val)}
+        />
       </box>
       <box height={1} />
 
@@ -755,25 +719,30 @@ export function TaskForm(props: TaskFormProps) {
                 >
                   <Show
                     when={availableRecurrences().length > 0}
-                    fallback={
-                      <text fg={FG_DIM}>{'None  [n] add custom'}</text>
-                    }
+                    fallback={<text fg={FG_DIM}>{'None  [n] add custom'}</text>}
                   >
                     {(() => {
                       const cursor = () =>
-                        Math.min(recurrenceCursor(), availableRecurrences().length - 1);
+                        Math.min(
+                          recurrenceCursor(),
+                          availableRecurrences().length - 1,
+                        );
                       const recur = () => availableRecurrences()[cursor()];
                       const isSelected = () => selectedRecurrence() === recur();
                       return (
                         <>
-                          <text fg={isSelected() ? ACCENT_PRIMARY : FG_NORMAL} attributes={1}>
+                          <text
+                            fg={isSelected() ? ACCENT_PRIMARY : FG_NORMAL}
+                            attributes={1}
+                          >
                             {'▸ '}
-                            {isSelected() ? '●' : '○'}{' '}
-                            {recur()}
+                            {isSelected() ? '●' : '○'} {recur()}
                           </text>
                           <box flexGrow={1} />
                           <text fg={FG_DIM}>
-                            {cursor() + 1}{' of '}{availableRecurrences().length}
+                            {cursor() + 1}
+                            {' of '}
+                            {availableRecurrences().length}
                           </text>
                         </>
                       );
@@ -815,7 +784,9 @@ export function TaskForm(props: TaskFormProps) {
       </Show>
       <Show when={selectedRecurrence() && !due().trim()}>
         <box height={1}>
-          <text fg={COLOR_ERROR}>{'  * Due date required for recurring tasks'}</text>
+          <text fg={COLOR_ERROR}>
+            {'  * Due date required for recurring tasks'}
+          </text>
         </box>
       </Show>
 
