@@ -249,6 +249,21 @@ export function TaskDetail(props: TaskDetailProps) {
         </Show>
       </box>
 
+      {/* Recurrence */}
+      <box height={1} flexDirection="row">
+        <text fg={FG_DIM}>{'Recurrence: '}</text>
+        <Show
+          when={task().recur || task().parent}
+          fallback={<text fg={FG_MUTED}>{'None'}</text>}
+        >
+          <text fg="#8a7aaa">
+            {task().recur
+              ? '↻ ' + task().recur
+              : '↻ recurring (child)'}
+          </text>
+        </Show>
+      </box>
+
       <box height={1} />
 
       {/* Status, UUID, Created, Modified */}
