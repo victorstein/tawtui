@@ -12,7 +12,7 @@ import {
   COLOR_ERROR,
   PROJECT_COLOR,
 } from '../theme';
-import { getTagGradient, lerpHex } from '../utils';
+import { getTagGradient, lerpHex, VIRTUAL_TAGS } from '../utils';
 
 interface TaskCardProps {
   task: Task;
@@ -103,10 +103,12 @@ export function TaskCard(props: TaskCardProps) {
   /** Tag pills (rounded with powerline caps). */
   const tagParts = () => {
     if (!task().tags || task().tags!.length === 0) return [];
-    return task().tags!.map((tag) => ({
-      text: tag,
-      grad: getTagGradient(tag),
-    }));
+    return task()
+      .tags!.filter((tag) => !VIRTUAL_TAGS.has(tag))
+      .map((tag) => ({
+        text: tag,
+        grad: getTagGradient(tag),
+      }));
   };
 
   const hasMetaParts = () => !!projectPart() || tagParts().length > 0;

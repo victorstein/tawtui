@@ -38,6 +38,42 @@ export function lerpHex(a: string, b: string, t: number): string {
   return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${blue.toString(16).padStart(2, '0')}`;
 }
 
+/** TaskWarrior virtual tags (computed metadata, not user-created). */
+export const VIRTUAL_TAGS = new Set([
+  'ACTIVE',
+  'ANNOTATED',
+  'BLOCKED',
+  'BLOCKING',
+  'CHILD',
+  'COMPLETED',
+  'DELETED',
+  'DUE',
+  'DUETODAY',
+  'INSTANCE',
+  'LATEST',
+  'MONTH',
+  'ORPHAN',
+  'OVERDUE',
+  'PARENT',
+  'PENDING',
+  'PRIORITY',
+  'PROJECT',
+  'QUARTER',
+  'READY',
+  'SCHEDULED',
+  'TAGGED',
+  'TEMPLATE',
+  'TODAY',
+  'TOMORROW',
+  'UDA',
+  'UNBLOCKED',
+  'UNTIL',
+  'WAITING',
+  'WEEK',
+  'YEAR',
+  'YESTERDAY',
+]);
+
 export const ALLOWED_TAGS = [
   'bug',
   'feature',

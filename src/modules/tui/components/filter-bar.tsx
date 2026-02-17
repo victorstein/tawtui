@@ -1,22 +1,34 @@
 import { createSignal, Show, For, onMount } from 'solid-js';
 import { useKeyboard } from '@opentui/solid';
 import type { TaskwarriorService } from '../../taskwarrior.service';
-import { ALLOWED_TAGS } from '../utils';
+import {
+  lerpHex,
+  darkenHex,
+  LEFT_CAP,
+  RIGHT_CAP,
+  getTagGradient,
+  getAuthorGradient,
+  VIRTUAL_TAGS,
+} from '../utils';
 import {
   BG_SURFACE,
   BG_INPUT,
-  BG_INPUT_FOCUS,
   BG_SELECTED,
-  BORDER_DIM,
   FG_PRIMARY,
   FG_NORMAL,
   FG_DIM,
   FG_FAINT,
   ACCENT_PRIMARY,
-  ACCENT_SECONDARY,
   ACCENT_TERTIARY,
+  PRIORITY_H,
+  PRIORITY_M,
+  PRIORITY_L,
+  PROJECT_COLOR,
   COLOR_SUCCESS,
 } from '../theme';
+
+/** Maximum number of suggestion items visible in the dropdown. */
+const MAX_VISIBLE_SUGGESTIONS = 5;
 
 interface FilterBarProps {
   /** Current filter text value (two-way binding). */
@@ -50,6 +62,62 @@ function parseFilterChips(text: string): string[] {
     .filter((t) => t.length > 0);
 }
 
+/** Priority gradient endpoints keyed by level letter. */
+const PRIORITY_GRADIENTS: Record<string, { start: string; end: string }> = {
+  H: { start: PRIORITY_H, end: darkenHex(PRIORITY_H, 0.55) },
+  M: { start: PRIORITY_M, end: darkenHex(PRIORITY_M, 0.55) },
+  L: { start: PRIORITY_L, end: darkenHex(PRIORITY_L, 0.55) },
+};
+
+/** Resolve a chip token to its gradient start/end colors. */
+function getChipGradient(chip: string): { start: string; end: string } {
+  // Tags: +tagName
+  if (chip.startsWith('+')) {
+    return getTagGradient(chip.slice(1));
+  }
+
+  // Projects: project:name
+  if (chip.startsWith('project:')) {
+    const name = chip.slice('project:'.length);
+    const grad = getAuthorGradient(name);
+    // Blend toward project teal so projects feel distinct from author pills
+    return {
+      start: lerpHex(PROJECT_COLOR, grad.start, 0.35),
+      end: lerpHex(darkenHex(PROJECT_COLOR, 0.6), grad.end, 0.35),
+    };
+  }
+
+  // Priority: priority:H/M/L
+  if (chip.startsWith('priority:')) {
+    const level = chip.slice('priority:'.length).toUpperCase();
+    return (
+      PRIORITY_GRADIENTS[level] ?? {
+        start: ACCENT_PRIMARY,
+        end: darkenHex(ACCENT_PRIMARY, 0.55),
+      }
+    );
+  }
+
+  // Description search: description.has:, description:, description.contains:
+  if (chip.startsWith('description')) {
+    return {
+      start: ACCENT_TERTIARY,
+      end: darkenHex(ACCENT_TERTIARY, 0.55),
+    };
+  }
+
+  // Default: primary accent gradient
+  return { start: ACCENT_PRIMARY, end: darkenHex(ACCENT_PRIMARY, 0.55) };
+}
+
+/** Determine the suggestion category prefix icon and gradient for coloring. */
+function getSuggestionGradient(suggestion: string): {
+  start: string;
+  end: string;
+} {
+  return getChipGradient(suggestion);
+}
+
 export function FilterBar(props: FilterBarProps) {
   // Suggestions state
   const [showSuggestions, setShowSuggestions] = createSignal(false);
@@ -62,7 +130,10 @@ export function FilterBar(props: FilterBarProps) {
     if (!tw) return;
 
     try {
-      const projects = await tw.getProjects();
+      const [projects, tags] = await Promise.all([
+        tw.getProjects(),
+        tw.getTags(),
+      ]);
 
       const items: string[] = [];
 
@@ -71,13 +142,16 @@ export function FilterBar(props: FilterBarProps) {
         if (proj) items.push(`project:${proj}`);
       }
 
-      // Tags as `+<name>`
-      for (const tag of ALLOWED_TAGS) {
-        items.push(`+${tag}`);
+      // Tags as `+<name>` (exclude virtual tags)
+      for (const tag of tags) {
+        if (tag && !VIRTUAL_TAGS.has(tag)) items.push(`+${tag}`);
       }
 
       // Priority shortcuts
       items.push('priority:H', 'priority:M', 'priority:L');
+
+      // Description search
+      items.push('description.has:');
 
       setSuggestions(items);
     } catch {
@@ -114,8 +188,8 @@ export function FilterBar(props: FilterBarProps) {
         setShowSuggestions(true);
         setSelectedSuggestion(0);
       } else {
-        // Cycle through visible suggestions (clamped to 10)
-        const maxVisible = Math.min(filteredSuggestions().length, 10);
+        // Cycle through visible suggestions
+        const maxVisible = Math.min(filteredSuggestions().length, MAX_VISIBLE_SUGGESTIONS);
         if (maxVisible > 0) {
           setSelectedSuggestion((prev) => (prev + 1) % maxVisible);
         }
@@ -126,7 +200,7 @@ export function FilterBar(props: FilterBarProps) {
     // Shift+Tab cycles backwards through suggestions
     if (key.name === 'tab' && key.shift) {
       if (showSuggestions()) {
-        const maxVisible = Math.min(filteredSuggestions().length, 10);
+        const maxVisible = Math.min(filteredSuggestions().length, MAX_VISIBLE_SUGGESTIONS);
         if (maxVisible > 0) {
           setSelectedSuggestion((prev) => (prev - 1 + maxVisible) % maxVisible);
         }
@@ -173,7 +247,7 @@ export function FilterBar(props: FilterBarProps) {
     // Arrow keys within suggestions
     if (showSuggestions()) {
       if (key.name === 'down' || key.name === 'j') {
-        const maxVisible = Math.min(filteredSuggestions().length, 10);
+        const maxVisible = Math.min(filteredSuggestions().length, MAX_VISIBLE_SUGGESTIONS);
         if (maxVisible > 0) {
           setSelectedSuggestion((prev) => Math.min(prev + 1, maxVisible - 1));
         }
@@ -189,7 +263,7 @@ export function FilterBar(props: FilterBarProps) {
   const chips = () => parseFilterChips(props.filterText);
 
   return (
-    <box flexDirection="column" width="100%">
+    <box flexDirection="column" width="100%" position="relative">
       {/* Main filter bar row */}
       <box height={1} width="100%" flexDirection="row" paddingX={1}>
         {/* Filter icon / label */}
@@ -201,7 +275,7 @@ export function FilterBar(props: FilterBarProps) {
         <input
           flexGrow={1}
           value={props.filterText}
-          placeholder="e.g. project:work +urgent priority:H"
+          placeholder="e.g. project:work +urgent priority:H description.has:fix"
           focused={props.focused && !showSuggestions()}
           backgroundColor={BG_INPUT}
           textColor={FG_NORMAL}
@@ -209,75 +283,119 @@ export function FilterBar(props: FilterBarProps) {
         />
       </box>
 
-      {/* Active filter chips */}
+      {/* Active filter chips — gradient pills */}
       <Show when={chips().length > 0}>
         <box height={1} width="100%" flexDirection="row" paddingX={1}>
           <text fg={FG_DIM}>{'Active: '}</text>
           <For each={chips()}>
-            {(chip, index) => (
-              <>
-                <Show when={index() > 0}>
-                  <text fg={FG_FAINT}> </text>
-                </Show>
-                <text fg={ACCENT_SECONDARY} attributes={1}>
-                  {`[${chip}]`}
-                </text>
-              </>
-            )}
+            {(chip, index) => {
+              const grad = getChipGradient(chip);
+              const label = ` ${chip} `;
+              return (
+                <>
+                  <Show when={index() > 0}>
+                    <text> </text>
+                  </Show>
+                  <text fg={grad.start}>{LEFT_CAP}</text>
+                  <For each={label.split('')}>
+                    {(char, i) => {
+                      const t = label.length > 1 ? i() / (label.length - 1) : 0;
+                      return (
+                        <text
+                          fg={FG_PRIMARY}
+                          bg={lerpHex(grad.start, grad.end, t)}
+                          attributes={1}
+                        >
+                          {char}
+                        </text>
+                      );
+                    }}
+                  </For>
+                  <text fg={grad.end}>{RIGHT_CAP}</text>
+                </>
+              );
+            }}
           </For>
         </box>
       </Show>
 
-      {/* Key hints */}
-      <box height={1} width="100%" flexDirection="row" paddingX={1}>
-        <text fg={COLOR_SUCCESS} attributes={1}>
-          {' [Enter] '}
-        </text>
-        <text fg={FG_DIM}>{'Apply'}</text>
-        <text fg={FG_DIM}>{'  |  '}</text>
-        <text fg={ACCENT_PRIMARY} attributes={1}>
-          {' [Esc] '}
-        </text>
-        <text fg={FG_DIM}>{'Clear & Close'}</text>
-        <text fg={FG_DIM}>{'  |  '}</text>
-        <text fg={ACCENT_TERTIARY} attributes={1}>
-          {' [Tab] '}
-        </text>
-        <text fg={FG_DIM}>{'Suggestions'}</text>
-      </box>
+      {/* Key hints — hidden when suggestions are open */}
+      <Show when={!showSuggestions()}>
+        <box height={1} width="100%" flexDirection="row" paddingX={1}>
+          {/* Enter pill */}
+          <text fg={COLOR_SUCCESS}>{LEFT_CAP}</text>
+          <text fg={FG_PRIMARY} bg={COLOR_SUCCESS} attributes={1}>
+            {' Enter '}
+          </text>
+          <text fg={COLOR_SUCCESS}>{RIGHT_CAP}</text>
+          <text fg={FG_DIM}>{' Apply  '}</text>
 
-      {/* Suggestions popup */}
+          {/* Esc pill */}
+          <text fg={ACCENT_PRIMARY}>{LEFT_CAP}</text>
+          <text fg={FG_PRIMARY} bg={ACCENT_PRIMARY} attributes={1}>
+            {' Esc '}
+          </text>
+          <text fg={ACCENT_PRIMARY}>{RIGHT_CAP}</text>
+          <text fg={FG_DIM}>{' Clear  '}</text>
+
+          {/* Tab pill */}
+          <text fg={ACCENT_TERTIARY}>{LEFT_CAP}</text>
+          <text fg={FG_PRIMARY} bg={ACCENT_TERTIARY} attributes={1}>
+            {' Tab '}
+          </text>
+          <text fg={ACCENT_TERTIARY}>{RIGHT_CAP}</text>
+          <text fg={FG_DIM}>{' Suggest'}</text>
+        </box>
+      </Show>
+
+      {/* Suggestions popup — absolutely positioned to overlay content below */}
       <Show when={showSuggestions() && filteredSuggestions().length > 0}>
         <box
-          flexDirection="column"
+          position="absolute"
+          top={1 + (chips().length > 0 ? 1 : 0)}
+          left={0}
           width="100%"
+          zIndex={50}
+          flexDirection="column"
           backgroundColor={BG_SURFACE}
-          borderStyle="single"
-          borderColor={BORDER_DIM}
         >
-          <box height={1} paddingX={1}>
-            <text fg={FG_DIM} attributes={1}>
-              {'Suggestions (Tab to cycle, Enter to select)'}
+          <box height={1} paddingX={1} flexDirection="row">
+            <text fg={ACCENT_TERTIARY}>{LEFT_CAP}</text>
+            <text fg={FG_PRIMARY} bg={ACCENT_TERTIARY} attributes={1}>
+              {' Suggestions '}
+            </text>
+            <text fg={ACCENT_TERTIARY}>{RIGHT_CAP}</text>
+            <text fg={FG_FAINT}>
+              {' Tab/\u2191\u2193 cycle \u00b7 Enter select'}
             </text>
           </box>
-          <For each={filteredSuggestions().slice(0, 10)}>
-            {(suggestion, index) => (
-              <box
-                height={1}
-                paddingX={1}
-                backgroundColor={
-                  index() === selectedSuggestion() ? BG_SELECTED : undefined
-                }
-              >
-                <text
-                  fg={index() === selectedSuggestion() ? FG_PRIMARY : FG_DIM}
-                  attributes={index() === selectedSuggestion() ? 1 : 0}
+          <For each={filteredSuggestions().slice(0, MAX_VISIBLE_SUGGESTIONS)}>
+            {(suggestion, index) => {
+              const isSelected = () => index() === selectedSuggestion();
+              const grad = getSuggestionGradient(suggestion);
+              return (
+                <box
+                  height={1}
+                  paddingX={1}
+                  backgroundColor={isSelected() ? BG_SELECTED : undefined}
+                  flexDirection="row"
                 >
-                  {index() === selectedSuggestion() ? '> ' : '  '}
-                  {suggestion}
-                </text>
-              </box>
-            )}
+                  {/* Colored pip indicator */}
+                  <text fg={isSelected() ? grad.start : FG_FAINT}>
+                    {isSelected() ? '\u25B6 ' : '  '}
+                  </text>
+                  {/* Suggestion text with gradient accent for selected */}
+                  <Show
+                    when={isSelected()}
+                    fallback={<text fg={FG_DIM}>{suggestion}</text>}
+                  >
+                    <text fg={grad.start} attributes={1}>
+                      {suggestion}
+                    </text>
+                  </Show>
+                </box>
+              );
+            }}
           </For>
         </box>
       </Show>

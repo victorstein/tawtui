@@ -68,7 +68,11 @@ function categoriseTasks(tasks: Task[]): [Task[], Task[], Task[]] {
         const y = t.end.slice(0, 4);
         const m = t.end.slice(4, 6);
         const d = t.end.slice(6, 8);
-        const endDate = new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10));
+        const endDate = new Date(
+          parseInt(y, 10),
+          parseInt(m, 10) - 1,
+          parseInt(d, 10),
+        );
         if (endDate >= todayMidnight) {
           done.push(t);
         }
@@ -275,8 +279,18 @@ export function TasksView(props: TasksViewProps) {
     // (ArchiveView has its own keyboard handler)
     if (archiveMode()) return;
 
+    // Clear applied filter with Escape when filter bar is closed
+    if (key.name === 'escape' && appliedFilter().trim()) {
+      setAppliedFilter('');
+      setFilterText('');
+      loadTasks();
+      return;
+    }
+
     // Toggle filter mode with `/`
     if (key.name === '/') {
+      key.preventDefault();
+      setFilterText(appliedFilter());
       setFilterActive(true);
       return;
     }
@@ -315,26 +329,38 @@ export function TasksView(props: TasksViewProps) {
       const col = activeColumn();
       if (col === 0) {
         const uuid = task.uuid;
-        taskAction((u) => getTaskwarriorService()!.startTask(u), task).then(() => {
-          setActiveColumn(1);
-          const idx = inProgressTasks().findIndex((t) => t.uuid === uuid);
-          if (idx >= 0) {
-            const indices = [...selectedIndices()] as [number, number, number];
-            indices[1] = idx;
-            setSelectedIndices(indices);
-          }
-        });
+        taskAction((u) => getTaskwarriorService()!.startTask(u), task).then(
+          () => {
+            setActiveColumn(1);
+            const idx = inProgressTasks().findIndex((t) => t.uuid === uuid);
+            if (idx >= 0) {
+              const indices = [...selectedIndices()] as [
+                number,
+                number,
+                number,
+              ];
+              indices[1] = idx;
+              setSelectedIndices(indices);
+            }
+          },
+        );
       } else if (col === 1) {
         const uuid = task.uuid;
-        taskAction((u) => getTaskwarriorService()!.completeTask(u), task).then(() => {
-          setActiveColumn(2);
-          const idx = doneTasks().findIndex((t) => t.uuid === uuid);
-          if (idx >= 0) {
-            const indices = [...selectedIndices()] as [number, number, number];
-            indices[2] = idx;
-            setSelectedIndices(indices);
-          }
-        });
+        taskAction((u) => getTaskwarriorService()!.completeTask(u), task).then(
+          () => {
+            setActiveColumn(2);
+            const idx = doneTasks().findIndex((t) => t.uuid === uuid);
+            if (idx >= 0) {
+              const indices = [...selectedIndices()] as [
+                number,
+                number,
+                number,
+              ];
+              indices[2] = idx;
+              setSelectedIndices(indices);
+            }
+          },
+        );
       }
       return;
     }
@@ -346,15 +372,21 @@ export function TasksView(props: TasksViewProps) {
       const col = activeColumn();
       if (col === 1) {
         const uuid = task.uuid;
-        taskAction((u) => getTaskwarriorService()!.stopTask(u), task).then(() => {
-          setActiveColumn(0);
-          const idx = todoTasks().findIndex((t) => t.uuid === uuid);
-          if (idx >= 0) {
-            const indices = [...selectedIndices()] as [number, number, number];
-            indices[0] = idx;
-            setSelectedIndices(indices);
-          }
-        });
+        taskAction((u) => getTaskwarriorService()!.stopTask(u), task).then(
+          () => {
+            setActiveColumn(0);
+            const idx = todoTasks().findIndex((t) => t.uuid === uuid);
+            if (idx >= 0) {
+              const indices = [...selectedIndices()] as [
+                number,
+                number,
+                number,
+              ];
+              indices[0] = idx;
+              setSelectedIndices(indices);
+            }
+          },
+        );
       } else if (col === 2) {
         const uuid = task.uuid;
         const tw = getTaskwarriorService();
@@ -569,14 +601,14 @@ export function TasksView(props: TasksViewProps) {
 
         {/* Active filter indicator — shown when a filter is applied but bar is closed */}
         <Show when={!filterActive() && appliedFilter().trim()}>
-          <box height={1} width="100%" paddingX={1}>
+          <box height={1} width="100%" flexDirection="row" paddingX={1}>
             <text fg={ACCENT_PRIMARY} attributes={1}>
               {'Filter: '}
             </text>
-            <text fg={ACCENT_SECONDARY}>{appliedFilter()}</text>
-            <text fg={FG_DIM}>
-              {'  (press / to edit, Esc in filter to clear)'}
+            <text fg={ACCENT_SECONDARY} truncate>
+              {appliedFilter()}
             </text>
+            <text fg={FG_DIM}>{'  (/ edit, Esc clear)'}</text>
           </box>
         </Show>
 
