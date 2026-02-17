@@ -137,8 +137,15 @@ export function TaskCard(props: TaskCardProps) {
 
   const hasMetaParts = () => !!projectPart() || tagParts().length > 0;
 
-  /** Due date + BLOCKED indicator for line 3. */
-  const hasDueLine = () => !!task().due || !!task().depends;
+  const recurrenceText = () => {
+    if (task().recur) return task().recur!;
+    if (task().parent) return 'recurring';
+    return null;
+  };
+
+  /** Due date + recurrence + BLOCKED indicator for line 3. */
+  const hasDueLine = () =>
+    !!task().due || !!task().depends || !!recurrenceText();
 
   return (
     <box
@@ -195,10 +202,16 @@ export function TaskCard(props: TaskCardProps) {
         </box>
       </Show>
 
-      {/* Line 3: due date + BLOCKED indicator */}
+      {/* Line 3: recurrence + due date + BLOCKED indicator */}
       <Show when={hasDueLine()}>
         <box height={1} width="100%" flexDirection="row">
           <text fg={FG_FAINT}>{'  '}</text>
+          <Show when={recurrenceText()}>
+            <text fg="#8a7aaa">{'↻ ' + recurrenceText()}</text>
+            <Show when={task().due}>
+              <text fg={FG_FAINT}>{'  '}</text>
+            </Show>
+          </Show>
           <Show when={task().due}>
             {(() => {
               const overdue = isOverdue(task().due!);
