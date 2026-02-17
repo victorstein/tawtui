@@ -71,16 +71,10 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
   }
 
   async onModuleDestroy(): Promise<void> {
-    this.logger.log('Cleaning up all tmux sessions');
-    const cleanups = Array.from(this.sessions.keys()).map(async (id) => {
-      try {
-        await this.destroySession(id);
-      } catch {
-        // best-effort cleanup
-      }
-    });
-    await Promise.allSettled(cleanups);
+    this.logger.log('Persisting session metadata before shutdown');
     this.persistSessions();
+    this.sessions.clear();
+    this.contentHashes.clear();
   }
 
   // ---------------------------------------------------------------------------

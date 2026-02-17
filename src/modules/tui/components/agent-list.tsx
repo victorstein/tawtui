@@ -110,13 +110,16 @@ export function AgentList(props: AgentListProps) {
             );
           }}
         </For>
-        <Show when={props.agents.length === 0}>
-          <box paddingX={1} paddingY={1} flexDirection="column">
-            <text fg={FG_DIM}>No agents running</text>
-            <box height={1} />
-            <text fg={FG_DIM}>Press 'n' to spawn a new agent</text>
-          </box>
-        </Show>
+        {/* Stable container prevents @opentui <Show> node cleanup issues */}
+        <box flexDirection="column">
+          <Show when={props.agents.length === 0}>
+            <box paddingX={1} paddingY={1} flexDirection="column">
+              <text fg={FG_DIM}>No agents running</text>
+              <box height={1} />
+              <text fg={FG_DIM}>Press 'n' to spawn a new agent</text>
+            </box>
+          </Show>
+        </box>
       </scrollbox>
     </box>
   );
