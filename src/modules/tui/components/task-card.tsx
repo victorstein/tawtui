@@ -167,7 +167,7 @@ export function TaskCard(props: TaskCardProps) {
 
       {/* Line 2: project (rectangular) + tag pills (rounded caps) */}
       <Show when={hasMetaParts()}>
-        <box height={1} width="100%" flexDirection="row">
+        <box width="100%" flexDirection="row" flexWrap="wrap">
           <text fg={FG_FAINT}>{'  '}</text>
           {/* Project pill — rectangular */}
           <Show when={projectPart()}>
@@ -180,7 +180,7 @@ export function TaskCard(props: TaskCardProps) {
           {/* Tag pills — rounded with powerline caps */}
           <For each={tagParts()}>
             {(part, index) => (
-              <>
+              <box flexDirection="row">
                 <Show when={index() > 0 || !!projectPart()}>
                   <text>{' '}</text>
                 </Show>
@@ -189,7 +189,7 @@ export function TaskCard(props: TaskCardProps) {
                   <text fg={part.fg}>{' ' + part.text + ' '}</text>
                 </box>
                 <text fg={part.bg}>{'\uE0B4'}</text>
-              </>
+              </box>
             )}
           </For>
         </box>
