@@ -93,7 +93,10 @@ export function getTagGradient(tag: string): { start: string; end: string } {
 }
 
 /** Generate a gradient pair for a PR author name using HSL color space. */
-export function getAuthorGradient(author: string): { start: string; end: string } {
+export function getAuthorGradient(author: string): {
+  start: string;
+  end: string;
+} {
   const hash = djb2(author);
   const hue = (hash * 137) % 360; // different multiplier than tags to avoid collisions
   const start = hslToHex(hue, 50, 45);

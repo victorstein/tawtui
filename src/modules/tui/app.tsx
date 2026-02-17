@@ -1,4 +1,4 @@
-import { createSignal, Match, Switch } from 'solid-js';
+import { createSignal, Match, Switch, onMount } from 'solid-js';
 import { useKeyboard, useRenderer } from '@opentui/solid';
 import { TabBar } from './components/tab-bar';
 import { StatusBar } from './components/status-bar';
@@ -7,6 +7,13 @@ import { ReposView } from './views/repos-view';
 import { AgentsView } from './views/agents-view';
 import { DialogProvider, useDialog } from './context/dialog';
 import { DialogConfirm } from './components/dialog-confirm';
+import { DialogSetupWizard } from './components/dialog-setup-wizard';
+import type { DependencyService } from '../dependency.service';
+import type { DependencyStatus } from '../dependency.types';
+
+function getDependencyService(): DependencyService | null {
+  return (globalThis as any).__tawtui?.dependencyService ?? null;
+}
 
 const TABS = [{ name: 'Tasks' }, { name: 'Repos' }, { name: 'Agents' }];
 
@@ -24,6 +31,31 @@ function AppContent() {
   const [activeTab, setActiveTab] = createSignal(0);
   const [archiveMode, setArchiveMode] = createSignal(false);
   const [inputCaptured, setInputCaptured] = createSignal(false);
+  const [refreshTrigger, setRefreshTrigger] = createSignal(0);
+
+  // Check dependencies on startup
+  onMount(() => {
+    const depService = getDependencyService();
+    if (!depService) return;
+
+    void depService.checkAll().then((status: DependencyStatus) => {
+      if (!status.allGood) {
+        dialog.show(
+          () => (
+            <DialogSetupWizard
+              status={status}
+              onCheckAgain={() => depService.checkAll()}
+              onContinue={() => {
+                dialog.close();
+                setRefreshTrigger((n) => n + 1);
+              }}
+            />
+          ),
+          { size: 'large' },
+        );
+      }
+    });
+  });
 
   useKeyboard((key) => {
     // Don't handle global keys when a dialog is open or sub-component owns input
@@ -87,10 +119,11 @@ function AppContent() {
             <TasksView
               onArchiveModeChange={(active) => setArchiveMode(active)}
               onInputCapturedChange={(captured) => setInputCaptured(captured)}
+              refreshTrigger={refreshTrigger}
             />
           </Match>
           <Match when={activeTab() === 1}>
-            <ReposView />
+            <ReposView refreshTrigger={refreshTrigger} />
           </Match>
           <Match when={activeTab() === 2}>
             <AgentsView />

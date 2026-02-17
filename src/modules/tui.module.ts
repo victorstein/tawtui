@@ -3,9 +3,10 @@ import { TuiService } from './tui.service';
 import { TaskwarriorModule } from './taskwarrior.module';
 import { GithubModule } from './github.module';
 import { TerminalModule } from './terminal.module';
+import { DependencyModule } from './dependency.module';
 
 @Module({
-  imports: [TaskwarriorModule, GithubModule, TerminalModule],
+  imports: [TaskwarriorModule, GithubModule, TerminalModule, DependencyModule],
   providers: [TuiService],
   exports: [TuiService],
 })
