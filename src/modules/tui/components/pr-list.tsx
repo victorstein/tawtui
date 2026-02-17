@@ -19,7 +19,7 @@ import {
   COLOR_ERROR,
   COLOR_WARNING,
 } from '../theme';
-import { lerpHex, darkenHex, LEFT_CAP, RIGHT_CAP } from '../utils/color';
+import { lerpHex, darkenHex, LEFT_CAP, RIGHT_CAP, getAuthorGradient } from '../utils';
 
 const DIM_FACTOR = 0.5;
 
@@ -264,19 +264,26 @@ export function PrList(props: PrListProps) {
 
                   {/* Line 2: Author pill + stats + icons */}
                   <box height={1} width="100%" flexDirection="row">
-                    <text fg={BORDER_DIM}>
-                      {LEFT_CAP}
-                    </text>
-                    <box
-                      backgroundColor={BORDER_DIM}
-                    >
-                      <text fg={FG_NORMAL}>
-                        {' @' + pr.author.login + ' '}
-                      </text>
-                    </box>
-                    <text fg={BORDER_DIM}>
-                      {RIGHT_CAP}
-                    </text>
+                    {(() => {
+                      const authorGrad = getAuthorGradient(pr.author.login);
+                      return (
+                        <>
+                          <text fg={authorGrad.start}>{LEFT_CAP}</text>
+                          <For each={(' @' + pr.author.login + ' ').split('')}>
+                            {(char, i) => {
+                              const label = ' @' + pr.author.login + ' ';
+                              const t = label.length > 1 ? i() / (label.length - 1) : 0;
+                              return (
+                                <text fg={FG_NORMAL} bg={lerpHex(authorGrad.start, authorGrad.end, t)}>
+                                  {char}
+                                </text>
+                              );
+                            }}
+                          </For>
+                          <text fg={authorGrad.end}>{RIGHT_CAP}</text>
+                        </>
+                      );
+                    })()}
                     <text fg={FG_DIM}> </text>
                     <text fg={COLOR_SUCCESS}>{`+${pr.additions}`}</text>
                     <text fg={FG_DIM}>/</text>

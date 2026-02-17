@@ -10,7 +10,7 @@ import {
 import { useKeyboard, useTerminalDimensions } from '@opentui/solid';
 import { RGBA } from '@opentui/core';
 import { BG_SURFACE, BORDER_DIALOG } from '../theme';
-import { lerpHex } from '../utils/color';
+import { lerpHex } from '../utils';
 
 export type DialogSize = 'small' | 'medium' | 'large';
 

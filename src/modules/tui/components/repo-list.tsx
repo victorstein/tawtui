@@ -8,7 +8,7 @@ import {
   FG_DIM,
   REPO_GRAD,
 } from '../theme';
-import { lerpHex, darkenHex, LEFT_CAP, RIGHT_CAP } from '../utils/color';
+import { lerpHex, darkenHex, LEFT_CAP, RIGHT_CAP, getAuthorGradient } from '../utils';
 
 const DIM_FACTOR = 0.5;
 
@@ -116,12 +116,27 @@ export function RepoList(props: RepoListProps) {
                   backgroundColor={isSelected() ? BG_SELECTED : undefined}
                   flexDirection="row"
                 >
-                  {/* Owner pill — rectangular, solid background */}
-                  <box backgroundColor={REPO_GRAD[0]} paddingX={1}>
-                    <text fg={FG_PRIMARY} attributes={1}>
-                      {repo.owner}
-                    </text>
-                  </box>
+                  {/* Owner pill — gradient with powerline caps */}
+                  {(() => {
+                    const ownerGrad = getAuthorGradient(repo.owner);
+                    const label = ` ${repo.owner} `;
+                    return (
+                      <>
+                        <text fg={ownerGrad.start}>{LEFT_CAP}</text>
+                        <For each={label.split('')}>
+                          {(char, i) => {
+                            const t = label.length > 1 ? i() / (label.length - 1) : 0;
+                            return (
+                              <text fg={FG_PRIMARY} bg={lerpHex(ownerGrad.start, ownerGrad.end, t)} attributes={1}>
+                                {char}
+                              </text>
+                            );
+                          }}
+                        </For>
+                        <text fg={ownerGrad.end}>{RIGHT_CAP}</text>
+                      </>
+                    );
+                  })()}
                   {/* Separator */}
                   <text fg={FG_DIM}>{' / '}</text>
                   {/* Repo name */}

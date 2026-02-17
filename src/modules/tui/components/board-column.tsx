@@ -2,7 +2,7 @@ import { For, Show } from 'solid-js';
 import type { Task } from '../../taskwarrior.types';
 import { TaskCard } from './task-card';
 import { BORDER_DIM, FG_DIM } from '../theme';
-import { lerpHex, darkenHex, LEFT_CAP, RIGHT_CAP } from '../utils/color';
+import { lerpHex, darkenHex, LEFT_CAP, RIGHT_CAP } from '../utils';
 
 const COLUMN_GRADIENTS: Record<string, [string, string]> = {
   TODO: ['#8a7aaa', '#445f80'],
