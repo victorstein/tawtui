@@ -12,7 +12,12 @@ import { DialogSetupWizard } from './components/dialog-setup-wizard';
 import { getDependencyService, getTuiExit } from './bridge';
 import type { DependencyStatus } from '../dependency.types';
 
-const TABS = [{ name: 'Tasks' }, { name: 'Repos' }, { name: 'Agents' }, { name: 'Calendar' }];
+const TABS = [
+  { name: 'Tasks' },
+  { name: 'Repos' },
+  { name: 'Agents' },
+  { name: 'Calendar' },
+];
 
 export function App() {
   return (
@@ -127,7 +132,9 @@ function AppContent() {
             <ReposView refreshTrigger={refreshTrigger} />
           </Match>
           <Match when={activeTab() === 2}>
-            <AgentsView onInputCapturedChange={(captured) => setInputCaptured(captured)} />
+            <AgentsView
+              onInputCapturedChange={(captured) => setInputCaptured(captured)}
+            />
           </Match>
           <Match when={activeTab() === 3}>
             <CalendarView refreshTrigger={refreshTrigger} />

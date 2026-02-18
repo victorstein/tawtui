@@ -182,7 +182,10 @@ export function FilterBar(props: FilterBarProps) {
         setSelectedSuggestion(0);
       } else {
         // Cycle through visible suggestions
-        const maxVisible = Math.min(filteredSuggestions().length, MAX_VISIBLE_SUGGESTIONS);
+        const maxVisible = Math.min(
+          filteredSuggestions().length,
+          MAX_VISIBLE_SUGGESTIONS,
+        );
         if (maxVisible > 0) {
           setSelectedSuggestion((prev) => (prev + 1) % maxVisible);
         }
@@ -193,7 +196,10 @@ export function FilterBar(props: FilterBarProps) {
     // Shift+Tab cycles backwards through suggestions
     if (key.name === 'tab' && key.shift) {
       if (showSuggestions()) {
-        const maxVisible = Math.min(filteredSuggestions().length, MAX_VISIBLE_SUGGESTIONS);
+        const maxVisible = Math.min(
+          filteredSuggestions().length,
+          MAX_VISIBLE_SUGGESTIONS,
+        );
         if (maxVisible > 0) {
           setSelectedSuggestion((prev) => (prev - 1 + maxVisible) % maxVisible);
         }
@@ -240,7 +246,10 @@ export function FilterBar(props: FilterBarProps) {
     // Arrow keys within suggestions
     if (showSuggestions()) {
       if (key.name === 'down' || key.name === 'j') {
-        const maxVisible = Math.min(filteredSuggestions().length, MAX_VISIBLE_SUGGESTIONS);
+        const maxVisible = Math.min(
+          filteredSuggestions().length,
+          MAX_VISIBLE_SUGGESTIONS,
+        );
         if (maxVisible > 0) {
           setSelectedSuggestion((prev) => Math.min(prev + 1, maxVisible - 1));
         }

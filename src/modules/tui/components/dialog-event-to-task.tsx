@@ -187,9 +187,7 @@ export function DialogEventToTask(props: DialogEventToTaskProps) {
       <box height={1} />
 
       <box height={1}>
-        <text fg={FG_MUTED}>
-          {'  '}Will add meeting details as annotation
-        </text>
+        <text fg={FG_MUTED}>{'  '}Will add meeting details as annotation</text>
       </box>
       <box height={1} />
 

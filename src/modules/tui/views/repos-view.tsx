@@ -315,30 +315,25 @@ export function ReposView(props: ReposViewProps) {
                       repo.owner,
                       repo.repo,
                       detail.title,
-                    )
-                      .catch(() => {
-                        dialog.show(
-                          () => (
-                            <box
-                              flexDirection="column"
-                              paddingX={1}
-                              paddingY={1}
-                            >
-                              <text fg={COLOR_ERROR}>
-                                Failed to create review agent
+                    ).catch(() => {
+                      dialog.show(
+                        () => (
+                          <box flexDirection="column" paddingX={1} paddingY={1}>
+                            <text fg={COLOR_ERROR}>
+                              Failed to create review agent
+                            </text>
+                            <box height={1} />
+                            <box flexDirection="row">
+                              <text fg={ACCENT_PRIMARY} attributes={1}>
+                                {' [Esc] '}
                               </text>
-                              <box height={1} />
-                              <box flexDirection="row">
-                                <text fg={ACCENT_PRIMARY} attributes={1}>
-                                  {' [Esc] '}
-                                </text>
-                                <text fg={FG_DIM}>Close</text>
-                              </box>
+                              <text fg={FG_DIM}>Close</text>
                             </box>
-                          ),
-                          { size: 'medium' },
-                        );
-                      });
+                          </box>
+                        ),
+                        { size: 'medium' },
+                      );
+                    });
                   }}
                   onClose={() => dialog.close()}
                 />
@@ -376,10 +371,14 @@ export function ReposView(props: ReposViewProps) {
 
   // Reload when parent bumps refreshTrigger (e.g. after setup wizard)
   createEffect(
-    on(() => props.refreshTrigger?.(), () => {
-      loadRepos();
-      loadPRs();
-    }, { defer: true }),
+    on(
+      () => props.refreshTrigger?.(),
+      () => {
+        loadRepos();
+        loadPRs();
+      },
+      { defer: true },
+    ),
   );
 
   // Calculate pane widths from terminal dimensions.

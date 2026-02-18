@@ -536,9 +536,13 @@ export function TasksView(props: TasksViewProps) {
 
   // Reload when parent bumps refreshTrigger (e.g. after setup wizard)
   createEffect(
-    on(() => props.refreshTrigger?.(), () => {
-      loadTasks();
-    }, { defer: true }),
+    on(
+      () => props.refreshTrigger?.(),
+      () => {
+        loadTasks();
+      },
+      { defer: true },
+    ),
   );
 
   // Calculate column width from terminal dimensions.
@@ -611,7 +615,9 @@ export function TasksView(props: TasksViewProps) {
             <text fg={COLOR_ERROR}>Error: {error()}</text>
             <box flexDirection="row">
               <text fg={FG_DIM}>{'Press '}</text>
-              <text fg={ACCENT_PRIMARY} attributes={1}>{'s'}</text>
+              <text fg={ACCENT_PRIMARY} attributes={1}>
+                {'s'}
+              </text>
               <text fg={FG_DIM}>{' to configure dependencies'}</text>
             </box>
           </box>

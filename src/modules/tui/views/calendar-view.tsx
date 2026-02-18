@@ -17,16 +17,15 @@ import {
   FG_PRIMARY,
   FG_DIM,
   FG_MUTED,
+  FG_FAINT,
   COLOR_ERROR,
-  BORDER_DIM,
+  CALENDAR_GRAD,
 } from '../theme';
-import { lerpHex } from '../utils';
+import { lerpHex, LEFT_CAP, RIGHT_CAP } from '../utils';
 
 interface CalendarViewProps {
   refreshTrigger?: () => number;
 }
-
-const CALENDAR_GRAD: [string, string] = ['#5aaaa0', '#2a8a7a'];
 
 function formatDateHeader(d: Date): string {
   const days = [
@@ -116,14 +115,31 @@ export function CalendarView(props: CalendarViewProps) {
         from: dateStr,
         to: toISODateString(addDays(date, 1)),
       });
-      result.sort((a, b) => {
+      // Filter to only events starting on the selected date
+      const filtered = result.filter((e) => {
+        if (e.start.dateTime) {
+          return e.start.dateTime.startsWith(dateStr);
+        }
+        if (e.start.date) {
+          return e.start.date === dateStr;
+        }
+        return false;
+      });
+      filtered.sort((a, b) => {
         const aTime = a.start.dateTime ?? a.start.date ?? '';
         const bTime = b.start.dateTime ?? b.start.date ?? '';
         return aTime.localeCompare(bTime);
       });
-      setEvents(result);
-      if (eventIndex() >= result.length) {
-        setEventIndex(Math.max(result.length - 1, 0));
+      // Deduplicate by event id (shared calendar overlaps)
+      const seen = new Set<string>();
+      const unique = filtered.filter((e) => {
+        if (seen.has(e.id)) return false;
+        seen.add(e.id);
+        return true;
+      });
+      setEvents(unique);
+      if (eventIndex() >= unique.length) {
+        setEventIndex(Math.max(unique.length - 1, 0));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load events');
@@ -139,9 +155,13 @@ export function CalendarView(props: CalendarViewProps) {
 
   // Reload when selected date changes
   createEffect(
-    on(selectedDate, (date) => {
-      loadEvents(date);
-    }, { defer: true }),
+    on(
+      selectedDate,
+      (date) => {
+        loadEvents(date);
+      },
+      { defer: true },
+    ),
   );
 
   // Reload when parent bumps refreshTrigger
@@ -158,6 +178,11 @@ export function CalendarView(props: CalendarViewProps) {
   // Pane widths
   const navPaneWidth = () => Math.floor(dimensions().width * 0.25);
   const eventPaneWidth = () => dimensions().width - navPaneWidth();
+
+  const innerNavWidth = () => Math.max(navPaneWidth() - 2, 1);
+  const navHeaderLabel = () => ` ${formatDateShort(selectedDate())} `;
+  const innerEventWidth = () => Math.max(eventPaneWidth() - 2, 1);
+  const eventHeaderLabel = () => ` EVENTS (${events().length}) `;
 
   useKeyboard((key) => {
     if (dialog.isOpen()) return;
@@ -212,9 +237,7 @@ export function CalendarView(props: CalendarViewProps) {
 
     // Event list navigation: down
     if (key.name === 'j' || key.name === 'down') {
-      setEventIndex((i) =>
-        Math.min(i + 1, Math.max(events().length - 1, 0)),
-      );
+      setEventIndex((i) => Math.min(i + 1, Math.max(events().length - 1, 0)));
       return;
     }
     // Event list navigation: up
@@ -253,7 +276,11 @@ export function CalendarView(props: CalendarViewProps) {
             onCancel={() => dialog.close()}
           />
         ),
-        { size: 'large', gradStart: CALENDAR_GRAD[0], gradEnd: CALENDAR_GRAD[1] },
+        {
+          size: 'large',
+          gradStart: CALENDAR_GRAD[0],
+          gradEnd: CALENDAR_GRAD[1],
+        },
       );
       return;
     }
@@ -266,19 +293,17 @@ export function CalendarView(props: CalendarViewProps) {
         <box
           flexDirection="column"
           width={navPaneWidth()}
-          borderRight
-          borderColor={BORDER_DIM}
+          borderStyle="single"
+          borderColor={lerpHex(CALENDAR_GRAD[0], CALENDAR_GRAD[1], 0.5)}
         >
-          {/* Gradient header */}
+          {/* Gradient top separator */}
           <box height={1} width="100%" flexDirection="row">
-            <For each={Array.from({ length: navPaneWidth() }, (_, i) => i)}>
+            <For each={Array.from({ length: innerNavWidth() }, (_, i) => i)}>
               {(i) => {
                 const t = () =>
-                  navPaneWidth() > 1 ? i / (navPaneWidth() - 1) : 0;
+                  innerNavWidth() > 1 ? i / (innerNavWidth() - 1) : 0;
                 return (
-                  <text
-                    fg={lerpHex(CALENDAR_GRAD[0], CALENDAR_GRAD[1], t())}
-                  >
+                  <text fg={lerpHex(CALENDAR_GRAD[0], CALENDAR_GRAD[1], t())}>
                     {'\u2500'}
                   </text>
                 );
@@ -286,37 +311,81 @@ export function CalendarView(props: CalendarViewProps) {
             </For>
           </box>
 
-          {/* Date display */}
+          {/* Pill header */}
+          <box height={1} width="100%" paddingX={1} flexDirection="row">
+            <text fg={CALENDAR_GRAD[0]}>{LEFT_CAP}</text>
+            <For each={navHeaderLabel().split('')}>
+              {(char, i) => {
+                const t = () =>
+                  navHeaderLabel().length > 1
+                    ? i() / (navHeaderLabel().length - 1)
+                    : 0;
+                return (
+                  <text
+                    fg="#ffffff"
+                    bg={lerpHex(CALENDAR_GRAD[0], CALENDAR_GRAD[1], t())}
+                    attributes={1}
+                  >
+                    {char}
+                  </text>
+                );
+              }}
+            </For>
+            <text fg={CALENDAR_GRAD[1]}>{RIGHT_CAP}</text>
+          </box>
+
+          {/* Gradient separator below header */}
+          <box height={1} width="100%" flexDirection="row">
+            <For each={Array.from({ length: innerNavWidth() }, (_, i) => i)}>
+              {(i) => {
+                const t = () =>
+                  innerNavWidth() > 1 ? i / (innerNavWidth() - 1) : 0;
+                return (
+                  <text fg={lerpHex(CALENDAR_GRAD[0], CALENDAR_GRAD[1], t())}>
+                    {'\u2500'}
+                  </text>
+                );
+              }}
+            </For>
+          </box>
+
+          {/* Content area */}
           <box paddingX={1} flexDirection="column">
             <box height={1}>
               <text fg={FG_PRIMARY} attributes={1}>
-                {formatDateShort(selectedDate())}
+                {formatDateHeader(selectedDate())}
               </text>
             </box>
             <box height={1} />
             <box height={1}>
-              <text fg={FG_DIM}>{'[←/→] day  [t] today'}</text>
+              <text fg={FG_MUTED}>{events().length} events</text>
+            </box>
+            <box height={1} />
+            <box height={1}>
+              <text fg={FG_MUTED}>{'[←/→] day  [t] today'}</text>
             </box>
             <box height={1}>
-              <text fg={FG_DIM}>{'[[ / ]] week'}</text>
+              <text fg={FG_MUTED}>{'[[ / ]] week'}</text>
             </box>
           </box>
         </box>
 
         {/* Right pane: Event list */}
-        <box flexDirection="column" width={eventPaneWidth()} flexGrow={1}>
-          {/* Gradient header */}
+        <box
+          flexDirection="column"
+          width={eventPaneWidth()}
+          flexGrow={1}
+          borderStyle="single"
+          borderColor={lerpHex(CALENDAR_GRAD[0], CALENDAR_GRAD[1], 0.5)}
+        >
+          {/* Gradient top separator */}
           <box height={1} width="100%" flexDirection="row">
-            <For
-              each={Array.from({ length: eventPaneWidth() }, (_, i) => i)}
-            >
+            <For each={Array.from({ length: innerEventWidth() }, (_, i) => i)}>
               {(i) => {
                 const t = () =>
-                  eventPaneWidth() > 1 ? i / (eventPaneWidth() - 1) : 0;
+                  innerEventWidth() > 1 ? i / (innerEventWidth() - 1) : 0;
                 return (
-                  <text
-                    fg={lerpHex(CALENDAR_GRAD[0], CALENDAR_GRAD[1], t())}
-                  >
+                  <text fg={lerpHex(CALENDAR_GRAD[0], CALENDAR_GRAD[1], t())}>
                     {'\u2500'}
                   </text>
                 );
@@ -324,12 +393,42 @@ export function CalendarView(props: CalendarViewProps) {
             </For>
           </box>
 
-          {/* Title */}
-          <box height={1} paddingX={1}>
-            <text fg={FG_PRIMARY} attributes={1}>
-              {'Events \u2014 '}
-              {formatDateHeader(selectedDate())}
-            </text>
+          {/* Pill header */}
+          <box height={1} width="100%" paddingX={1} flexDirection="row">
+            <text fg={CALENDAR_GRAD[0]}>{LEFT_CAP}</text>
+            <For each={eventHeaderLabel().split('')}>
+              {(char, i) => {
+                const t = () =>
+                  eventHeaderLabel().length > 1
+                    ? i() / (eventHeaderLabel().length - 1)
+                    : 0;
+                return (
+                  <text
+                    fg="#ffffff"
+                    bg={lerpHex(CALENDAR_GRAD[0], CALENDAR_GRAD[1], t())}
+                    attributes={1}
+                  >
+                    {char}
+                  </text>
+                );
+              }}
+            </For>
+            <text fg={CALENDAR_GRAD[1]}>{RIGHT_CAP}</text>
+          </box>
+
+          {/* Gradient separator below header */}
+          <box height={1} width="100%" flexDirection="row">
+            <For each={Array.from({ length: innerEventWidth() }, (_, i) => i)}>
+              {(i) => {
+                const t = () =>
+                  innerEventWidth() > 1 ? i / (innerEventWidth() - 1) : 0;
+                return (
+                  <text fg={lerpHex(CALENDAR_GRAD[0], CALENDAR_GRAD[1], t())}>
+                    {'\u2500'}
+                  </text>
+                );
+              }}
+            </For>
           </box>
 
           {/* Content: Loading state */}
@@ -359,17 +458,23 @@ export function CalendarView(props: CalendarViewProps) {
 
           {/* Content: Event list */}
           <Show when={!loading() && !error() && events().length > 0}>
-            <box flexDirection="column" flexGrow={1} overflow="hidden">
+            <scrollbox flexGrow={1} width="100%">
               <For each={events()}>
                 {(event, idx) => (
-                  <EventCard
-                    event={event}
-                    isSelected={idx() === eventIndex()}
-                    width={eventPaneWidth()}
-                  />
+                  <box width="100%" flexDirection="column">
+                    <EventCard
+                      event={event}
+                      isSelected={idx() === eventIndex()}
+                      width={Math.max(eventPaneWidth() - 2, 10)}
+                    />
+                    {/* Spacer between cards */}
+                    <Show when={idx() < events().length - 1}>
+                      <box height={1} />
+                    </Show>
+                  </box>
                 )}
               </For>
-            </box>
+            </scrollbox>
           </Show>
 
           {/* Bottom hints */}
