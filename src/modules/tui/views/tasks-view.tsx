@@ -207,7 +207,7 @@ export function TasksView(props: TasksViewProps) {
 
   /** Execute a task action and refresh. */
   async function taskAction(
-    action: (uuid: string) => Promise<void>,
+    action: (uuid: string) => void | Promise<void>,
     task: Task | null,
   ): Promise<void> {
     if (!task) return;
@@ -215,7 +215,7 @@ export function TasksView(props: TasksViewProps) {
     if (!tw) return;
 
     try {
-      await action.call(tw, task.uuid);
+      await Promise.resolve(action.call(tw, task.uuid));
       await loadTasks();
     } catch {
       // Silently ignore errors for now; the refresh will show current state

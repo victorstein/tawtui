@@ -146,7 +146,7 @@ export function TaskForm(props: TaskFormProps) {
     const tw = getTaskwarriorService();
     if (!tw) return;
     try {
-      const projects = await (tw.getProjects() as Promise<string[]>);
+      const projects = tw.getProjects() as string[];
       setAvailableTags([...ALLOWED_TAGS]);
       setAvailableProjects(projects);
       // Set initial project index

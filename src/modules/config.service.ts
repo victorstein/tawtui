@@ -69,7 +69,7 @@ export class ConfigService {
 
     try {
       const text = readFileSync(this.configPath, 'utf-8');
-      const raw = JSON.parse(text);
+      const raw = JSON.parse(text) as Partial<AppConfig>;
       // Merge with defaults for forward compatibility
       const config: AppConfig = {
         ...structuredClone(DEFAULT_CONFIG),

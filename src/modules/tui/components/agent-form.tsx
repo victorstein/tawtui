@@ -139,7 +139,7 @@ export function AgentForm(props: AgentFormProps) {
     const tw = getTaskwarriorService();
     if (tw) {
       try {
-        const tasks = await (tw.getTasks('status:pending') as Promise<Task[]>);
+        const tasks = tw.getTasks('status:pending') as Task[];
         setPendingTasks(tasks);
       } catch {
         // Silently fail — will show empty list

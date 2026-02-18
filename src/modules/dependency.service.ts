@@ -15,17 +15,17 @@ export class DependencyService {
   async checkAll(): Promise<DependencyStatus> {
     const platform = process.platform;
 
+    const taskInstalled = this.taskwarriorService.isInstalled();
+
     const [
       ghInstalled,
       ghAuthenticated,
-      taskInstalled,
       gogInstalled,
       gogAuthenticated,
       gogHasCredentials,
     ] = await Promise.all([
       this.githubService.isGhInstalled(),
       this.githubService.isAuthenticated(),
-      this.taskwarriorService.isInstalled(),
       this.calendarService.isInstalled(),
       this.calendarService.isAuthenticated(),
       this.calendarService.hasCredentials(),

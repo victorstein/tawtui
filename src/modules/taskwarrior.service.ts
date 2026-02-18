@@ -46,7 +46,7 @@ export class TaskwarriorService {
    * Retrieve tasks matching an optional filter string.
    * Runs: task <rc-overrides> [filter] export
    */
-  async getTasks(filter?: string): Promise<Task[]> {
+  getTasks(filter?: string): Task[] {
     const args: string[] = [];
     if (filter) {
       args.push(...filter.split(/\s+/));
@@ -83,7 +83,7 @@ export class TaskwarriorService {
    * Retrieve a single task by UUID.
    * Returns null if the task is not found.
    */
-  async getTask(uuid: string): Promise<Task | null> {
+  getTask(uuid: string): Task | null {
     const args = [uuid, 'export'];
     const { stdout, exitCode } = this.execTask(args);
 
@@ -108,7 +108,7 @@ export class TaskwarriorService {
    * Create a new task by piping JSON to `task import`.
    * Returns the newly created task.
    */
-  async createTask(dto: CreateTaskDto): Promise<Task> {
+  createTask(dto: CreateTaskDto): Task {
     const payload: Record<string, unknown> = {
       description: dto.description,
       status: 'pending',
@@ -139,14 +139,14 @@ export class TaskwarriorService {
 
     if (uuidMatch) {
       if (dto.annotation) {
-        await this.addAnnotation(uuidMatch[1], dto.annotation);
+        this.addAnnotation(uuidMatch[1], dto.annotation);
       }
-      const created = await this.getTask(uuidMatch[1]);
+      const created = this.getTask(uuidMatch[1]);
       if (created) return created;
     }
 
     // Fallback: try to find the task by description if UUID extraction failed
-    const tasks = await this.getTasks(`description:${dto.description}`);
+    const tasks = this.getTasks(`description:${dto.description}`);
     if (tasks.length > 0) {
       // Return the most recently entered one
       const task = tasks.sort((a, b) => {
@@ -156,8 +156,8 @@ export class TaskwarriorService {
       })[0];
 
       if (dto.annotation) {
-        await this.addAnnotation(task.uuid, dto.annotation);
-        const refreshed = await this.getTask(task.uuid);
+        this.addAnnotation(task.uuid, dto.annotation);
+        const refreshed = this.getTask(task.uuid);
         if (refreshed) return refreshed;
       }
 
@@ -171,7 +171,7 @@ export class TaskwarriorService {
    * Update an existing task by UUID.
    * Runs: task <rc-overrides> <uuid> modify <modifications>
    */
-  async updateTask(uuid: string, dto: UpdateTaskDto): Promise<void> {
+  updateTask(uuid: string, dto: UpdateTaskDto): void {
     const modifications: string[] = [];
 
     if (dto.description !== undefined) {
@@ -218,17 +218,17 @@ export class TaskwarriorService {
 
     // Annotations are managed separately via annotate/denotate commands
     if (dto.annotation !== undefined) {
-      const task = await this.getTask(uuid);
+      const task = this.getTask(uuid);
       if (!task) {
         throw new Error(`Task ${uuid} not found`);
       }
       if (task.annotations?.length) {
         for (const ann of task.annotations) {
-          await this.removeAnnotation(uuid, ann.description);
+          this.removeAnnotation(uuid, ann.description);
         }
       }
       if (dto.annotation) {
-        await this.addAnnotation(uuid, dto.annotation);
+        this.addAnnotation(uuid, dto.annotation);
       }
     }
   }
@@ -237,7 +237,7 @@ export class TaskwarriorService {
    * Mark a task as completed.
    * Runs: task rc.confirmation=off <uuid> done
    */
-  async completeTask(uuid: string): Promise<void> {
+  completeTask(uuid: string): void {
     const { stderr, exitCode } = this.execTask([uuid, 'done']);
 
     if (exitCode !== 0) {
@@ -251,7 +251,7 @@ export class TaskwarriorService {
    * Restore a completed task back to pending status.
    * Runs: task <uuid> modify status:pending
    */
-  async undoComplete(uuid: string): Promise<void> {
+  undoComplete(uuid: string): void {
     const { stderr, exitCode } = this.execTask([
       uuid,
       'modify',
@@ -270,7 +270,7 @@ export class TaskwarriorService {
    * Uses two separate modify calls so the end-date change applies
    * even when the task is already in completed status.
    */
-  async archiveTask(uuid: string): Promise<void> {
+  archiveTask(uuid: string): void {
     // Ensure the task is marked completed (no-op if already done)
     this.execTask([uuid, 'modify', 'status:completed']);
 
@@ -292,7 +292,7 @@ export class TaskwarriorService {
    * Delete a task.
    * Runs: task rc.confirmation=off <uuid> delete
    */
-  async deleteTask(uuid: string): Promise<void> {
+  deleteTask(uuid: string): void {
     const { stderr, exitCode } = this.execTask([uuid, 'delete']);
 
     if (exitCode !== 0) {
@@ -306,7 +306,7 @@ export class TaskwarriorService {
    * Start tracking time on a task.
    * Runs: task <uuid> start
    */
-  async startTask(uuid: string): Promise<void> {
+  startTask(uuid: string): void {
     const { stderr, exitCode } = this.execTask([uuid, 'start']);
 
     if (exitCode !== 0) {
@@ -320,7 +320,7 @@ export class TaskwarriorService {
    * Stop tracking time on a task.
    * Runs: task <uuid> stop
    */
-  async stopTask(uuid: string): Promise<void> {
+  stopTask(uuid: string): void {
     const { stderr, exitCode } = this.execTask([uuid, 'stop']);
 
     if (exitCode !== 0) {
@@ -334,7 +334,7 @@ export class TaskwarriorService {
    * Add an annotation to a task.
    * Runs: task <uuid> annotate <text>
    */
-  async addAnnotation(uuid: string, text: string): Promise<void> {
+  addAnnotation(uuid: string, text: string): void {
     const { stderr, exitCode } = this.execTask([uuid, 'annotate', text]);
 
     if (exitCode !== 0) {
@@ -348,7 +348,7 @@ export class TaskwarriorService {
    * Remove an annotation from a task matching the given pattern.
    * Runs: task <uuid> denotate <pattern>
    */
-  async removeAnnotation(uuid: string, pattern: string): Promise<void> {
+  removeAnnotation(uuid: string, pattern: string): void {
     const { stderr, exitCode } = this.execTask([uuid, 'denotate', pattern]);
 
     if (exitCode !== 0) {
@@ -362,7 +362,7 @@ export class TaskwarriorService {
    * Get all known tags.
    * Runs: task _tags
    */
-  async getTags(): Promise<string[]> {
+  getTags(): string[] {
     const { stdout, exitCode } = this.execTask(['_tags']);
 
     if (exitCode !== 0) {
@@ -379,7 +379,7 @@ export class TaskwarriorService {
    * Get all known projects.
    * Runs: task _projects
    */
-  async getProjects(): Promise<string[]> {
+  getProjects(): string[] {
     const { stdout, exitCode } = this.execTask(['_projects']);
 
     if (exitCode !== 0) {
@@ -395,7 +395,7 @@ export class TaskwarriorService {
   /**
    * Check whether the `task` binary is available on the system.
    */
-  async isInstalled(): Promise<boolean> {
+  isInstalled(): boolean {
     try {
       const proc = Bun.spawnSync(['task', '--version'], {
         stdout: 'pipe',

@@ -8,6 +8,24 @@ import { TerminalService } from './terminal.service';
 import { DependencyService } from './dependency.service';
 import { CalendarService } from './calendar.service';
 
+interface TawtuiGlobal {
+  __tawtui?: {
+    taskwarriorService: TaskwarriorService;
+    githubService: GithubService;
+    configService: ConfigService;
+    terminalService: TerminalService;
+    dependencyService: DependencyService;
+    calendarService: CalendarService;
+    createPrReviewSession: (
+      prNumber: number,
+      repoOwner: string,
+      repoName: string,
+      prTitle: string,
+    ) => Promise<{ taskUuid: string; sessionId: string }>;
+  };
+  __tuiExit?: () => void;
+}
+
 @Injectable()
 export class TuiService {
   constructor(
@@ -20,10 +38,12 @@ export class TuiService {
   ) {}
 
   async launch(): Promise<void> {
+    const g = globalThis as unknown as TawtuiGlobal;
+
     // Bridge NestJS services to SolidJS components via globalThis.
     // SolidJS components don't have access to the NestJS DI container,
     // so we expose required services on a well-known global.
-    (globalThis as any).__tawtui = {
+    g.__tawtui = {
       taskwarriorService: this.taskwarriorService,
       githubService: this.githubService,
       configService: this.configService,
@@ -47,7 +67,7 @@ export class TuiService {
     // Set up the exit promise before rendering so the App component
     // can resolve it at any time (even during the initial render pass).
     const exitPromise = new Promise<void>((resolve) => {
-      (globalThis as any).__tuiExit = resolve;
+      g.__tuiExit = resolve;
     });
 
     // render() accepts either a CliRenderer or a CliRendererConfig.
@@ -60,7 +80,7 @@ export class TuiService {
     });
 
     // Keep the process alive until the user presses 'q'.
-    // The App component calls (globalThis as any).__tuiExit() on quit.
+    // The App component calls g.__tuiExit() on quit.
     await exitPromise;
   }
 }
