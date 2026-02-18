@@ -8,9 +8,9 @@ import {
 } from 'solid-js';
 import { useKeyboard, useTerminalDimensions } from '@opentui/solid';
 import type { Task } from '../../taskwarrior.types';
-import type { TaskwarriorService } from '../../taskwarrior.service';
 import { DialogConfirm } from './dialog-confirm';
 import { useDialog } from '../context/dialog';
+import { getTaskwarriorService } from '../bridge';
 import {
   BG_SELECTED,
   FG_PRIMARY,
@@ -22,13 +22,6 @@ import {
   PRIORITY_M,
   PRIORITY_L,
 } from '../theme';
-
-/**
- * Access the TaskwarriorService bridged from NestJS DI via globalThis.
- */
-function getTaskwarriorService(): TaskwarriorService | null {
-  return (globalThis as any).__tawtui?.taskwarriorService ?? null;
-}
 
 const PRIORITY_COLORS: Record<string, string> = {
   H: PRIORITY_H,

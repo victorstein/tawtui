@@ -1,6 +1,5 @@
 import { createSignal, Show, For, onMount } from 'solid-js';
 import { useKeyboard } from '@opentui/solid';
-import type { TaskwarriorService } from '../../taskwarrior.service';
 import {
   lerpHex,
   darkenHex,
@@ -10,6 +9,7 @@ import {
   getAuthorGradient,
   VIRTUAL_TAGS,
 } from '../utils';
+import { getTaskwarriorService } from '../bridge';
 import {
   BG_SURFACE,
   BG_INPUT,
@@ -41,13 +41,6 @@ interface FilterBarProps {
   onClear: () => void;
   /** Whether the filter input should be focused. */
   focused: boolean;
-}
-
-/**
- * Access the TaskwarriorService bridged from NestJS DI via globalThis.
- */
-function getTaskwarriorService(): TaskwarriorService | null {
-  return (globalThis as any).__tawtui?.taskwarriorService ?? null;
 }
 
 /**

@@ -7,13 +7,14 @@ interface StatusBarProps {
 }
 
 const TAB_HINTS = [
-  '1-3 switch tab | j/k navigate | n new | enter detail | m/M move | x archive | / filter | q quit',
-  '1-3 switch tab | h/l panes | j/k navigate | a add | x remove | r refresh | enter PR detail | q quit',
-  '1-3 switch tab | h/l panes | j/k navigate | n new | i interactive | K kill | r refresh | q quit',
+  '1-4 switch tab | j/k navigate | n new | enter detail | m/M move | x archive | / filter | q quit',
+  '1-4 switch tab | h/l panes | j/k navigate | a add | x remove | r refresh | enter PR detail | q quit',
+  '1-4 switch tab | h/l panes | j/k navigate | n new | i interactive | K kill | r refresh | q quit',
+  '1-4 switch tab | h/l day | j/k events | [ / ] week | t today | enter convert | r refresh | q quit',
 ];
 
 const ARCHIVE_HINT =
-  '1-3 switch tab | j/k navigate | u undo | D delete | A back to board | q quit';
+  '1-4 switch tab | j/k navigate | u undo | D delete | A back to board | q quit';
 
 export function StatusBar(props: StatusBarProps) {
   const hint = () => {

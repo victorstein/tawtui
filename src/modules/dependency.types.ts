@@ -8,8 +8,14 @@ export interface GhDepStatus extends DepStatus {
   authInstructions: string;
 }
 
+export interface GogDepStatus extends DepStatus {
+  authenticated: boolean;
+  authInstructions: string;
+}
+
 export interface DependencyStatus {
   gh: GhDepStatus;
+  gog: GogDepStatus;
   task: DepStatus;
   platform: NodeJS.Platform;
   allGood: boolean;

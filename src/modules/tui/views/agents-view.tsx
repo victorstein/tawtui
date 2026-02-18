@@ -1,20 +1,13 @@
 import { createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js';
 import { useKeyboard, useTerminalDimensions } from '@opentui/solid';
 import type { TerminalSession, CaptureResult } from '../../terminal.types';
-import type { TerminalService } from '../../terminal.service';
 import { AgentList } from '../components/agent-list';
 import { TerminalOutput } from '../components/terminal-output';
 import { useDialog } from '../context/dialog';
 import { DialogConfirm } from '../components/dialog-confirm';
 import { AgentForm } from '../components/agent-form';
+import { getTerminalService, getTaskwarriorService } from '../bridge';
 import { COLOR_ERROR } from '../theme';
-
-/**
- * Access the TerminalService bridged from NestJS DI via globalThis.
- */
-function getTerminalService(): TerminalService | null {
-  return (globalThis as any).__tawtui?.terminalService ?? null;
-}
 
 /** Pane identifiers for the split-pane layout. */
 type Pane = 'agents' | 'terminal';
@@ -240,7 +233,7 @@ export function AgentsView(props: AgentsViewProps) {
 
               // If a task was linked, start it in Taskwarrior
               if (data.taskUuid) {
-                const tw = (globalThis as any).__tawtui?.taskwarriorService;
+                const tw = getTaskwarriorService();
                 if (tw) {
                   try {
                     await tw.startTask(data.taskUuid);

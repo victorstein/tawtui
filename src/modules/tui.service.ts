@@ -6,6 +6,7 @@ import { GithubService } from './github.service';
 import { ConfigService } from './config.service';
 import { TerminalService } from './terminal.service';
 import { DependencyService } from './dependency.service';
+import { CalendarService } from './calendar.service';
 
 @Injectable()
 export class TuiService {
@@ -15,6 +16,7 @@ export class TuiService {
     private readonly configService: ConfigService,
     private readonly terminalService: TerminalService,
     private readonly dependencyService: DependencyService,
+    private readonly calendarService: CalendarService,
   ) {}
 
   async launch(): Promise<void> {
@@ -27,6 +29,7 @@ export class TuiService {
       configService: this.configService,
       terminalService: this.terminalService,
       dependencyService: this.dependencyService,
+      calendarService: this.calendarService,
       createPrReviewSession: (
         prNumber: number,
         repoOwner: string,

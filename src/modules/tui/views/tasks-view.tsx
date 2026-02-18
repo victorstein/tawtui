@@ -1,7 +1,6 @@
 import { createSignal, createEffect, on, onMount, Show } from 'solid-js';
 import { useKeyboard, useTerminalDimensions } from '@opentui/solid';
 import type { Task, CreateTaskDto } from '../../taskwarrior.types';
-import type { TaskwarriorService } from '../../taskwarrior.service';
 import { BoardColumn } from '../components/board-column';
 import { TaskForm } from '../components/task-form';
 import { TaskDetail } from '../components/task-detail';
@@ -10,13 +9,13 @@ import { ArchiveView } from '../components/archive-view';
 import { DialogConfirm } from '../components/dialog-confirm';
 import { DialogSetupWizard } from '../components/dialog-setup-wizard';
 import { useDialog } from '../context/dialog';
+import { getTaskwarriorService, getDependencyService } from '../bridge';
 import {
   FG_DIM,
   ACCENT_PRIMARY,
   ACCENT_SECONDARY,
   COLOR_ERROR,
 } from '../theme';
-import type { DependencyService } from '../../dependency.service';
 import type { DependencyStatus } from '../../dependency.types';
 
 /** Column definitions for the kanban board. */
@@ -24,21 +23,6 @@ const COLUMNS = ['TODO', 'IN PROGRESS', 'DONE'] as const;
 
 const DIALOG_GRAD_START = '#5a7aaa';
 const DIALOG_GRAD_END = '#2a4a7a';
-
-/**
- * Access the TaskwarriorService bridged from NestJS DI via globalThis.
- * The TuiService sets this before rendering.
- */
-function getTaskwarriorService(): TaskwarriorService | null {
-  return (globalThis as any).__tawtui?.taskwarriorService ?? null;
-}
-
-/**
- * Access the DependencyService bridged from NestJS DI via globalThis.
- */
-function getDependencyService(): DependencyService | null {
-  return (globalThis as any).__tawtui?.dependencyService ?? null;
-}
 
 /**
  * Categorise a flat list of tasks into the three kanban columns.

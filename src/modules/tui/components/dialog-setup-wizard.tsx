@@ -1,6 +1,8 @@
 import { createSignal, Show, For } from 'solid-js';
 import { useKeyboard } from '@opentui/solid';
 import type { DependencyStatus } from '../../dependency.types';
+import { useDialog } from '../context/dialog';
+import { DialogGogAuth } from './dialog-gog-auth';
 import {
   FG_PRIMARY,
   FG_NORMAL,
@@ -8,6 +10,7 @@ import {
   COLOR_ERROR,
   COLOR_SUCCESS,
   COLOR_WARNING,
+  ACCENT_PRIMARY,
   ACCENT_TERTIARY,
   SEPARATOR_COLOR,
 } from '../theme';
@@ -38,9 +41,46 @@ export function DialogSetupWizard(props: DialogSetupWizardProps) {
   const [status, setStatus] = createSignal<DependencyStatus>(props.status);
   const [focused, setFocused] = createSignal(0);
   const [checking, setChecking] = createSignal(false);
+  const dialog = useDialog();
+
+  const ghStatus = () => status().gh;
+  const taskStatus = () => status().task;
+  const gogStatus = () => status().gog;
+  const hasMissing = () =>
+    !ghStatus().installed ||
+    !ghStatus().authenticated ||
+    !taskStatus().installed ||
+    !gogStatus().installed ||
+    !gogStatus().authenticated;
 
   useKeyboard((key) => {
     if (checking()) return;
+
+    if (
+      key.name === 'a' &&
+      gogStatus().installed &&
+      !gogStatus().authenticated
+    ) {
+      key.preventDefault();
+      key.stopPropagation();
+      dialog.show(
+        () => (
+          <DialogGogAuth
+            onSuccess={() => {
+              dialog.close();
+              setChecking(true);
+              void props.onCheckAgain().then((result) => {
+                setStatus(result);
+                setChecking(false);
+              });
+            }}
+            onCancel={() => dialog.close()}
+          />
+        ),
+        { size: 'medium' },
+      );
+      return;
+    }
 
     if (key.name === 'c') {
       setChecking(true);
@@ -67,13 +107,6 @@ export function DialogSetupWizard(props: DialogSetupWizardProps) {
       return;
     }
   });
-
-  const ghStatus = () => status().gh;
-  const taskStatus = () => status().task;
-  const hasMissing = () =>
-    !ghStatus().installed ||
-    !ghStatus().authenticated ||
-    !taskStatus().installed;
 
   return (
     <box flexDirection="column" paddingX={1} paddingY={1}>
@@ -116,6 +149,35 @@ export function DialogSetupWizard(props: DialogSetupWizardProps) {
       </box>
       <box height={1} />
 
+      {/* Google Calendar CLI section */}
+      <text fg={FG_NORMAL} attributes={1}>
+        {'  Google Calendar CLI (gog)'}
+      </text>
+      <box flexDirection="row">
+        <text>{'    '}</text>
+        <text fg={gogStatus().installed ? COLOR_SUCCESS : COLOR_ERROR}>
+          {gogStatus().installed ? '✓' : '✗'}
+        </text>
+        <text fg={FG_DIM}>{' Installed'}</text>
+      </box>
+      <box flexDirection="row">
+        <text>{'    '}</text>
+        <text fg={gogStatus().authenticated ? COLOR_SUCCESS : COLOR_ERROR}>
+          {gogStatus().authenticated ? '✓' : '✗'}
+        </text>
+        <text fg={FG_DIM}>{' Authenticated'}</text>
+      </box>
+      <Show when={gogStatus().installed && !gogStatus().authenticated}>
+        <box flexDirection="row">
+          <text>{'    '}</text>
+          <text fg={ACCENT_PRIMARY} attributes={1}>
+            {'[A]'}
+          </text>
+          <text fg={FG_DIM}>{' Authenticate'}</text>
+        </box>
+      </Show>
+      <box height={1} />
+
       {/* Install instructions — only shown when something is missing */}
       <Show when={hasMissing()}>
         <text fg={SEPARATOR_COLOR}>{'  ─── Install Instructions ───'}</text>
@@ -139,6 +201,20 @@ export function DialogSetupWizard(props: DialogSetupWizardProps) {
           <box flexDirection="row">
             <text fg={FG_DIM}>{'  TaskWarrior: '}</text>
             <text fg={COLOR_WARNING}>{taskStatus().instructions}</text>
+          </box>
+        </Show>
+
+        <Show when={!gogStatus().installed}>
+          <box flexDirection="row">
+            <text fg={FG_DIM}>{'  Google Cal:  '}</text>
+            <text fg={COLOR_WARNING}>{gogStatus().instructions}</text>
+          </box>
+        </Show>
+
+        <Show when={gogStatus().installed && !gogStatus().authenticated}>
+          <box flexDirection="row">
+            <text fg={FG_DIM}>{'  Cal Auth:    '}</text>
+            <text fg={COLOR_WARNING}>{gogStatus().authInstructions}</text>
           </box>
         </Show>
 
@@ -203,7 +279,6 @@ export function DialogSetupWizard(props: DialogSetupWizardProps) {
           }}
         </For>
       </box>
-
     </box>
   );
 }

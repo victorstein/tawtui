@@ -5,17 +5,14 @@ import { StatusBar } from './components/status-bar';
 import { TasksView } from './views/tasks-view';
 import { ReposView } from './views/repos-view';
 import { AgentsView } from './views/agents-view';
+import { CalendarView } from './views/calendar-view';
 import { DialogProvider, useDialog } from './context/dialog';
 import { DialogConfirm } from './components/dialog-confirm';
 import { DialogSetupWizard } from './components/dialog-setup-wizard';
-import type { DependencyService } from '../dependency.service';
+import { getDependencyService, getTuiExit } from './bridge';
 import type { DependencyStatus } from '../dependency.types';
 
-function getDependencyService(): DependencyService | null {
-  return (globalThis as any).__tawtui?.dependencyService ?? null;
-}
-
-const TABS = [{ name: 'Tasks' }, { name: 'Repos' }, { name: 'Agents' }];
+const TABS = [{ name: 'Tasks' }, { name: 'Repos' }, { name: 'Agents' }, { name: 'Calendar' }];
 
 export function App() {
   return (
@@ -75,6 +72,10 @@ function AppContent() {
       setActiveTab(2);
       return;
     }
+    if (key.name === '4') {
+      setActiveTab(3);
+      return;
+    }
 
     // Tab cycling
     if (key.name === 'tab' && !key.shift) {
@@ -95,8 +96,8 @@ function AppContent() {
             onConfirm={() => {
               dialog.close();
               renderer.destroy();
-              const exit = (globalThis as any).__tuiExit;
-              if (typeof exit === 'function') {
+              const exit = getTuiExit();
+              if (exit) {
                 exit();
               }
             }}
@@ -127,6 +128,9 @@ function AppContent() {
           </Match>
           <Match when={activeTab() === 2}>
             <AgentsView onInputCapturedChange={(captured) => setInputCaptured(captured)} />
+          </Match>
+          <Match when={activeTab() === 3}>
+            <CalendarView refreshTrigger={refreshTrigger} />
           </Match>
         </Switch>
       </box>
