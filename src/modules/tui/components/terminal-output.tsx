@@ -1,12 +1,14 @@
 import { For, Show } from 'solid-js';
 import type { CaptureResult } from '../../terminal.types';
 import {
-  ACCENT_PRIMARY,
+  AGENT_GRAD,
+  INTERACTIVE_GRAD,
   BORDER_DIM,
   SEPARATOR_COLOR,
   FG_NORMAL,
   FG_DIM,
 } from '../theme';
+import { lerpHex } from '../utils';
 import { parseAnsiText } from '../utils/ansi-parser';
 
 interface TerminalOutputProps {
@@ -33,9 +35,13 @@ export function TerminalOutput(props: TerminalOutputProps) {
     return FG_DIM;
   };
 
+  const focusedColor = () => lerpHex(AGENT_GRAD[0], AGENT_GRAD[1], 0.5);
+  const interactiveColor = () =>
+    lerpHex(INTERACTIVE_GRAD[0], INTERACTIVE_GRAD[1], 0.5);
+
   const borderColorVal = () => {
-    if (props.isInteractive) return ACCENT_PRIMARY;
-    if (props.isActivePane) return ACCENT_PRIMARY;
+    if (props.isInteractive) return interactiveColor();
+    if (props.isActivePane) return focusedColor();
     return BORDER_DIM;
   };
 
@@ -63,7 +69,7 @@ export function TerminalOutput(props: TerminalOutputProps) {
       {/* Separator */}
       <box height={1} width="100%">
         <text
-          fg={props.isInteractive ? ACCENT_PRIMARY : SEPARATOR_COLOR}
+          fg={props.isInteractive ? interactiveColor() : props.isActivePane ? focusedColor() : SEPARATOR_COLOR}
           truncate
         >
           {props.isInteractive ? '\u2550'.repeat(200) : '\u2500'.repeat(200)}

@@ -88,3 +88,9 @@ export const REPO_GRAD: [string, string] = [P.tertiary, P.surface];
 
 // PR pane gradient (warm orange → tan)
 export const PR_GRAD: [string, string] = [P.primary, P.tan];
+
+// Agent pane gradient (purple → slate blue)
+export const AGENT_GRAD: [string, string] = [P.purple, P.secondaryLight];
+
+// Interactive mode gradient (green → teal)
+export const INTERACTIVE_GRAD: [string, string] = [P.green, P.tertiary];
