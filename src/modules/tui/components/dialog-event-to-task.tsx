@@ -1,6 +1,7 @@
 import { createSignal, Show, For } from 'solid-js';
 import { useKeyboard } from '@opentui/solid';
 import type {
+  CalendarAttendee,
   CalendarEvent,
   CalendarEventDateTime,
 } from '../../calendar.types';
@@ -9,10 +10,14 @@ import { darkenHex, formatTimeRange, lerpHex } from '../utils';
 import {
   BG_INPUT,
   BG_INPUT_FOCUS,
+  COLOR_ERROR,
+  COLOR_SUCCESS,
+  COLOR_WARNING,
   FG_PRIMARY,
   FG_NORMAL,
   FG_DIM,
   FG_MUTED,
+  FG_FAINT,
   SEPARATOR_COLOR,
 } from '../theme';
 
@@ -53,6 +58,21 @@ function buildAnnotation(event: CalendarEvent): string {
   return lines.join('\n');
 }
 
+function attendeeStatusIcon(
+  status: CalendarAttendee['responseStatus'],
+): { icon: string; color: string } {
+  switch (status) {
+    case 'accepted':
+      return { icon: '\u2713', color: COLOR_SUCCESS };
+    case 'declined':
+      return { icon: '\u2717', color: COLOR_ERROR };
+    case 'tentative':
+      return { icon: '?', color: COLOR_WARNING };
+    default:
+      return { icon: '\u2022', color: FG_MUTED };
+  }
+}
+
 // Focus areas: 0 = title input, 1 = button row
 type FocusArea = 0 | 1;
 
@@ -63,6 +83,21 @@ export function DialogEventToTask(props: DialogEventToTaskProps) {
 
   const timeRange = () => formatTimeRange(props.event.start, props.event.end);
   const dueDate = () => formatDueDate(props.event.start);
+
+  const sortedAttendees = () => {
+    const attendees = props.event.attendees ?? [];
+    const priority: Record<string, number> = {
+      accepted: 0,
+      tentative: 1,
+      needsAction: 2,
+      declined: 3,
+    };
+    return [...attendees].sort(
+      (a, b) =>
+        (priority[a.responseStatus ?? ''] ?? 2) -
+        (priority[b.responseStatus ?? ''] ?? 2),
+    );
+  };
 
   const handleConfirm = () => {
     const desc = title().trim();
@@ -149,6 +184,23 @@ export function DialogEventToTask(props: DialogEventToTaskProps) {
             {props.event.attendees?.length ?? 0} attendees
           </text>
         </box>
+        <scrollbox maxHeight={6} width="100%">
+          <For each={sortedAttendees()}>
+            {(attendee) => {
+              const { icon, color } = attendeeStatusIcon(attendee.responseStatus);
+              const name = attendee.displayName || attendee.email;
+              return (
+                <box height={1} flexDirection="row">
+                  <text fg={color}>{'  '}{icon}{' '}</text>
+                  <text fg={FG_DIM}>{name}</text>
+                  <Show when={attendee.self}>
+                    <text fg={FG_MUTED}>{' (you)'}</text>
+                  </Show>
+                </box>
+              );
+            }}
+          </For>
+        </scrollbox>
       </Show>
 
       {/* Separator */}
@@ -163,7 +215,7 @@ export function DialogEventToTask(props: DialogEventToTaskProps) {
             fg={focusArea() === 0 ? FG_NORMAL : FG_DIM}
             attributes={focusArea() === 0 ? 1 : 0}
           >
-            {focusArea() === 0 ? '> ' : '  '}Title
+            {focusArea() === 0 ? '> ' : '  \u270E '}Title
           </text>
         </box>
         <input
@@ -180,14 +232,14 @@ export function DialogEventToTask(props: DialogEventToTaskProps) {
 
       <box height={1} flexDirection="row">
         <box width={14}>
-          <text fg={FG_DIM}>{'  '}Due</text>
+          <text fg={FG_FAINT}>{'  '}Due</text>
         </box>
-        <text fg={FG_NORMAL}>{dueDate() || 'No date'}</text>
+        <text fg={FG_DIM}>{dueDate() || 'No date'}</text>
       </box>
       <box height={1} />
 
       <box height={1}>
-        <text fg={FG_MUTED}>{'  '}Will add meeting details as annotation</text>
+        <text fg={FG_FAINT}>{'  '}Will add meeting details as annotation</text>
       </box>
       <box height={1} />
 

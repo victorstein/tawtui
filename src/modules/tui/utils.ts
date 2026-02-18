@@ -163,3 +163,15 @@ export function getAuthorGradient(author: string): {
   const end = hslToHex((hue + 25) % 360, 35, 30);
   return { start, end };
 }
+
+/** Generate a gradient pair for a calendar event ID using HSL color space. */
+export function getEventGradient(eventId: string): {
+  start: string;
+  end: string;
+} {
+  const hash = djb2(eventId);
+  const hue = (hash * 53) % 360;
+  const start = hslToHex(hue, 50, 50);
+  const end = hslToHex((hue + 35) % 360, 40, 35);
+  return { start, end };
+}

@@ -15,9 +15,9 @@ import {
 } from '../bridge';
 import {
   FG_PRIMARY,
+  FG_NORMAL,
   FG_DIM,
   FG_MUTED,
-  FG_FAINT,
   COLOR_ERROR,
   CALENDAR_GRAD,
 } from '../theme';
@@ -357,15 +357,18 @@ export function CalendarView(props: CalendarViewProps) {
               </text>
             </box>
             <box height={1} />
-            <box height={1}>
-              <text fg={FG_MUTED}>{events().length} events</text>
+            <box height={1} flexDirection="row">
+              <text fg={FG_NORMAL} attributes={1}>
+                {events().length}
+              </text>
+              <text fg={FG_MUTED}> events</text>
             </box>
             <box height={1} />
             <box height={1}>
-              <text fg={FG_MUTED}>{'[←/→] day  [t] today'}</text>
+              <text fg={FG_DIM}>{'[←/→] day  [t] today'}</text>
             </box>
             <box height={1}>
-              <text fg={FG_MUTED}>{'[[ / ]] week'}</text>
+              <text fg={FG_DIM}>{'[[ / ]] week'}</text>
             </box>
           </box>
         </box>
@@ -480,7 +483,7 @@ export function CalendarView(props: CalendarViewProps) {
           {/* Bottom hints */}
           <Show when={!loading() && !error() && events().length > 0}>
             <box height={1} paddingX={1}>
-              <text fg={FG_MUTED}>
+              <text fg={FG_DIM}>
                 {'[j/k] navigate  [Enter] convert to task  [r] refresh'}
               </text>
             </box>

@@ -1,9 +1,16 @@
-import { Show } from 'solid-js';
+import { Show, For } from 'solid-js';
 import type { CalendarEvent } from '../../calendar.types';
-import { formatTimeRange, getTagGradient } from '../utils';
 import {
+  formatTimeRange,
+  getEventGradient,
+  getTagGradient,
+  lerpHex,
+  LEFT_CAP,
+  RIGHT_CAP,
+} from '../utils';
+import {
+  ACCENT_SECONDARY,
   BG_SELECTED,
-  CALENDAR_GRAD,
   COLOR_ERROR,
   COLOR_WARNING,
   FG_PRIMARY,
@@ -45,11 +52,30 @@ export function EventCard(props: EventCardProps) {
     >
       {/* Line 1: time pill + status badge + title */}
       <box height={1} width="100%" flexDirection="row">
-        <box backgroundColor={CALENDAR_GRAD[0]} marginRight={1}>
-          <text fg="#ffffff" attributes={1}>
-            {timePillText()}
-          </text>
-        </box>
+        {(() => {
+          const chars = timePillText().split('');
+          const grad = getEventGradient(event().id);
+          return (
+            <box flexDirection="row" marginRight={1}>
+              <text fg={grad.start}>{LEFT_CAP}</text>
+              <For each={chars}>
+                {(char, i) => {
+                  const t =
+                    chars.length > 1 ? i() / (chars.length - 1) : 0;
+                  return (
+                    <text
+                      fg="#ffffff"
+                      bg={lerpHex(grad.start, grad.end, t)}
+                    >
+                      {char}
+                    </text>
+                  );
+                }}
+              </For>
+              <text fg={grad.end}>{RIGHT_CAP}</text>
+            </box>
+          );
+        })()}
         <Show when={statusBadge()}>
           <box backgroundColor={statusBadge()!.bg} marginRight={1}>
             <text fg="#ffffff" attributes={1}>
@@ -71,14 +97,31 @@ export function EventCard(props: EventCardProps) {
         <box width="100%" flexDirection="row">
           <text fg={FG_FAINT}>{'  '}</text>
           <Show when={event().calendarId}>
-            <box
-              backgroundColor={getTagGradient(event().calendarId!).start}
-              paddingX={1}
-            >
-              <text fg="#ffffff" attributes={1}>
-                {event().calendarId!}
-              </text>
-            </box>
+            {(() => {
+              const calId = event().calendarId!;
+              const chars = (' ' + calId + ' ').split('');
+              const grad = getTagGradient(calId);
+              return (
+                <box flexDirection="row">
+                  <text fg={grad.start}>{LEFT_CAP}</text>
+                  <For each={chars}>
+                    {(char, i) => {
+                      const t =
+                        chars.length > 1 ? i() / (chars.length - 1) : 0;
+                      return (
+                        <text
+                          fg="#ffffff"
+                          bg={lerpHex(grad.start, grad.end, t)}
+                        >
+                          {char}
+                        </text>
+                      );
+                    }}
+                  </For>
+                  <text fg={grad.end}>{RIGHT_CAP}</text>
+                </box>
+              );
+            })()}
           </Show>
           <Show
             when={
@@ -86,10 +129,11 @@ export function EventCard(props: EventCardProps) {
               (event().attendees?.length ?? 0) > 1
             }
           >
-            <text fg={FG_MUTED}>
+            <text fg={ACCENT_SECONDARY} attributes={1}>
               {' '}
-              {event().attendees?.length ?? 0} attendees
+              {event().attendees?.length ?? 0}
             </text>
+            <text fg={FG_MUTED}> attendees</text>
           </Show>
         </box>
       </Show>
@@ -98,7 +142,7 @@ export function EventCard(props: EventCardProps) {
       <Show when={event().location}>
         <box height={1} width="100%" flexDirection="row">
           <text fg={FG_FAINT}>{'\u0020\u0020\u2022 '}</text>
-          <text fg={FG_FAINT} truncate>
+          <text fg={FG_MUTED} truncate>
             {event().location}
           </text>
         </box>
