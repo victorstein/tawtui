@@ -36,7 +36,7 @@ const BUTTONS = [
   { label: ' [Esc] Cancel ', gradStart: '#e05555', gradEnd: '#8a2a2a' },
 ] as const;
 
-function formatDueDate(start: CalendarEventDateTime): string {
+function formatTaskwarriorDate(start: CalendarEventDateTime): string {
   if (start.dateTime) return start.dateTime;
   if (start.date) return start.date;
   return '';
@@ -58,9 +58,10 @@ function buildAnnotation(event: CalendarEvent): string {
   return lines.join('\n');
 }
 
-function attendeeStatusIcon(
-  status: CalendarAttendee['responseStatus'],
-): { icon: string; color: string } {
+function attendeeStatusIcon(status: CalendarAttendee['responseStatus']): {
+  icon: string;
+  color: string;
+} {
   switch (status) {
     case 'accepted':
       return { icon: '\u2713', color: COLOR_SUCCESS };
@@ -82,7 +83,8 @@ export function DialogEventToTask(props: DialogEventToTaskProps) {
   const [buttonIndex, setButtonIndex] = createSignal(0);
 
   const timeRange = () => formatTimeRange(props.event.start, props.event.end);
-  const dueDate = () => formatDueDate(props.event.start);
+  const scheduledDate = () => formatTaskwarriorDate(props.event.start);
+  const dueDate = () => formatTaskwarriorDate(props.event.end);
 
   const sortedAttendees = () => {
     const attendees = props.event.attendees ?? [];
@@ -105,9 +107,11 @@ export function DialogEventToTask(props: DialogEventToTaskProps) {
 
     const dto: CreateTaskDto = {
       description: desc,
-      due: dueDate(),
+      scheduled: scheduledDate() || undefined,
+      due: dueDate() || undefined,
       tags: ['meeting'],
       annotation: buildAnnotation(props.event),
+      calendar_event_id: props.event.id,
     };
     props.onConfirm(dto);
   };
@@ -187,11 +191,16 @@ export function DialogEventToTask(props: DialogEventToTaskProps) {
         <scrollbox maxHeight={6} width="100%">
           <For each={sortedAttendees()}>
             {(attendee) => {
-              const { icon, color } = attendeeStatusIcon(attendee.responseStatus);
+              const { icon, color } = attendeeStatusIcon(
+                attendee.responseStatus,
+              );
               const name = attendee.displayName || attendee.email;
               return (
                 <box height={1} flexDirection="row">
-                  <text fg={color}>{'  '}{icon}{' '}</text>
+                  <text fg={color}>
+                    {'  '}
+                    {icon}{' '}
+                  </text>
                   <text fg={FG_DIM}>{name}</text>
                   <Show when={attendee.self}>
                     <text fg={FG_MUTED}>{' (you)'}</text>
@@ -230,6 +239,12 @@ export function DialogEventToTask(props: DialogEventToTaskProps) {
       </box>
       <box height={1} />
 
+      <box height={1} flexDirection="row">
+        <box width={14}>
+          <text fg={FG_FAINT}>{'  '}Scheduled</text>
+        </box>
+        <text fg={FG_DIM}>{scheduledDate() || 'No date'}</text>
+      </box>
       <box height={1} flexDirection="row">
         <box width={14}>
           <text fg={FG_FAINT}>{'  '}Due</text>

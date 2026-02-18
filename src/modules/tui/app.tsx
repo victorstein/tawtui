@@ -34,6 +34,9 @@ function AppContent() {
   const [archiveMode, setArchiveMode] = createSignal(false);
   const [inputCaptured, setInputCaptured] = createSignal(false);
   const [refreshTrigger, setRefreshTrigger] = createSignal(0);
+  const [pendingTaskUuid, setPendingTaskUuid] = createSignal<string | null>(
+    null,
+  );
 
   // Check dependencies on startup
   onMount(() => {
@@ -58,6 +61,11 @@ function AppContent() {
       }
     });
   });
+
+  function handleNavigateToTask(taskUuid: string): void {
+    setPendingTaskUuid(taskUuid);
+    setActiveTab(0);
+  }
 
   useKeyboard((key) => {
     // Don't handle global keys when a dialog is open or sub-component owns input
@@ -126,6 +134,8 @@ function AppContent() {
               onArchiveModeChange={(active) => setArchiveMode(active)}
               onInputCapturedChange={(captured) => setInputCaptured(captured)}
               refreshTrigger={refreshTrigger}
+              navigateToTaskUuid={() => pendingTaskUuid()}
+              onNavigateConsumed={() => setPendingTaskUuid(null)}
             />
           </Match>
           <Match when={activeTab() === 1}>
@@ -137,7 +147,10 @@ function AppContent() {
             />
           </Match>
           <Match when={activeTab() === 3}>
-            <CalendarView refreshTrigger={refreshTrigger} />
+            <CalendarView
+              refreshTrigger={refreshTrigger}
+              onNavigateToTask={handleNavigateToTask}
+            />
           </Match>
         </Switch>
       </box>

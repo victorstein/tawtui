@@ -12,6 +12,8 @@ export class TaskwarriorService {
     'rc.verbose=nothing',
     'rc.color=off',
     'rc.json.array=on',
+    'rc.uda.calendar_event_id.type=string',
+    'rc.uda.calendar_event_id.label=Calendar Event ID',
   ];
 
   /**
@@ -121,6 +123,8 @@ export class TaskwarriorService {
     if (dto.scheduled) payload.scheduled = dto.scheduled;
     if (dto.recur) payload.recur = dto.recur;
     if (dto.depends) payload.depends = dto.depends;
+    if (dto.calendar_event_id)
+      payload.calendar_event_id = dto.calendar_event_id;
 
     const json = JSON.stringify(payload);
     const { stdout, stderr, exitCode } = this.execTask(['import'], json);
@@ -390,6 +394,22 @@ export class TaskwarriorService {
       .trim()
       .split('\n')
       .filter((line) => line.length > 0);
+  }
+
+  getLinkedCalendarEventMap(): Map<string, string> {
+    const tasks = this.getTasks('calendar_event_id.any:');
+    const map = new Map<string, string>();
+    for (const task of tasks) {
+      const id = task.calendar_event_id;
+      if (typeof id === 'string' && id.length > 0) {
+        map.set(id, task.uuid);
+      }
+    }
+    return map;
+  }
+
+  getLinkedCalendarEventIds(): Set<string> {
+    return new Set(this.getLinkedCalendarEventMap().keys());
   }
 
   /**

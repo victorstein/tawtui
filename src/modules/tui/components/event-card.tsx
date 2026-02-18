@@ -11,6 +11,7 @@ import {
 import {
   ACCENT_SECONDARY,
   BG_SELECTED,
+  CALENDAR_GRAD,
   COLOR_ERROR,
   COLOR_WARNING,
   FG_PRIMARY,
@@ -22,6 +23,7 @@ import {
 interface EventCardProps {
   event: CalendarEvent;
   isSelected: boolean;
+  isLinked?: boolean;
   width: number;
 }
 
@@ -60,13 +62,9 @@ export function EventCard(props: EventCardProps) {
               <text fg={grad.start}>{LEFT_CAP}</text>
               <For each={chars}>
                 {(char, i) => {
-                  const t =
-                    chars.length > 1 ? i() / (chars.length - 1) : 0;
+                  const t = chars.length > 1 ? i() / (chars.length - 1) : 0;
                   return (
-                    <text
-                      fg="#ffffff"
-                      bg={lerpHex(grad.start, grad.end, t)}
-                    >
+                    <text fg="#ffffff" bg={lerpHex(grad.start, grad.end, t)}>
                       {char}
                     </text>
                   );
@@ -82,6 +80,30 @@ export function EventCard(props: EventCardProps) {
               {statusBadge()!.label}
             </text>
           </box>
+        </Show>
+        <Show when={props.isLinked}>
+          {(() => {
+            const chars = ' TASK '.split('');
+            return (
+              <box flexDirection="row" marginRight={1}>
+                <text fg={CALENDAR_GRAD[0]}>{LEFT_CAP}</text>
+                <For each={chars}>
+                  {(char, i) => {
+                    const t = chars.length > 1 ? i() / (chars.length - 1) : 0;
+                    return (
+                      <text
+                        fg="#ffffff"
+                        bg={lerpHex(CALENDAR_GRAD[0], CALENDAR_GRAD[1], t)}
+                      >
+                        {char}
+                      </text>
+                    );
+                  }}
+                </For>
+                <text fg={CALENDAR_GRAD[1]}>{RIGHT_CAP}</text>
+              </box>
+            );
+          })()}
         </Show>
         <text
           fg={selected() ? FG_PRIMARY : FG_NORMAL}
@@ -106,8 +128,7 @@ export function EventCard(props: EventCardProps) {
                   <text fg={grad.start}>{LEFT_CAP}</text>
                   <For each={chars}>
                     {(char, i) => {
-                      const t =
-                        chars.length > 1 ? i() / (chars.length - 1) : 0;
+                      const t = chars.length > 1 ? i() / (chars.length - 1) : 0;
                       return (
                         <text
                           fg="#ffffff"

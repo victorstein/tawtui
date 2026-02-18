@@ -79,6 +79,8 @@ interface TasksViewProps {
   onArchiveModeChange?: (active: boolean) => void;
   onInputCapturedChange?: (captured: boolean) => void;
   refreshTrigger?: () => number;
+  navigateToTaskUuid?: () => string | null;
+  onNavigateConsumed?: () => void;
 }
 
 export function TasksView(props: TasksViewProps) {
@@ -195,6 +197,24 @@ export function TasksView(props: TasksViewProps) {
     clampIndex(0);
     clampIndex(1);
     clampIndex(2);
+  });
+
+  // Cross-view navigation: select a task by UUID when navigated from another tab
+  createEffect(() => {
+    const uuid = props.navigateToTaskUuid?.() ?? null;
+    if (!uuid) return;
+    const columns = [todoTasks(), inProgressTasks(), doneTasks()];
+    for (let col = 0; col < columns.length; col++) {
+      const idx = columns[col].findIndex((t) => t.uuid === uuid);
+      if (idx >= 0) {
+        setActiveColumn(col);
+        const indices = [...selectedIndices()] as [number, number, number];
+        indices[col] = idx;
+        setSelectedIndices(indices);
+        props.onNavigateConsumed?.();
+        return;
+      }
+    }
   });
 
   /** Get the currently focused task (if any). */

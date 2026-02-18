@@ -25,6 +25,7 @@ import { lerpHex, LEFT_CAP, RIGHT_CAP } from '../utils';
 
 interface CalendarViewProps {
   refreshTrigger?: () => number;
+  onNavigateToTask?: (taskUuid: string) => void;
 }
 
 function formatDateHeader(d: Date): string {
@@ -94,6 +95,19 @@ export function CalendarView(props: CalendarViewProps) {
   const [eventIndex, setEventIndex] = createSignal(0);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
+  const [linkedEventMap, setLinkedEventMap] = createSignal<Map<string, string>>(
+    new Map(),
+  );
+
+  function loadLinkedEventIds(): void {
+    const tw = getTaskwarriorService();
+    if (!tw) return;
+    try {
+      setLinkedEventMap(tw.getLinkedCalendarEventMap());
+    } catch {
+      // Non-fatal — linked status is a nice-to-have
+    }
+  }
 
   async function loadEvents(date: Date): Promise<void> {
     const cal = getCalendarService();
@@ -141,6 +155,7 @@ export function CalendarView(props: CalendarViewProps) {
       if (eventIndex() >= unique.length) {
         setEventIndex(Math.max(unique.length - 1, 0));
       }
+      loadLinkedEventIds();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load events');
       setEvents([]);
@@ -183,6 +198,34 @@ export function CalendarView(props: CalendarViewProps) {
   const navHeaderLabel = () => ` ${formatDateShort(selectedDate())} `;
   const innerEventWidth = () => Math.max(eventPaneWidth() - 2, 1);
   const eventHeaderLabel = () => ` EVENTS (${events().length}) `;
+
+  function openConvertDialog(event: CalendarEvent): void {
+    dialog.show(
+      () => (
+        <DialogEventToTask
+          event={event}
+          onConfirm={(dto: CreateTaskDto) => {
+            const tw = getTaskwarriorService();
+            if (tw) {
+              try {
+                tw.createTask(dto);
+                loadLinkedEventIds();
+              } catch {
+                // Task creation failed — still close the dialog
+              }
+            }
+            dialog.close();
+          }}
+          onCancel={() => dialog.close()}
+        />
+      ),
+      {
+        size: 'large',
+        gradStart: CALENDAR_GRAD[0],
+        gradEnd: CALENDAR_GRAD[1],
+      },
+    );
+  }
 
   useKeyboard((key) => {
     if (dialog.isOpen()) return;
@@ -252,36 +295,18 @@ export function CalendarView(props: CalendarViewProps) {
       return;
     }
 
-    // Convert event to task
+    // Convert event to task / navigate to linked task
     if (key.name === 'return') {
       const eventList = events();
       const event = eventList[eventIndex()];
       if (!event) return;
 
-      dialog.show(
-        () => (
-          <DialogEventToTask
-            event={event}
-            onConfirm={async (dto: CreateTaskDto) => {
-              const tw = getTaskwarriorService();
-              if (tw) {
-                try {
-                  await tw.createTask(dto);
-                } catch {
-                  // Task creation failed — still close the dialog
-                }
-              }
-              dialog.close();
-            }}
-            onCancel={() => dialog.close()}
-          />
-        ),
-        {
-          size: 'large',
-          gradStart: CALENDAR_GRAD[0],
-          gradEnd: CALENDAR_GRAD[1],
-        },
-      );
+      const taskUuid = linkedEventMap().get(event.id);
+      if (taskUuid && props.onNavigateToTask) {
+        props.onNavigateToTask(taskUuid);
+      } else {
+        openConvertDialog(event);
+      }
       return;
     }
   });
@@ -468,6 +493,7 @@ export function CalendarView(props: CalendarViewProps) {
                     <EventCard
                       event={event}
                       isSelected={idx() === eventIndex()}
+                      isLinked={linkedEventMap().has(event.id)}
                       width={Math.max(eventPaneWidth() - 2, 10)}
                     />
                     {/* Spacer between cards */}
@@ -484,7 +510,7 @@ export function CalendarView(props: CalendarViewProps) {
           <Show when={!loading() && !error() && events().length > 0}>
             <box height={1} paddingX={1}>
               <text fg={FG_DIM}>
-                {'[j/k] navigate  [Enter] convert to task  [r] refresh'}
+                {'[j/k] navigate  [Enter] convert/view task  [r] refresh'}
               </text>
             </box>
           </Show>
