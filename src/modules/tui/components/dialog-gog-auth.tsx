@@ -1,4 +1,4 @@
-import { createSignal, Show } from 'solid-js';
+import { createSignal, createEffect, Show } from 'solid-js';
 import { useKeyboard } from '@opentui/solid';
 import { getCalendarService } from '../bridge';
 import type { AuthResult } from '../../calendar.types';
@@ -10,6 +10,7 @@ import {
   BG_INPUT_FOCUS,
   COLOR_SUCCESS,
   COLOR_ERROR,
+  COLOR_WARNING,
   ACCENT_TERTIARY,
   ACCENT_PRIMARY,
 } from '../theme';
@@ -19,14 +20,72 @@ interface DialogGogAuthProps {
   onCancel: () => void;
 }
 
-type Mode = 'email' | 'authenticating' | 'result';
+type Mode =
+  | 'checking'
+  | 'credentials'
+  | 'importing'
+  | 'email'
+  | 'authenticating'
+  | 'result';
 
 export function DialogGogAuth(props: DialogGogAuthProps) {
-  const [mode, setMode] = createSignal<Mode>('email');
+  const [mode, setMode] = createSignal<Mode>('checking');
   const [email, setEmail] = createSignal('');
+  const [credPath, setCredPath] = createSignal('');
   const [result, setResult] = createSignal<AuthResult | null>(null);
+  const [errorSource, setErrorSource] = createSignal<'credentials' | 'auth'>(
+    'auth',
+  );
 
   let cancelled = false;
+
+  // Check credentials on mount
+  createEffect(() => {
+    if (mode() !== 'checking') return;
+
+    const calService = getCalendarService();
+    if (!calService) {
+      setResult({ success: false, error: 'Calendar service not available' });
+      setErrorSource('credentials');
+      setMode('result');
+      return;
+    }
+
+    void calService.hasCredentials().then((has) => {
+      if (cancelled) return;
+      if (has) {
+        setMode('email');
+      } else {
+        setMode('credentials');
+      }
+    });
+  });
+
+  const handleImportCredentials = () => {
+    const path = credPath().trim();
+    if (!path) return;
+
+    setMode('importing');
+
+    const calService = getCalendarService();
+    if (!calService) {
+      setResult({ success: false, error: 'Calendar service not available' });
+      setErrorSource('credentials');
+      setMode('result');
+      return;
+    }
+
+    void calService.importCredentials(path).then((res) => {
+      if (cancelled) return;
+      if (res.success) {
+        setMode('email');
+      } else {
+        setResult(res);
+        setErrorSource('credentials');
+        setMode('result');
+      }
+    });
+  };
 
   const handleSubmitEmail = () => {
     const addr = email().trim();
@@ -38,6 +97,7 @@ export function DialogGogAuth(props: DialogGogAuthProps) {
     const calService = getCalendarService();
     if (!calService) {
       setResult({ success: false, error: 'Calendar service not available' });
+      setErrorSource('auth');
       setMode('result');
       return;
     }
@@ -45,6 +105,7 @@ export function DialogGogAuth(props: DialogGogAuthProps) {
     void calService.startAuth(addr).then((res) => {
       if (cancelled) return;
       setResult(res);
+      setErrorSource('auth');
       setMode('result');
     });
   };
@@ -56,7 +117,11 @@ export function DialogGogAuth(props: DialogGogAuthProps) {
       key.preventDefault();
       key.stopPropagation();
 
-      if (currentMode === 'email' || currentMode === 'authenticating') {
+      if (
+        currentMode === 'email' ||
+        currentMode === 'authenticating' ||
+        currentMode === 'credentials'
+      ) {
         cancelled = true;
         props.onCancel();
       } else if (currentMode === 'result') {
@@ -73,13 +138,20 @@ export function DialogGogAuth(props: DialogGogAuthProps) {
       key.preventDefault();
       key.stopPropagation();
 
-      if (currentMode === 'email') {
+      if (currentMode === 'credentials') {
+        handleImportCredentials();
+      } else if (currentMode === 'email') {
         handleSubmitEmail();
       } else if (currentMode === 'result') {
         if (result()?.success) {
           props.onSuccess();
         } else {
-          setMode('email');
+          // Retry — go back to the step that failed
+          if (errorSource() === 'credentials') {
+            setMode('credentials');
+          } else {
+            setMode('email');
+          }
         }
       }
       return;
@@ -93,6 +165,61 @@ export function DialogGogAuth(props: DialogGogAuthProps) {
         {'  Google Calendar Authentication'}
       </text>
       <box height={1} />
+
+      {/* Checking mode */}
+      <Show when={mode() === 'checking'}>
+        <text fg={ACCENT_TERTIARY} attributes={1}>
+          {'  Checking credentials...'}
+        </text>
+      </Show>
+
+      {/* Credentials mode */}
+      <Show when={mode() === 'credentials'}>
+        <text fg={COLOR_WARNING} attributes={1}>
+          {'  OAuth credentials required'}
+        </text>
+        <text fg={FG_DIM}>
+          {'  1. Go to console.cloud.google.com/apis/credentials'}
+        </text>
+        <text fg={FG_DIM}>
+          {'  2. Create Credentials → OAuth client ID → Desktop app'}
+        </text>
+        <text fg={FG_DIM}>{'  3. Download the JSON file'}</text>
+        <text fg={FG_DIM}>{'  4. Enter the file path below'}</text>
+        <box height={1} />
+        <box flexDirection="row">
+          <box width={8}>
+            <text fg={FG_DIM}>{'File'}</text>
+          </box>
+          <input
+            width={40}
+            value={credPath()}
+            placeholder="/path/to/client_secret.json"
+            focused={true}
+            backgroundColor={BG_INPUT_FOCUS}
+            textColor={FG_NORMAL}
+            onInput={(val: string) => setCredPath(val)}
+          />
+        </box>
+        <box height={1} />
+        <box flexDirection="row">
+          <text fg={COLOR_SUCCESS} attributes={1}>
+            {' [Enter] '}
+          </text>
+          <text fg={FG_DIM}>{'Import  '}</text>
+          <text fg={ACCENT_PRIMARY} attributes={1}>
+            {' [Esc] '}
+          </text>
+          <text fg={FG_DIM}>{'Cancel'}</text>
+        </box>
+      </Show>
+
+      {/* Importing mode */}
+      <Show when={mode() === 'importing'}>
+        <text fg={ACCENT_TERTIARY} attributes={1}>
+          {'  Importing credentials...'}
+        </text>
+      </Show>
 
       {/* Email mode */}
       <Show when={mode() === 'email'}>

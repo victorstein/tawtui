@@ -51,6 +51,7 @@ export function DialogSetupWizard(props: DialogSetupWizardProps) {
     !ghStatus().authenticated ||
     !taskStatus().installed ||
     !gogStatus().installed ||
+    !gogStatus().hasCredentials ||
     !gogStatus().authenticated;
 
   useKeyboard((key) => {
@@ -59,7 +60,7 @@ export function DialogSetupWizard(props: DialogSetupWizardProps) {
     if (
       key.name === 'a' &&
       gogStatus().installed &&
-      !gogStatus().authenticated
+      (!gogStatus().hasCredentials || !gogStatus().authenticated)
     ) {
       key.preventDefault();
       key.stopPropagation();
@@ -162,12 +163,24 @@ export function DialogSetupWizard(props: DialogSetupWizardProps) {
       </box>
       <box flexDirection="row">
         <text>{'    '}</text>
+        <text fg={gogStatus().hasCredentials ? COLOR_SUCCESS : COLOR_ERROR}>
+          {gogStatus().hasCredentials ? '✓' : '✗'}
+        </text>
+        <text fg={FG_DIM}>{' Credentials'}</text>
+      </box>
+      <box flexDirection="row">
+        <text>{'    '}</text>
         <text fg={gogStatus().authenticated ? COLOR_SUCCESS : COLOR_ERROR}>
           {gogStatus().authenticated ? '✓' : '✗'}
         </text>
         <text fg={FG_DIM}>{' Authenticated'}</text>
       </box>
-      <Show when={gogStatus().installed && !gogStatus().authenticated}>
+      <Show
+        when={
+          gogStatus().installed &&
+          (!gogStatus().hasCredentials || !gogStatus().authenticated)
+        }
+      >
         <box flexDirection="row">
           <text>{'    '}</text>
           <text fg={ACCENT_PRIMARY} attributes={1}>
@@ -208,6 +221,15 @@ export function DialogSetupWizard(props: DialogSetupWizardProps) {
           <box flexDirection="row">
             <text fg={FG_DIM}>{'  Google Cal:  '}</text>
             <text fg={COLOR_WARNING}>{gogStatus().instructions}</text>
+          </box>
+        </Show>
+
+        <Show when={gogStatus().installed && !gogStatus().hasCredentials}>
+          <box flexDirection="row">
+            <text fg={FG_DIM}>{'  Cal Creds:   '}</text>
+            <text fg={COLOR_WARNING}>
+              {'gog auth credentials <client_secret.json>'}
+            </text>
           </box>
         </Show>
 

@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { homedir } from 'os';
+import { join } from 'path';
 import type {
   CalendarEvent,
   GetEventsOptions,
@@ -51,6 +53,36 @@ export class CalendarService {
     } catch {
       return false;
     }
+  }
+
+  getCredentialsPath(): string {
+    const home = homedir();
+    if (process.platform === 'darwin') {
+      return join(
+        home,
+        'Library',
+        'Application Support',
+        'gogcli',
+        'credentials.json',
+      );
+    }
+    return join(home, '.config', 'gogcli', 'credentials.json');
+  }
+
+  async hasCredentials(): Promise<boolean> {
+    return Bun.file(this.getCredentialsPath()).exists();
+  }
+
+  async importCredentials(filePath: string): Promise<AuthResult> {
+    const result = await this.execGog(['auth', 'credentials', filePath]);
+
+    if (result.exitCode === 0) {
+      return { success: true };
+    }
+    return {
+      success: false,
+      error: result.stderr || 'Failed to import credentials',
+    };
   }
 
   async startAuth(email: string): Promise<AuthResult> {
