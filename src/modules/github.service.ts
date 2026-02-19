@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type {
+  PrDiff,
   PullRequest,
   PullRequestDetail,
   RepoConfig,
@@ -143,6 +144,32 @@ export class GithubService {
         `Failed to parse PR detail response for ${owner}/${repo}#${prNumber}: ${result.stdout}`,
       );
     }
+  }
+
+  async getPrDiff(
+    owner: string,
+    repo: string,
+    prNumber: number,
+  ): Promise<PrDiff> {
+    const result = await this.execGh([
+      'pr',
+      'diff',
+      String(prNumber),
+      '--repo',
+      `${owner}/${repo}`,
+    ]);
+
+    if (result.exitCode !== 0) {
+      throw new Error(
+        `Failed to get diff for PR #${prNumber} in ${owner}/${repo}: ${result.stderr}`,
+      );
+    }
+
+    return {
+      raw: result.stdout,
+      prNumber,
+      repoFullName: `${owner}/${repo}`,
+    };
   }
 
   async validateRepo(owner: string, repo: string): Promise<boolean> {

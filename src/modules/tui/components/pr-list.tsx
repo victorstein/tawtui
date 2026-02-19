@@ -6,6 +6,7 @@ import {
   onCleanup,
 } from 'solid-js';
 import type { PullRequest } from '../../github.types';
+import type { TerminalSession } from '../../terminal.types';
 import {
   PR_GRAD,
   ACCENT_PRIMARY,
@@ -32,6 +33,7 @@ interface PrListProps {
   repoLabel: string | null; // "owner/repo" or null when no repo selected
   loading: boolean;
   error: string | null;
+  agents?: TerminalSession[];
 }
 
 /**
@@ -230,6 +232,10 @@ export function PrList(props: PrListProps) {
                 props.isActivePane && index() === props.selectedIndex;
               const review = () => getReviewIcon(pr.reviewDecision);
               const ci = () => getCiIcon(pr.statusCheckRollup);
+              const activeAgent = () =>
+                props.agents?.find(
+                  (a) => a.prNumber === pr.number && a.status === 'running',
+                ) ?? null;
 
               return (
                 <box
@@ -266,6 +272,9 @@ export function PrList(props: PrListProps) {
                     >
                       {pr.title}
                     </text>
+                    <Show when={activeAgent()}>
+                      <text fg={COLOR_SUCCESS}> ● agent</text>
+                    </Show>
                   </box>
 
                   {/* Line 2: Author pill + stats + icons */}

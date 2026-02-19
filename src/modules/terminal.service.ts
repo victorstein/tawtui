@@ -6,14 +6,17 @@ import {
 } from '@nestjs/common';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
+import { homedir, tmpdir } from 'os';
 import { TaskwarriorService } from './taskwarrior.service';
+import { ConfigService } from './config.service';
 import type {
   TerminalSession,
   CaptureResult,
   CursorPosition,
 } from './terminal.types';
 import type { ExecResult } from '../shared/types';
+import type { PrDiff, PullRequestDetail } from './github.types';
+import type { ProjectAgentConfig } from './config.types';
 
 const KEY_MAP: Record<string, string> = {
   return: 'Enter',
@@ -60,7 +63,10 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
   private readonly sessionsDir = join(homedir(), '.config', 'tawtui');
   private readonly sessionsPath = join(this.sessionsDir, 'sessions.json');
 
-  constructor(private readonly taskwarriorService: TaskwarriorService) {}
+  constructor(
+    private readonly taskwarriorService: TaskwarriorService,
+    private readonly configService: ConfigService,
+  ) {}
 
   // ---------------------------------------------------------------------------
   // Lifecycle
@@ -362,12 +368,20 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
   /**
    * Create a Taskwarrior task for reviewing a PR and spin up a terminal
    * session to run the review agent.  Returns the task UUID and session ID.
+   *
+   * When `prDetail` is provided, a markdown briefing file is written to
+   * `/tmp/tawtui/pr-contexts/` with the PR description, changed files, and
+   * diff.  When `projectAgentConfig` is provided, the matching agent binary
+   * and flags are resolved from the config and used as the session command.
    */
   async createPrReviewSession(
     prNumber: number,
     repoOwner: string,
     repoName: string,
     prTitle: string,
+    prDetail?: PullRequestDetail,
+    prDiff?: PrDiff,
+    projectAgentConfig?: ProjectAgentConfig,
   ): Promise<{ taskUuid: string; sessionId: string }> {
     // Create a Taskwarrior task for the review
     const task = await this.taskwarriorService.createTask({
@@ -379,11 +393,79 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
     // Start the task so it's marked as "in progress"
     await this.taskwarriorService.startTask(task.uuid);
 
+    // Build the markdown context file when PR detail is available
+    let contextFilePath: string | undefined;
+
+    if (prDetail) {
+      const contextDir = join(tmpdir(), 'tawtui', 'pr-contexts');
+      mkdirSync(contextDir, { recursive: true });
+      contextFilePath = join(
+        contextDir,
+        `pr-${repoOwner}-${repoName}-${prNumber}.md`,
+      );
+
+      const sections: string[] = [
+        `# PR Review Context: #${prNumber} — ${prTitle}`,
+        ``,
+        `**Repository:** ${repoOwner}/${repoName}`,
+        `**Branch:** ${prDetail.headRefName} → ${prDetail.baseRefName}`,
+        `**Author:** ${prDetail.author.login}`,
+        `**Stats:** +${prDetail.additions}/-${prDetail.deletions} across ${prDetail.changedFiles} file(s)`,
+        ``,
+        `## Description`,
+        ``,
+        prDetail.body || '_No description provided._',
+        ``,
+      ];
+
+      if (prDetail.files?.length) {
+        sections.push(`## Changed Files`, ``);
+        for (const file of prDetail.files) {
+          sections.push(
+            `- \`${file.path}\` (+${file.additions}/-${file.deletions})`,
+          );
+        }
+        sections.push(``);
+      }
+
+      if (prDiff) {
+        sections.push(`## Diff`, ``, '```diff', prDiff.raw, '```');
+      }
+
+      writeFileSync(contextFilePath, sections.join('\n'), 'utf-8');
+    }
+
+    // Build the launch command using project agent config
+    let command: string | undefined;
+    if (projectAgentConfig) {
+      const agentTypes = this.configService.getAgentTypes();
+      const agentDef = agentTypes.find(
+        (a) => a.id === projectAgentConfig.agentTypeId,
+      );
+      let baseCommand = agentDef?.command ?? '';
+      if (projectAgentConfig.autoApprove && agentDef?.autoApproveFlag) {
+        baseCommand += ' ' + agentDef.autoApproveFlag;
+      }
+      command = baseCommand;
+    }
+
+    // Append context file path as argument
+    if (contextFilePath && command) {
+      command = `${command} "${contextFilePath}"`;
+    }
+
+    // Fall back to a placeholder command when no agent config is provided
+    if (!command) {
+      command = `echo "Reviewing PR #${prNumber} for ${repoOwner}/${repoName}..." && sleep 5`;
+    }
+
+    const sessionCwd = projectAgentConfig?.cwd ?? process.cwd();
+
     // Create a terminal session for the review agent
     const session = await this.createSession({
       name: `PR #${prNumber} Review`,
-      cwd: process.cwd(),
-      command: `echo "Reviewing PR #${prNumber} for ${repoOwner}/${repoName}..." && sleep 5`,
+      cwd: sessionCwd,
+      command,
       prNumber,
       repoOwner,
       repoName,

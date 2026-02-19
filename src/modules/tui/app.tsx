@@ -2,9 +2,9 @@ import { createSignal, Match, Switch, onMount } from 'solid-js';
 import { useKeyboard, useRenderer } from '@opentui/solid';
 import { TabBar } from './components/tab-bar';
 import { StatusBar } from './components/status-bar';
+import type { ReviewsHintContext } from './components/status-bar';
 import { TasksView } from './views/tasks-view';
-import { ReposView } from './views/repos-view';
-import { AgentsView } from './views/agents-view';
+import ReviewsView from './views/reviews-view';
 import { DialogProvider, useDialog } from './context/dialog';
 import { DialogConfirm } from './components/dialog-confirm';
 import { DialogSetupWizard } from './components/dialog-setup-wizard';
@@ -15,7 +15,7 @@ function getDependencyService(): DependencyService | null {
   return (globalThis as any).__tawtui?.dependencyService ?? null;
 }
 
-const TABS = [{ name: 'Tasks' }, { name: 'Repos' }, { name: 'Agents' }];
+const TABS = [{ name: 'Tasks' }, { name: 'Reviews' }];
 
 export function App() {
   return (
@@ -32,6 +32,9 @@ function AppContent() {
   const [archiveMode, setArchiveMode] = createSignal(false);
   const [inputCaptured, setInputCaptured] = createSignal(false);
   const [refreshTrigger, setRefreshTrigger] = createSignal(0);
+  const [reviewsHintCtx, setReviewsHintCtx] = createSignal<ReviewsHintContext>({
+    mode: 'empty',
+  });
 
   // Check dependencies on startup
   onMount(() => {
@@ -71,11 +74,6 @@ function AppContent() {
       setActiveTab(1);
       return;
     }
-    if (key.name === '3') {
-      setActiveTab(2);
-      return;
-    }
-
     // Tab cycling
     if (key.name === 'tab' && !key.shift) {
       setActiveTab((prev) => (prev + 1) % TABS.length);
@@ -123,15 +121,20 @@ function AppContent() {
             />
           </Match>
           <Match when={activeTab() === 1}>
-            <ReposView refreshTrigger={refreshTrigger} />
-          </Match>
-          <Match when={activeTab() === 2}>
-            <AgentsView onInputCapturedChange={(captured) => setInputCaptured(captured)} />
+            <ReviewsView
+              refreshTrigger={refreshTrigger}
+              onInputCapturedChange={(captured) => setInputCaptured(captured)}
+              onHintContextChange={(ctx) => setReviewsHintCtx(ctx)}
+            />
           </Match>
         </Switch>
       </box>
 
-      <StatusBar activeTab={activeTab} archiveMode={archiveMode} />
+      <StatusBar
+        activeTab={activeTab}
+        archiveMode={archiveMode}
+        reviewsHintCtx={reviewsHintCtx}
+      />
     </box>
   );
 }
