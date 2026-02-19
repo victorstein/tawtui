@@ -435,28 +435,31 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
       writeFileSync(contextFilePath, sections.join('\n'), 'utf-8');
     }
 
-    // Build the launch command using project agent config
-    let command: string | undefined;
-    if (projectAgentConfig) {
-      const agentTypes = this.configService.getAgentTypes();
-      const agentDef = agentTypes.find(
-        (a) => a.id === projectAgentConfig.agentTypeId,
-      );
-      let baseCommand = agentDef?.command ?? '';
-      if (projectAgentConfig.autoApprove && agentDef?.autoApproveFlag) {
-        baseCommand += ' ' + agentDef.autoApproveFlag;
-      }
-      command = baseCommand;
+    // Build the launch command using project agent config or default agent
+    const agentTypes = this.configService.getAgentTypes();
+    let agentDef = projectAgentConfig
+      ? agentTypes.find((a) => a.id === projectAgentConfig.agentTypeId)
+      : undefined;
+
+    // Fall back to the first available agent type when no project config exists
+    if (!agentDef) {
+      agentDef = agentTypes[0];
     }
 
-    // Append context file path as argument
+    let command = agentDef?.command ?? '';
+    const useAutoApprove = projectAgentConfig?.autoApprove ?? false;
+    if (useAutoApprove && agentDef?.autoApproveFlag) {
+      command += ' ' + agentDef.autoApproveFlag;
+    }
+
+    // Pipe the context file into the agent with a review prompt
     if (contextFilePath && command) {
-      command = `${command} "${contextFilePath}"`;
-    }
-
-    // Fall back to a placeholder command when no agent config is provided
-    if (!command) {
-      command = `echo "Reviewing PR #${prNumber} for ${repoOwner}/${repoName}..." && sleep 5`;
+      const reviewPrompt = [
+        `Review PR #${prNumber} in ${repoOwner}/${repoName}: "${prTitle}".`,
+        'Analyze the PR context provided via stdin (description, changed files, and diff).',
+        'Provide a thorough code review covering: code quality, potential bugs, security concerns, and suggested improvements.',
+      ].join(' ');
+      command = `cat "${contextFilePath}" | ${command} -p "${reviewPrompt}"`;
     }
 
     const sessionCwd = projectAgentConfig?.cwd ?? process.cwd();
