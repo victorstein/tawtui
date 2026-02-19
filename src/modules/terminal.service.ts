@@ -383,15 +383,30 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
     prDiff?: PrDiff,
     projectAgentConfig?: ProjectAgentConfig,
   ): Promise<{ taskUuid: string; sessionId: string }> {
-    // Create a Taskwarrior task for the review
-    const task = this.taskwarriorService.createTask({
-      description: `Review PR #${prNumber}: ${prTitle}`,
-      project: `${repoOwner}/${repoName}`,
-      tags: ['pr-review'],
-    });
+    // Check for existing PR review task before creating a new one
+    const existingTasks = this.taskwarriorService.getTasks(
+      `project:${repoOwner}/${repoName} +pr-review status:pending or project:${repoOwner}/${repoName} +pr-review status:waiting`,
+    );
+    const existingTask = existingTasks.find(
+      (t) => t.description.includes(`PR #${prNumber}`),
+    );
 
-    // Start the task so it's marked as "in progress"
-    this.taskwarriorService.startTask(task.uuid);
+    let taskUuid: string;
+    if (existingTask) {
+      taskUuid = existingTask.uuid;
+      // Restart the task if it's not already active
+      if (!existingTask.start) {
+        this.taskwarriorService.startTask(taskUuid);
+      }
+    } else {
+      const task = this.taskwarriorService.createTask({
+        description: `Review PR #${prNumber}: ${prTitle}`,
+        project: `${repoOwner}/${repoName}`,
+        tags: ['pr-review'],
+      });
+      this.taskwarriorService.startTask(task.uuid);
+      taskUuid = task.uuid;
+    }
 
     // Build the markdown context file when PR detail is available
     let contextFilePath: string | undefined;
@@ -472,14 +487,14 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
       prNumber,
       repoOwner,
       repoName,
-      taskUuid: task.uuid,
+      taskUuid: taskUuid,
     });
 
     this.logger.log(
-      `Created PR review session: task=${task.uuid}, session=${session.id}`,
+      `Created PR review session: task=${taskUuid}, session=${session.id}`,
     );
 
-    return { taskUuid: task.uuid, sessionId: session.id };
+    return { taskUuid, sessionId: session.id };
   }
 
   /**

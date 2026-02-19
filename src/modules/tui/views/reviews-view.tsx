@@ -571,14 +571,33 @@ export default function ReviewsView(props: ReviewsViewProps) {
 
     gh.getPR(repo.owner, repo.repo, pr.number)
       .then((detail: PullRequestDetail) => {
+        const activeAgentForPr = agents().find(
+          (a) =>
+            a.prNumber === pr.number &&
+            a.repoOwner === repo.owner &&
+            a.repoName === repo.repo &&
+            a.status === 'running',
+        );
+
         dialog.close();
         dialog.show(
           () => (
             <DialogPrDetail
               pr={detail}
+              hasActiveAgent={!!activeAgentForPr}
               onSendToAgent={() => {
                 dialog.close();
                 void sendToAgent(detail, repo);
+              }}
+              onGoToAgent={() => {
+                dialog.close();
+                const agentIdx = agents().findIndex(
+                  (a) => a.id === activeAgentForPr!.id,
+                );
+                if (agentIdx >= 0) {
+                  setCursorIndex(repos().length + agentIdx);
+                  setActivePane('right');
+                }
               }}
               onClose={() => dialog.close()}
             />

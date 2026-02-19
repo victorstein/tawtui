@@ -31,6 +31,8 @@ const markdownStyle = SyntaxStyle.fromStyles({
 interface DialogPrDetailProps {
   pr: PullRequestDetail;
   onSendToAgent: () => void;
+  onGoToAgent?: () => void;
+  hasActiveAgent?: boolean;
   onClose: () => void;
 }
 
@@ -94,7 +96,11 @@ export function DialogPrDetail(props: DialogPrDetailProps) {
 
   useKeyboard((key) => {
     if (key.name === 's') {
-      props.onSendToAgent();
+      if (props.hasActiveAgent && props.onGoToAgent) {
+        props.onGoToAgent();
+      } else {
+        props.onSendToAgent();
+      }
       return;
     }
     if (key.name === 'escape') {
@@ -226,7 +232,12 @@ export function DialogPrDetail(props: DialogPrDetailProps) {
           <text fg={ACCENT_PRIMARY} attributes={1}>
             {'[S]'}
           </text>
-          <text fg={FG_DIM}>{' Send to Agent  '}</text>
+          <Show
+            when={props.hasActiveAgent}
+            fallback={<text fg={FG_DIM}>{' Send to Agent  '}</text>}
+          >
+            <text fg={COLOR_SUCCESS}>{' Go to Agent  '}</text>
+          </Show>
           <text fg={ACCENT_PRIMARY} attributes={1}>
             {'[Esc]'}
           </text>
