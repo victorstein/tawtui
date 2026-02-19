@@ -816,7 +816,13 @@ export default function ReviewsView(props: ReviewsViewProps) {
     if (key.name === 'return') {
       if (pane === 'left') {
         const sel = selectedItem();
-        if (sel.kind === 'repo' || sel.kind === 'agent') {
+        if (sel.kind === 'agent') {
+          // Enter on agent → straight to interactive mode
+          setActivePane('right');
+          setInteractive(true);
+          return;
+        }
+        if (sel.kind === 'repo') {
           setActivePane('right');
         }
         return;

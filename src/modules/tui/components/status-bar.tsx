@@ -33,7 +33,7 @@ function getReviewsHint(ctx: ReviewsHintContext): string {
     case 'repo-left':
       return `${base} | h/l panes | j/k navigate | enter PRs | a add repo | x remove | c config agent | n new agent | r refresh | q quit`;
     case 'agent-left':
-      return `${base} | h/l panes | j/k navigate | enter terminal | i interactive | K kill | n new agent | r refresh | q quit`;
+      return `${base} | h/l panes | j/k navigate | enter interactive | K kill | n new agent | r refresh | q quit`;
     case 'prs-right':
       return `${base} | h/l panes | j/k navigate | enter detail/spawn | r refresh | q quit`;
     case 'terminal-right':
