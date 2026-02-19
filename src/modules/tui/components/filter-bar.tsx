@@ -1,6 +1,5 @@
 import { createSignal, Show, For, onMount } from 'solid-js';
 import { useKeyboard } from '@opentui/solid';
-import type { TaskwarriorService } from '../../taskwarrior.service';
 import {
   lerpHex,
   darkenHex,
@@ -10,6 +9,7 @@ import {
   getAuthorGradient,
   VIRTUAL_TAGS,
 } from '../utils';
+import { getTaskwarriorService } from '../bridge';
 import {
   BG_SURFACE,
   BG_INPUT,
@@ -41,13 +41,6 @@ interface FilterBarProps {
   onClear: () => void;
   /** Whether the filter input should be focused. */
   focused: boolean;
-}
-
-/**
- * Access the TaskwarriorService bridged from NestJS DI via globalThis.
- */
-function getTaskwarriorService(): TaskwarriorService | null {
-  return (globalThis as any).__tawtui?.taskwarriorService ?? null;
 }
 
 /**
@@ -189,7 +182,10 @@ export function FilterBar(props: FilterBarProps) {
         setSelectedSuggestion(0);
       } else {
         // Cycle through visible suggestions
-        const maxVisible = Math.min(filteredSuggestions().length, MAX_VISIBLE_SUGGESTIONS);
+        const maxVisible = Math.min(
+          filteredSuggestions().length,
+          MAX_VISIBLE_SUGGESTIONS,
+        );
         if (maxVisible > 0) {
           setSelectedSuggestion((prev) => (prev + 1) % maxVisible);
         }
@@ -200,7 +196,10 @@ export function FilterBar(props: FilterBarProps) {
     // Shift+Tab cycles backwards through suggestions
     if (key.name === 'tab' && key.shift) {
       if (showSuggestions()) {
-        const maxVisible = Math.min(filteredSuggestions().length, MAX_VISIBLE_SUGGESTIONS);
+        const maxVisible = Math.min(
+          filteredSuggestions().length,
+          MAX_VISIBLE_SUGGESTIONS,
+        );
         if (maxVisible > 0) {
           setSelectedSuggestion((prev) => (prev - 1 + maxVisible) % maxVisible);
         }
@@ -247,7 +246,10 @@ export function FilterBar(props: FilterBarProps) {
     // Arrow keys within suggestions
     if (showSuggestions()) {
       if (key.name === 'down' || key.name === 'j') {
-        const maxVisible = Math.min(filteredSuggestions().length, MAX_VISIBLE_SUGGESTIONS);
+        const maxVisible = Math.min(
+          filteredSuggestions().length,
+          MAX_VISIBLE_SUGGESTIONS,
+        );
         if (maxVisible > 0) {
           setSelectedSuggestion((prev) => Math.min(prev + 1, maxVisible - 1));
         }

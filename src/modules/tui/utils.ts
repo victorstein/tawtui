@@ -1,5 +1,29 @@
 // src/modules/tui/utils.ts
 
+import type { CalendarEventDateTime } from '../calendar.types';
+
+/** Format a CalendarEventDateTime as HH:MM or 'All day'. */
+export function formatTime(dt: CalendarEventDateTime): string {
+  if (dt.dateTime) {
+    const d = new Date(dt.dateTime);
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${hours}:${minutes}`;
+  }
+  return 'All day';
+}
+
+/** Format a start–end time range, or 'All day' for date-only events. */
+export function formatTimeRange(
+  start: CalendarEventDateTime,
+  end: CalendarEventDateTime,
+): string {
+  if (start.dateTime && end.dateTime) {
+    return `${formatTime(start)}\u2013${formatTime(end)}`;
+  }
+  return 'All day';
+}
+
 /** Powerline left cap (right-facing half-circle). */
 export const LEFT_CAP = '\uE0B6';
 
@@ -137,5 +161,17 @@ export function getAuthorGradient(author: string): {
   const hue = (hash * 137) % 360; // different multiplier than tags to avoid collisions
   const start = hslToHex(hue, 50, 45);
   const end = hslToHex((hue + 25) % 360, 35, 30);
+  return { start, end };
+}
+
+/** Generate a gradient pair for a calendar event ID using HSL color space. */
+export function getEventGradient(eventId: string): {
+  start: string;
+  end: string;
+} {
+  const hash = djb2(eventId);
+  const hue = (hash * 53) % 360;
+  const start = hslToHex(hue, 50, 50);
+  const end = hslToHex((hue + 35) % 360, 40, 35);
   return { start, end };
 }

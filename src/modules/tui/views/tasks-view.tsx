@@ -1,7 +1,6 @@
 import { createSignal, createEffect, on, onMount, Show } from 'solid-js';
 import { useKeyboard, useTerminalDimensions } from '@opentui/solid';
 import type { Task, CreateTaskDto } from '../../taskwarrior.types';
-import type { TaskwarriorService } from '../../taskwarrior.service';
 import { BoardColumn } from '../components/board-column';
 import { TaskForm } from '../components/task-form';
 import { TaskDetail } from '../components/task-detail';
@@ -10,13 +9,13 @@ import { ArchiveView } from '../components/archive-view';
 import { DialogConfirm } from '../components/dialog-confirm';
 import { DialogSetupWizard } from '../components/dialog-setup-wizard';
 import { useDialog } from '../context/dialog';
+import { getTaskwarriorService, getDependencyService } from '../bridge';
 import {
   FG_DIM,
   ACCENT_PRIMARY,
   ACCENT_SECONDARY,
   COLOR_ERROR,
 } from '../theme';
-import type { DependencyService } from '../../dependency.service';
 import type { DependencyStatus } from '../../dependency.types';
 
 /** Column definitions for the kanban board. */
@@ -24,21 +23,6 @@ const COLUMNS = ['TODO', 'IN PROGRESS', 'DONE'] as const;
 
 const DIALOG_GRAD_START = '#5a7aaa';
 const DIALOG_GRAD_END = '#2a4a7a';
-
-/**
- * Access the TaskwarriorService bridged from NestJS DI via globalThis.
- * The TuiService sets this before rendering.
- */
-function getTaskwarriorService(): TaskwarriorService | null {
-  return (globalThis as any).__tawtui?.taskwarriorService ?? null;
-}
-
-/**
- * Access the DependencyService bridged from NestJS DI via globalThis.
- */
-function getDependencyService(): DependencyService | null {
-  return (globalThis as any).__tawtui?.dependencyService ?? null;
-}
 
 /**
  * Categorise a flat list of tasks into the three kanban columns.
@@ -95,6 +79,8 @@ interface TasksViewProps {
   onArchiveModeChange?: (active: boolean) => void;
   onInputCapturedChange?: (captured: boolean) => void;
   refreshTrigger?: () => number;
+  navigateToTaskUuid?: () => string | null;
+  onNavigateConsumed?: () => void;
 }
 
 export function TasksView(props: TasksViewProps) {
@@ -213,6 +199,24 @@ export function TasksView(props: TasksViewProps) {
     clampIndex(2);
   });
 
+  // Cross-view navigation: select a task by UUID when navigated from another tab
+  createEffect(() => {
+    const uuid = props.navigateToTaskUuid?.() ?? null;
+    if (!uuid) return;
+    const columns = [todoTasks(), inProgressTasks(), doneTasks()];
+    for (let col = 0; col < columns.length; col++) {
+      const idx = columns[col].findIndex((t) => t.uuid === uuid);
+      if (idx >= 0) {
+        setActiveColumn(col);
+        const indices = [...selectedIndices()] as [number, number, number];
+        indices[col] = idx;
+        setSelectedIndices(indices);
+        props.onNavigateConsumed?.();
+        return;
+      }
+    }
+  });
+
   /** Get the currently focused task (if any). */
   function selectedTask(): Task | null {
     const col = activeColumn();
@@ -223,7 +227,7 @@ export function TasksView(props: TasksViewProps) {
 
   /** Execute a task action and refresh. */
   async function taskAction(
-    action: (uuid: string) => Promise<void>,
+    action: (uuid: string) => void | Promise<void>,
     task: Task | null,
   ): Promise<void> {
     if (!task) return;
@@ -231,7 +235,7 @@ export function TasksView(props: TasksViewProps) {
     if (!tw) return;
 
     try {
-      await action.call(tw, task.uuid);
+      await Promise.resolve(action.call(tw, task.uuid));
       await loadTasks();
     } catch {
       // Silently ignore errors for now; the refresh will show current state
@@ -552,9 +556,13 @@ export function TasksView(props: TasksViewProps) {
 
   // Reload when parent bumps refreshTrigger (e.g. after setup wizard)
   createEffect(
-    on(() => props.refreshTrigger?.(), () => {
-      loadTasks();
-    }, { defer: true }),
+    on(
+      () => props.refreshTrigger?.(),
+      () => {
+        loadTasks();
+      },
+      { defer: true },
+    ),
   );
 
   // Calculate column width from terminal dimensions.
@@ -627,7 +635,9 @@ export function TasksView(props: TasksViewProps) {
             <text fg={COLOR_ERROR}>Error: {error()}</text>
             <box flexDirection="row">
               <text fg={FG_DIM}>{'Press '}</text>
-              <text fg={ACCENT_PRIMARY} attributes={1}>{'s'}</text>
+              <text fg={ACCENT_PRIMARY} attributes={1}>
+                {'s'}
+              </text>
               <text fg={FG_DIM}>{' to configure dependencies'}</text>
             </box>
           </box>

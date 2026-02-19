@@ -94,3 +94,6 @@ export const AGENT_GRAD: [string, string] = [P.purple, P.secondaryLight];
 
 // Interactive mode gradient (green → teal)
 export const INTERACTIVE_GRAD: [string, string] = [P.green, P.tertiary];
+
+// Calendar pane gradient (bright teal → dark teal)
+export const CALENDAR_GRAD: [string, string] = [P.tealBright, P.tealGreen];

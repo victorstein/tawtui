@@ -7,6 +7,16 @@ export interface AgentDefinition {
   autoApproveFlag?: string; // '--dangerously-skip-permissions'
 }
 
+export interface CalendarConfig {
+  defaultCalendarId: string;
+  defaultTaskProject?: string;
+  defaultTaskTags?: string[];
+}
+
+export const DEFAULT_CALENDAR_CONFIG: CalendarConfig = {
+  defaultCalendarId: 'primary',
+};
+
 export interface UserPreferences {
   theme: string;
   archiveTime: string; // "midnight" or custom time
@@ -29,4 +39,5 @@ export interface AppConfig {
   preferences: UserPreferences;
   agents?: { types: AgentDefinition[] };
   projectAgentConfigs?: ProjectAgentConfig[];
+  calendar?: CalendarConfig;
 }

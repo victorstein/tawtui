@@ -34,6 +34,7 @@ export interface CreateTaskDto {
   recur?: string;
   depends?: string;
   annotation?: string;
+  calendar_event_id?: string;
 }
 
 export type UpdateTaskDto = Partial<CreateTaskDto> & { until?: string };

@@ -6,8 +6,40 @@ import { GithubService } from './github.service';
 import { ConfigService } from './config.service';
 import { TerminalService } from './terminal.service';
 import { DependencyService } from './dependency.service';
+import { CalendarService } from './calendar.service';
 import type { PullRequestDetail, PrDiff } from './github.types';
 import type { ProjectAgentConfig } from './config.types';
+
+interface TawtuiGlobal {
+  __tawtui?: {
+    taskwarriorService: TaskwarriorService;
+    githubService: GithubService;
+    configService: ConfigService;
+    terminalService: TerminalService;
+    dependencyService: DependencyService;
+    calendarService: CalendarService;
+    createPrReviewSession: (
+      prNumber: number,
+      repoOwner: string,
+      repoName: string,
+      prTitle: string,
+      prDetail?: PullRequestDetail,
+      prDiff?: PrDiff,
+      projectAgentConfig?: ProjectAgentConfig,
+    ) => Promise<{ taskUuid: string; sessionId: string }>;
+    getPrDiff: (
+      owner: string,
+      repo: string,
+      prNumber: number,
+    ) => Promise<PrDiff>;
+    getProjectAgentConfig: (
+      projectKey: string,
+    ) => ProjectAgentConfig | null;
+    setProjectAgentConfig: (cfg: ProjectAgentConfig) => void;
+    removeProjectAgentConfig: (projectKey: string) => void;
+  };
+  __tuiExit?: () => void;
+}
 
 @Injectable()
 export class TuiService {
@@ -17,18 +49,22 @@ export class TuiService {
     private readonly configService: ConfigService,
     private readonly terminalService: TerminalService,
     private readonly dependencyService: DependencyService,
+    private readonly calendarService: CalendarService,
   ) {}
 
   async launch(): Promise<void> {
+    const g = globalThis as unknown as TawtuiGlobal;
+
     // Bridge NestJS services to SolidJS components via globalThis.
     // SolidJS components don't have access to the NestJS DI container,
     // so we expose required services on a well-known global.
-    (globalThis as any).__tawtui = {
+    g.__tawtui = {
       taskwarriorService: this.taskwarriorService,
       githubService: this.githubService,
       configService: this.configService,
       terminalService: this.terminalService,
       dependencyService: this.dependencyService,
+      calendarService: this.calendarService,
       createPrReviewSession: (
         prNumber: number,
         repoOwner: string,
@@ -60,7 +96,7 @@ export class TuiService {
     // Set up the exit promise before rendering so the App component
     // can resolve it at any time (even during the initial render pass).
     const exitPromise = new Promise<void>((resolve) => {
-      (globalThis as any).__tuiExit = resolve;
+      g.__tuiExit = resolve;
     });
 
     // render() accepts either a CliRenderer or a CliRendererConfig.
@@ -73,7 +109,7 @@ export class TuiService {
     });
 
     // Keep the process alive until the user presses 'q'.
-    // The App component calls (globalThis as any).__tuiExit() on quit.
+    // The App component calls g.__tuiExit() on quit.
     await exitPromise;
   }
 }

@@ -109,7 +109,13 @@ export function AgentList(props: AgentListProps) {
       <Show
         when={props.agents.length > 0}
         fallback={
-          <box flexGrow={1} width="100%" paddingX={1} paddingY={1} flexDirection="column">
+          <box
+            flexGrow={1}
+            width="100%"
+            paddingX={1}
+            paddingY={1}
+            flexDirection="column"
+          >
             <text fg={FG_DIM}>No agents running</text>
             <box height={1} />
             <text fg={FG_DIM}>Press 'n' to spawn a new agent</text>

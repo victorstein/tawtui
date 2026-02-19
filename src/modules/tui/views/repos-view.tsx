@@ -2,8 +2,6 @@ import { createSignal, createEffect, on, onMount } from 'solid-js';
 import { useKeyboard, useTerminalDimensions } from '@opentui/solid';
 import type { RepoConfig } from '../../../shared/types';
 import type { PullRequest, PullRequestDetail } from '../../github.types';
-import type { GithubService } from '../../github.service';
-import type { ConfigService } from '../../config.service';
 import { RepoList } from '../components/repo-list';
 import { PrList } from '../components/pr-list';
 import { DialogPrDetail } from '../components/dialog-pr-detail';
@@ -11,30 +9,14 @@ import { useDialog } from '../context/dialog';
 import { DialogPrompt } from '../components/dialog-prompt';
 import { DialogConfirm } from '../components/dialog-confirm';
 import { DialogSetupWizard } from '../components/dialog-setup-wizard';
+import {
+  getGithubService,
+  getConfigService,
+  getDependencyService,
+  getCreatePrReviewSession,
+} from '../bridge';
 import { ACCENT_PRIMARY, FG_DIM, COLOR_ERROR } from '../theme';
-import type { DependencyService } from '../../dependency.service';
 import type { DependencyStatus } from '../../dependency.types';
-
-/**
- * Access the GithubService bridged from NestJS DI via globalThis.
- */
-function getGithubService(): GithubService | null {
-  return (globalThis as any).__tawtui?.githubService ?? null;
-}
-
-/**
- * Access the ConfigService bridged from NestJS DI via globalThis.
- */
-function getConfigService(): ConfigService | null {
-  return (globalThis as any).__tawtui?.configService ?? null;
-}
-
-/**
- * Access the DependencyService bridged from NestJS DI via globalThis.
- */
-function getDependencyService(): DependencyService | null {
-  return (globalThis as any).__tawtui?.dependencyService ?? null;
-}
 
 /** Pane identifiers for the split-pane layout. */
 type Pane = 'repos' | 'prs';
@@ -326,38 +308,32 @@ export function ReposView(props: ReposViewProps) {
                   pr={detail}
                   onSendToAgent={() => {
                     dialog.close();
-                    const bridge = (globalThis as Record<string, any>).__tawtui;
-                    if (!bridge?.createPrReviewSession) return;
-                    bridge
-                      .createPrReviewSession(
-                        detail.number,
-                        repo.owner,
-                        repo.repo,
-                        detail.title,
-                      )
-                      .catch(() => {
-                        dialog.show(
-                          () => (
-                            <box
-                              flexDirection="column"
-                              paddingX={1}
-                              paddingY={1}
-                            >
-                              <text fg={COLOR_ERROR}>
-                                Failed to create review agent
+                    const createSession = getCreatePrReviewSession();
+                    if (!createSession) return;
+                    createSession(
+                      detail.number,
+                      repo.owner,
+                      repo.repo,
+                      detail.title,
+                    ).catch(() => {
+                      dialog.show(
+                        () => (
+                          <box flexDirection="column" paddingX={1} paddingY={1}>
+                            <text fg={COLOR_ERROR}>
+                              Failed to create review agent
+                            </text>
+                            <box height={1} />
+                            <box flexDirection="row">
+                              <text fg={ACCENT_PRIMARY} attributes={1}>
+                                {' [Esc] '}
                               </text>
-                              <box height={1} />
-                              <box flexDirection="row">
-                                <text fg={ACCENT_PRIMARY} attributes={1}>
-                                  {' [Esc] '}
-                                </text>
-                                <text fg={FG_DIM}>Close</text>
-                              </box>
+                              <text fg={FG_DIM}>Close</text>
                             </box>
-                          ),
-                          { size: 'medium' },
-                        );
-                      });
+                          </box>
+                        ),
+                        { size: 'medium' },
+                      );
+                    });
                   }}
                   onClose={() => dialog.close()}
                 />
@@ -395,10 +371,14 @@ export function ReposView(props: ReposViewProps) {
 
   // Reload when parent bumps refreshTrigger (e.g. after setup wizard)
   createEffect(
-    on(() => props.refreshTrigger?.(), () => {
-      loadRepos();
-      loadPRs();
-    }, { defer: true }),
+    on(
+      () => props.refreshTrigger?.(),
+      () => {
+        loadRepos();
+        loadPRs();
+      },
+      { defer: true },
+    ),
   );
 
   // Calculate pane widths from terminal dimensions.
