@@ -2,6 +2,7 @@ import { Show, For } from 'solid-js';
 import type { Task } from '../../taskwarrior.types';
 import {
   BG_SELECTED,
+  CALENDAR_GRAD,
   FG_PRIMARY,
   FG_NORMAL,
   FG_DIM,
@@ -12,7 +13,13 @@ import {
   COLOR_ERROR,
   PROJECT_COLOR,
 } from '../theme';
-import { getTagGradient, lerpHex, VIRTUAL_TAGS } from '../utils';
+import {
+  getTagGradient,
+  lerpHex,
+  LEFT_CAP,
+  RIGHT_CAP,
+  VIRTUAL_TAGS,
+} from '../utils';
 
 interface TaskCardProps {
   task: Task;
@@ -94,6 +101,11 @@ export function TaskCard(props: TaskCardProps) {
     return PRIORITY_COLORS[p] ?? FG_DIM;
   };
 
+  const isCalendarLinked = () => {
+    const id = task().calendar_event_id;
+    return typeof id === 'string' && id.length > 0;
+  };
+
   /** Project pill (rectangular, no caps). */
   const projectPart = () => {
     if (!task().project) return null;
@@ -137,6 +149,25 @@ export function TaskCard(props: TaskCardProps) {
             <text fg={FG_PRIMARY} attributes={1}>
               {' ' + priorityLabel() + ' '}
             </text>
+          </box>
+        </Show>
+        <Show when={isCalendarLinked()}>
+          <box flexDirection="row" marginRight={1}>
+            <text fg={CALENDAR_GRAD[0]}>{LEFT_CAP}</text>
+            <For each={' CAL '.split('')}>
+              {(char, i) => {
+                const t = 4 > 1 ? i() / 4 : 0;
+                return (
+                  <text
+                    fg="#ffffff"
+                    bg={lerpHex(CALENDAR_GRAD[0], CALENDAR_GRAD[1], t)}
+                  >
+                    {char}
+                  </text>
+                );
+              }}
+            </For>
+            <text fg={CALENDAR_GRAD[1]}>{RIGHT_CAP}</text>
           </box>
         </Show>
         <text

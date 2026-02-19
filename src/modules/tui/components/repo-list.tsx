@@ -8,7 +8,13 @@ import {
   FG_DIM,
   REPO_GRAD,
 } from '../theme';
-import { lerpHex, darkenHex, LEFT_CAP, RIGHT_CAP, getAuthorGradient } from '../utils';
+import {
+  lerpHex,
+  darkenHex,
+  LEFT_CAP,
+  RIGHT_CAP,
+  getAuthorGradient,
+} from '../utils';
 
 const DIM_FACTOR = 0.5;
 
@@ -125,9 +131,14 @@ export function RepoList(props: RepoListProps) {
                         <text fg={ownerGrad.start}>{LEFT_CAP}</text>
                         <For each={label.split('')}>
                           {(char, i) => {
-                            const t = label.length > 1 ? i() / (label.length - 1) : 0;
+                            const t =
+                              label.length > 1 ? i() / (label.length - 1) : 0;
                             return (
-                              <text fg={FG_PRIMARY} bg={lerpHex(ownerGrad.start, ownerGrad.end, t)} attributes={1}>
+                              <text
+                                fg={FG_PRIMARY}
+                                bg={lerpHex(ownerGrad.start, ownerGrad.end, t)}
+                                attributes={1}
+                              >
                                 {char}
                               </text>
                             );

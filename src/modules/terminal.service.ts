@@ -70,7 +70,7 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
     await this.discoverExistingSessions();
   }
 
-  async onModuleDestroy(): Promise<void> {
+  onModuleDestroy(): void {
     this.logger.log('Persisting session metadata before shutdown');
     this.persistSessions();
     this.sessions.clear();
@@ -370,14 +370,14 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
     prTitle: string,
   ): Promise<{ taskUuid: string; sessionId: string }> {
     // Create a Taskwarrior task for the review
-    const task = await this.taskwarriorService.createTask({
+    const task = this.taskwarriorService.createTask({
       description: `Review PR #${prNumber}: ${prTitle}`,
       project: `${repoOwner}/${repoName}`,
       tags: ['pr-review'],
     });
 
     // Start the task so it's marked as "in progress"
-    await this.taskwarriorService.startTask(task.uuid);
+    this.taskwarriorService.startTask(task.uuid);
 
     // Create a terminal session for the review agent
     const session = await this.createSession({

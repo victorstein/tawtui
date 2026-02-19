@@ -1,10 +1,4 @@
-import {
-  For,
-  Show,
-  createSignal,
-  onMount,
-  onCleanup,
-} from 'solid-js';
+import { For, Show, createSignal, onMount, onCleanup } from 'solid-js';
 import type { PullRequest } from '../../github.types';
 import {
   PR_GRAD,
@@ -20,7 +14,13 @@ import {
   COLOR_ERROR,
   COLOR_WARNING,
 } from '../theme';
-import { lerpHex, darkenHex, LEFT_CAP, RIGHT_CAP, getAuthorGradient } from '../utils';
+import {
+  lerpHex,
+  darkenHex,
+  LEFT_CAP,
+  RIGHT_CAP,
+  getAuthorGradient,
+} from '../utils';
 
 const DIM_FACTOR = 0.5;
 
@@ -210,12 +210,21 @@ export function PrList(props: PrListProps) {
           <text fg={COLOR_ERROR}>Error: {props.error}</text>
           <box flexDirection="row">
             <text fg={FG_DIM}>{'Press '}</text>
-            <text fg={ACCENT_PRIMARY} attributes={1}>{'s'}</text>
+            <text fg={ACCENT_PRIMARY} attributes={1}>
+              {'s'}
+            </text>
             <text fg={FG_DIM}>{' to configure dependencies'}</text>
           </box>
         </box>
       </Show>
-      <Show when={props.repoLabel && !props.loading && !props.error && props.prs.length === 0}>
+      <Show
+        when={
+          props.repoLabel &&
+          !props.loading &&
+          !props.error &&
+          props.prs.length === 0
+        }
+      >
         <box paddingX={1} paddingY={1}>
           <text fg={FG_DIM}>No open pull requests</text>
         </box>
@@ -243,9 +252,7 @@ export function PrList(props: PrListProps) {
                   <box height={1} width="100%" flexDirection="row">
                     <box
                       backgroundColor={
-                        isSelected()
-                          ? gradStart()
-                          : ACCENT_TERTIARY
+                        isSelected() ? gradStart() : ACCENT_TERTIARY
                       }
                     >
                       <text fg={FG_PRIMARY} attributes={1}>
@@ -278,9 +285,17 @@ export function PrList(props: PrListProps) {
                           <For each={(' @' + pr.author.login + ' ').split('')}>
                             {(char, i) => {
                               const label = ' @' + pr.author.login + ' ';
-                              const t = label.length > 1 ? i() / (label.length - 1) : 0;
+                              const t =
+                                label.length > 1 ? i() / (label.length - 1) : 0;
                               return (
-                                <text fg={FG_NORMAL} bg={lerpHex(authorGrad.start, authorGrad.end, t)}>
+                                <text
+                                  fg={FG_NORMAL}
+                                  bg={lerpHex(
+                                    authorGrad.start,
+                                    authorGrad.end,
+                                    t,
+                                  )}
+                                >
                                   {char}
                                 </text>
                               );

@@ -69,7 +69,13 @@ export function TerminalOutput(props: TerminalOutputProps) {
       {/* Separator */}
       <box height={1} width="100%">
         <text
-          fg={props.isInteractive ? interactiveColor() : props.isActivePane ? focusedColor() : SEPARATOR_COLOR}
+          fg={
+            props.isInteractive
+              ? interactiveColor()
+              : props.isActivePane
+                ? focusedColor()
+                : SEPARATOR_COLOR
+          }
           truncate
         >
           {props.isInteractive ? '\u2550'.repeat(200) : '\u2500'.repeat(200)}

@@ -11,9 +11,11 @@ import { homedir } from 'os';
 import type {
   AgentDefinition,
   AppConfig,
+  CalendarConfig,
   RepoConfig,
   UserPreferences,
 } from './config.types';
+import { DEFAULT_CALENDAR_CONFIG } from './config.types';
 
 const DEFAULT_CONFIG: AppConfig = {
   repos: [],
@@ -67,7 +69,7 @@ export class ConfigService {
 
     try {
       const text = readFileSync(this.configPath, 'utf-8');
-      const raw = JSON.parse(text);
+      const raw = JSON.parse(text) as Partial<AppConfig>;
       // Merge with defaults for forward compatibility
       const config: AppConfig = {
         ...structuredClone(DEFAULT_CONFIG),
@@ -132,5 +134,17 @@ export class ConfigService {
   getAgentTypes(): AgentDefinition[] {
     const config = this.load();
     return config.agents?.types ?? DEFAULT_AGENT_TYPES;
+  }
+
+  getCalendarConfig(): CalendarConfig {
+    const config = this.load();
+    return config.calendar ?? DEFAULT_CALENDAR_CONFIG;
+  }
+
+  updateCalendarConfig(update: Partial<CalendarConfig>): void {
+    const config = this.load();
+    const current = config.calendar ?? { ...DEFAULT_CALENDAR_CONFIG };
+    config.calendar = { ...current, ...update };
+    this.save(config);
   }
 }

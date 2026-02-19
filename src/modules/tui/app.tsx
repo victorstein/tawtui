@@ -5,17 +5,19 @@ import { StatusBar } from './components/status-bar';
 import { TasksView } from './views/tasks-view';
 import { ReposView } from './views/repos-view';
 import { AgentsView } from './views/agents-view';
+import { CalendarView } from './views/calendar-view';
 import { DialogProvider, useDialog } from './context/dialog';
 import { DialogConfirm } from './components/dialog-confirm';
 import { DialogSetupWizard } from './components/dialog-setup-wizard';
-import type { DependencyService } from '../dependency.service';
+import { getDependencyService, getTuiExit } from './bridge';
 import type { DependencyStatus } from '../dependency.types';
 
-function getDependencyService(): DependencyService | null {
-  return (globalThis as any).__tawtui?.dependencyService ?? null;
-}
-
-const TABS = [{ name: 'Tasks' }, { name: 'Repos' }, { name: 'Agents' }];
+const TABS = [
+  { name: 'Tasks' },
+  { name: 'Repos' },
+  { name: 'Agents' },
+  { name: 'Calendar' },
+];
 
 export function App() {
   return (
@@ -32,6 +34,9 @@ function AppContent() {
   const [archiveMode, setArchiveMode] = createSignal(false);
   const [inputCaptured, setInputCaptured] = createSignal(false);
   const [refreshTrigger, setRefreshTrigger] = createSignal(0);
+  const [pendingTaskUuid, setPendingTaskUuid] = createSignal<string | null>(
+    null,
+  );
 
   // Check dependencies on startup
   onMount(() => {
@@ -57,6 +62,11 @@ function AppContent() {
     });
   });
 
+  function handleNavigateToTask(taskUuid: string): void {
+    setPendingTaskUuid(taskUuid);
+    setActiveTab(0);
+  }
+
   useKeyboard((key) => {
     // Don't handle global keys when a dialog is open or sub-component owns input
     if (dialog.isOpen()) return;
@@ -73,6 +83,10 @@ function AppContent() {
     }
     if (key.name === '3') {
       setActiveTab(2);
+      return;
+    }
+    if (key.name === '4') {
+      setActiveTab(3);
       return;
     }
 
@@ -95,8 +109,8 @@ function AppContent() {
             onConfirm={() => {
               dialog.close();
               renderer.destroy();
-              const exit = (globalThis as any).__tuiExit;
-              if (typeof exit === 'function') {
+              const exit = getTuiExit();
+              if (exit) {
                 exit();
               }
             }}
@@ -120,13 +134,23 @@ function AppContent() {
               onArchiveModeChange={(active) => setArchiveMode(active)}
               onInputCapturedChange={(captured) => setInputCaptured(captured)}
               refreshTrigger={refreshTrigger}
+              navigateToTaskUuid={() => pendingTaskUuid()}
+              onNavigateConsumed={() => setPendingTaskUuid(null)}
             />
           </Match>
           <Match when={activeTab() === 1}>
             <ReposView refreshTrigger={refreshTrigger} />
           </Match>
           <Match when={activeTab() === 2}>
-            <AgentsView onInputCapturedChange={(captured) => setInputCaptured(captured)} />
+            <AgentsView
+              onInputCapturedChange={(captured) => setInputCaptured(captured)}
+            />
+          </Match>
+          <Match when={activeTab() === 3}>
+            <CalendarView
+              refreshTrigger={refreshTrigger}
+              onNavigateToTask={handleNavigateToTask}
+            />
           </Match>
         </Switch>
       </box>

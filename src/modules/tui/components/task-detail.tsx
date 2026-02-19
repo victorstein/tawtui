@@ -234,9 +234,7 @@ export function TaskDetail(props: TaskDetailProps) {
           fallback={<text fg={FG_MUTED}>{'None'}</text>}
         >
           <text fg="#8a7aaa">
-            {task().recur
-              ? '↻ ' + task().recur
-              : '↻ recurring (child)'}
+            {task().recur ? '↻ ' + task().recur : '↻ recurring (child)'}
           </text>
         </Show>
       </box>

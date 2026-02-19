@@ -14,6 +14,7 @@ import {
   COLOR_ERROR,
 } from '../theme';
 import { darkenHex, lerpHex } from '../utils';
+import { getConfigService, getTaskwarriorService } from '../bridge';
 
 const FORM_BUTTONS = [
   {
@@ -121,7 +122,7 @@ export function AgentForm(props: AgentFormProps) {
     setTimeout(() => setReady(true), 0);
 
     // Load agent types
-    const configService = (globalThis as any).__tawtui?.configService;
+    const configService = getConfigService();
     if (configService) {
       try {
         const types = configService.getAgentTypes() as AgentDefinition[];
@@ -135,10 +136,10 @@ export function AgentForm(props: AgentFormProps) {
     }
 
     // Load pending tasks
-    const tw = (globalThis as any).__tawtui?.taskwarriorService;
+    const tw = getTaskwarriorService();
     if (tw) {
       try {
-        const tasks = await (tw.getTasks('status:pending') as Promise<Task[]>);
+        const tasks = tw.getTasks('status:pending') as Task[];
         setPendingTasks(tasks);
       } catch {
         // Silently fail — will show empty list
