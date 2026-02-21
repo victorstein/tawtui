@@ -21,12 +21,14 @@ export class DependencyService {
       taskInstalled,
       gogInstalled,
       gogAuthenticated,
+      gogCredentials,
     ] = await Promise.all([
       this.githubService.isGhInstalled(),
       this.githubService.isAuthenticated(),
       this.taskwarriorService.isInstalled(),
       this.calendarService.isInstalled(),
       this.calendarService.isAuthenticated(),
+      this.calendarService.hasCredentials(),
     ]);
 
     return {
@@ -41,6 +43,7 @@ export class DependencyService {
         instructions: this.getGogInstallInstructions(platform),
         authenticated: gogAuthenticated,
         authInstructions: 'gog auth add you@gmail.com',
+        credentialsConfigured: gogCredentials,
       },
       task: {
         installed: taskInstalled,

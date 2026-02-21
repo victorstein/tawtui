@@ -77,7 +77,7 @@ export function DialogSetupWizard(props: DialogSetupWizardProps) {
             onCancel={() => dialog.close()}
           />
         ),
-        { size: 'medium' },
+        { size: 'large' },
       );
       return;
     }
@@ -162,6 +162,21 @@ export function DialogSetupWizard(props: DialogSetupWizardProps) {
       </box>
       <box flexDirection="row">
         <text>{'    '}</text>
+        <text
+          fg={
+            gogStatus().credentialsConfigured ? COLOR_SUCCESS : COLOR_WARNING
+          }
+        >
+          {gogStatus().credentialsConfigured ? '✓' : '⟳'}
+        </text>
+        <text fg={FG_DIM}>
+          {gogStatus().credentialsConfigured
+            ? ' Credentials configured'
+            : ' Will auto-configure on auth'}
+        </text>
+      </box>
+      <box flexDirection="row">
+        <text>{'    '}</text>
         <text fg={gogStatus().authenticated ? COLOR_SUCCESS : COLOR_ERROR}>
           {gogStatus().authenticated ? '✓' : '✗'}
         </text>
@@ -214,7 +229,7 @@ export function DialogSetupWizard(props: DialogSetupWizardProps) {
         <Show when={gogStatus().installed && !gogStatus().authenticated}>
           <box flexDirection="row">
             <text fg={FG_DIM}>{'  Cal Auth:    '}</text>
-            <text fg={COLOR_WARNING}>{gogStatus().authInstructions}</text>
+            <text fg={COLOR_WARNING}>{'Press [A] to authenticate'}</text>
           </box>
         </Show>
 

@@ -11,6 +11,7 @@ export interface GhDepStatus extends DepStatus {
 export interface GogDepStatus extends DepStatus {
   authenticated: boolean;
   authInstructions: string;
+  credentialsConfigured: boolean;
 }
 
 export interface DependencyStatus {

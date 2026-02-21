@@ -43,3 +43,8 @@ export interface AuthResult {
   success: boolean;
   error?: string;
 }
+
+export interface ManualAuthSession {
+  authUrl: string;
+  complete: (redirectUrl: string) => Promise<AuthResult>;
+}
