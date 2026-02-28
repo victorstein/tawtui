@@ -16,6 +16,12 @@ import { lerpHex, darkenHex, LEFT_CAP, RIGHT_CAP, getAuthorGradient } from '../u
 
 const DIM_FACTOR = 0.5;
 
+/** Abbreviate a worktree path to show just the last 2 segments. */
+function abbreviateWorktreePath(fullPath: string): string {
+  const parts = fullPath.split('/');
+  return parts.length > 2 ? parts.slice(-2).join('/') : fullPath;
+}
+
 /** Status indicator color mapping. */
 const STATUS_COLORS: Record<string, string> = {
   running: COLOR_SUCCESS,
@@ -252,6 +258,15 @@ export default function StackedList(props: StackedListProps) {
                   <box height={1} width="100%" paddingX={0}>
                     <text fg={FG_DIM} truncate>
                       {`  ${metaText()}`}
+                    </text>
+                  </box>
+                </Show>
+
+                {/* Line 3: worktree path if present */}
+                <Show when={agent.worktreePath}>
+                  <box height={1} width="100%" paddingX={0}>
+                    <text fg={FG_DIM} truncate>
+                      {`  ${abbreviateWorktreePath(agent.worktreePath!)}`}
                     </text>
                   </box>
                 </Show>

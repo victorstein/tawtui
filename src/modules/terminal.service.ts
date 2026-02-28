@@ -6,9 +6,10 @@ import {
 } from '@nestjs/common';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import { homedir, tmpdir } from 'os';
+import { homedir } from 'os';
 import { TaskwarriorService } from './taskwarrior.service';
 import { ConfigService } from './config.service';
+import { WorktreeService } from './worktree.service';
 import type {
   TerminalSession,
   CaptureResult,
@@ -66,6 +67,7 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
   constructor(
     private readonly taskwarriorService: TaskwarriorService,
     private readonly configService: ConfigService,
+    private readonly worktreeService: WorktreeService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -110,6 +112,8 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
     repoOwner?: string;
     repoName?: string;
     taskUuid?: string;
+    worktreeId?: string;
+    worktreePath?: string;
   }): Promise<TerminalSession> {
     if (!(await this.isTmuxInstalled())) {
       throw new Error('tmux is not installed or not available on PATH');
@@ -182,6 +186,8 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
       repoOwner: opts.repoOwner,
       repoName: opts.repoName,
       taskUuid: opts.taskUuid,
+      worktreeId: opts.worktreeId,
+      worktreePath: opts.worktreePath,
     };
 
     this.sessions.set(id, session);
@@ -367,12 +373,11 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
 
   /**
    * Create a Taskwarrior task for reviewing a PR and spin up a terminal
-   * session to run the review agent.  Returns the task UUID and session ID.
+   * session to run the review agent inside a git worktree.
    *
-   * When `prDetail` is provided, a markdown briefing file is written to
-   * `/tmp/tawtui/pr-contexts/` with the PR description, changed files, and
-   * diff.  When `projectAgentConfig` is provided, the matching agent binary
-   * and flags are resolved from the config and used as the session command.
+   * The worktree is created via {@link WorktreeService} giving the agent full
+   * codebase access at the PR branch.  A markdown briefing file is written
+   * into the worktree root as `.tawtui-pr-context.md`.
    */
   async createPrReviewSession(
     prNumber: number,
@@ -387,8 +392,8 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
     const existingTasks = this.taskwarriorService.getTasks(
       `project:${repoOwner}/${repoName} +pr-review status:pending or project:${repoOwner}/${repoName} +pr-review status:waiting`,
     );
-    const existingTask = existingTasks.find(
-      (t) => t.description.includes(`PR #${prNumber}`),
+    const existingTask = existingTasks.find((t) =>
+      t.description.includes(`PR #${prNumber}`),
     );
 
     let taskUuid: string;
@@ -408,16 +413,17 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
       taskUuid = task.uuid;
     }
 
-    // Build the markdown context file when PR detail is available
-    let contextFilePath: string | undefined;
+    // Create (or reuse) a worktree for this PR
+    const worktreeInfo = await this.worktreeService.createWorktree(
+      repoOwner,
+      repoName,
+      prNumber,
+      projectAgentConfig?.worktreeEnvFiles,
+    );
 
+    // Write the markdown context file into the worktree root
     if (prDetail) {
-      const contextDir = join(tmpdir(), 'tawtui', 'pr-contexts');
-      mkdirSync(contextDir, { recursive: true });
-      contextFilePath = join(
-        contextDir,
-        `pr-${repoOwner}-${repoName}-${prNumber}.md`,
-      );
+      const contextFilePath = join(worktreeInfo.path, '.tawtui-pr-context.md');
 
       const sections: string[] = [
         `# PR Review Context: #${prNumber} — ${prTitle}`,
@@ -467,34 +473,64 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
       command += ' ' + agentDef.autoApproveFlag;
     }
 
-    // Pipe the context file into the agent with a review prompt
-    if (contextFilePath && command) {
+    // Build an interactive agent command with the review prompt
+    if (command) {
       const reviewPrompt = [
         `Review PR #${prNumber} in ${repoOwner}/${repoName}: "${prTitle}".`,
-        'Analyze the PR context provided via stdin (description, changed files, and diff).',
+        'Read .tawtui-pr-context.md for full context including description, changed files, and diff.',
+        'You have full access to the codebase at the PR branch.',
         'Provide a thorough code review covering: code quality, potential bugs, security concerns, and suggested improvements.',
       ].join(' ');
-      command = `cat "${contextFilePath}" | ${command} -p "${reviewPrompt}"`;
+      const escaped = reviewPrompt.replace(/'/g, "'\\''");
+      command = `${command} -p '${escaped}'`;
     }
 
-    const sessionCwd = projectAgentConfig?.cwd ?? process.cwd();
-
-    // Create a terminal session for the review agent
+    // Create a terminal session for the review agent in the worktree directory
     const session = await this.createSession({
       name: `PR #${prNumber} Review`,
-      cwd: sessionCwd,
+      cwd: worktreeInfo.path,
       command,
       prNumber,
       repoOwner,
       repoName,
-      taskUuid: taskUuid,
+      taskUuid,
+      worktreeId: worktreeInfo.id,
+      worktreePath: worktreeInfo.path,
     });
 
+    // Link the session to the worktree for bidirectional tracking
+    this.worktreeService.linkSession(worktreeInfo.id, session.id);
+
     this.logger.log(
-      `Created PR review session: task=${taskUuid}, session=${session.id}`,
+      `Created PR review session: task=${taskUuid}, session=${session.id}, worktree=${worktreeInfo.id}`,
     );
 
     return { taskUuid, sessionId: session.id };
+  }
+
+  /**
+   * Destroy a session and optionally clean up its linked worktree.
+   */
+  async destroySessionWithWorktree(
+    id: string,
+    cleanupWorktree: boolean,
+  ): Promise<void> {
+    const session = this.sessions.get(id);
+    if (!session) {
+      throw new Error(`Session not found: ${id}`);
+    }
+
+    if (cleanupWorktree && session.worktreeId) {
+      try {
+        await this.worktreeService.removeWorktree(session.worktreeId);
+      } catch (error) {
+        this.logger.warn(
+          `Failed to remove worktree ${session.worktreeId}: ${error}`,
+        );
+      }
+    }
+
+    await this.destroySession(id);
   }
 
   /**
@@ -588,6 +624,8 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
         repoOwner: meta?.repoOwner,
         repoName: meta?.repoName,
         taskUuid: meta?.taskUuid,
+        worktreeId: meta?.worktreeId,
+        worktreePath: meta?.worktreePath,
       };
 
       this.sessions.set(session.id, session);
@@ -620,6 +658,8 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
         repoOwner: s.repoOwner,
         repoName: s.repoName,
         taskUuid: s.taskUuid,
+        worktreeId: s.worktreeId,
+        worktreePath: s.worktreePath,
       }));
       writeFileSync(this.sessionsPath, JSON.stringify(data, null, 2), 'utf-8');
     } catch {
@@ -645,6 +685,8 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
             repoOwner: item.repoOwner as string | undefined,
             repoName: item.repoName as string | undefined,
             taskUuid: item.taskUuid as string | undefined,
+            worktreeId: item.worktreeId as string | undefined,
+            worktreePath: item.worktreePath as string | undefined,
           });
         }
       }

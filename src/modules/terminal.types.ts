@@ -11,6 +11,8 @@ export interface TerminalSession {
   repoOwner?: string;
   repoName?: string;
   taskUuid?: string; // associated taskwarrior task UUID
+  worktreeId?: string; // linked worktree ID
+  worktreePath?: string; // denormalized path for UI display
 }
 
 export interface CursorPosition {

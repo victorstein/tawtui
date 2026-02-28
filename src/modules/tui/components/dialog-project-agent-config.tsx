@@ -35,13 +35,14 @@ interface DialogProjectAgentConfigProps {
   onCancel: () => void;
 }
 
-const FIELDS = ['agentType', 'autoApprove', 'cwd'] as const;
+const FIELDS = ['agentType', 'autoApprove', 'cwd', 'worktreeEnvFiles'] as const;
 type FieldName = (typeof FIELDS)[number];
 
 const FIELD_LABELS: Record<FieldName, string> = {
   agentType: 'Agent Type',
   autoApprove: 'Auto-approve',
   cwd: 'Working Dir',
+  worktreeEnvFiles: 'Env Files',
 };
 
 export function DialogProjectAgentConfig(props: DialogProjectAgentConfigProps) {
@@ -57,6 +58,9 @@ export function DialogProjectAgentConfig(props: DialogProjectAgentConfigProps) {
 
   // Working directory text input
   const [cwd, setCwd] = createSignal('');
+
+  // Worktree env files text input
+  const [worktreeEnvFiles, setWorktreeEnvFiles] = createSignal('');
 
   // Button row focus
   const [buttonFocus, setButtonFocus] = createSignal<number | null>(null);
@@ -120,6 +124,7 @@ export function DialogProjectAgentConfig(props: DialogProjectAgentConfigProps) {
         }
         setAutoApprove(existing.autoApprove);
         setCwd(existing.cwd ?? '');
+        setWorktreeEnvFiles(existing.worktreeEnvFiles?.join(', ') ?? '');
       }
     } catch {
       // Silently fail — will show empty list
@@ -135,6 +140,12 @@ export function DialogProjectAgentConfig(props: DialogProjectAgentConfigProps) {
       agentTypeId: agent.id,
       autoApprove: autoApprove(),
       cwd: cwd().trim() || undefined,
+      worktreeEnvFiles: worktreeEnvFiles().trim()
+        ? worktreeEnvFiles()
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : undefined,
     });
   };
 
@@ -440,6 +451,34 @@ export function DialogProjectAgentConfig(props: DialogProjectAgentConfigProps) {
           }
           textColor={FG_NORMAL}
           onInput={(val: string) => setCwd(val)}
+        />
+      </box>
+
+      <box height={1} />
+
+      {/* Worktree Env Files field — text input */}
+      <box height={1} flexDirection="row">
+        <box width={16}>
+          <text
+            fg={labelColor(fieldIndex('worktreeEnvFiles'))}
+            attributes={isFieldFocused(fieldIndex('worktreeEnvFiles')) ? 1 : 0}
+          >
+            {isFieldFocused(fieldIndex('worktreeEnvFiles')) ? '> ' : '  '}
+            {FIELD_LABELS.worktreeEnvFiles}
+          </text>
+        </box>
+        <input
+          width={56}
+          value={worktreeEnvFiles()}
+          placeholder=".env, .env.local"
+          focused={isFieldFocused(fieldIndex('worktreeEnvFiles'))}
+          backgroundColor={
+            isFieldFocused(fieldIndex('worktreeEnvFiles'))
+              ? BG_INPUT_FOCUS
+              : BG_INPUT
+          }
+          textColor={FG_NORMAL}
+          onInput={(val: string) => setWorktreeEnvFiles(val)}
         />
       </box>
 

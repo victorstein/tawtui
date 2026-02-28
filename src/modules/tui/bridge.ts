@@ -23,14 +23,14 @@ export interface TawtuiBridge {
     prDiff?: PrDiff,
     projectAgentConfig?: ProjectAgentConfig,
   ) => Promise<{ taskUuid: string; sessionId: string }>;
-  getPrDiff: (
-    owner: string,
-    repo: string,
-    prNumber: number,
-  ) => Promise<PrDiff>;
+  getPrDiff: (owner: string, repo: string, prNumber: number) => Promise<PrDiff>;
   getProjectAgentConfig: (projectKey: string) => ProjectAgentConfig | null;
   setProjectAgentConfig: (cfg: ProjectAgentConfig) => void;
   removeProjectAgentConfig: (projectKey: string) => void;
+  destroySessionWithWorktree: (
+    sessionId: string,
+    cleanupWorktree: boolean,
+  ) => Promise<void>;
 }
 
 function getBridge(): TawtuiBridge | undefined {
@@ -67,6 +67,12 @@ export function getCreatePrReviewSession():
   | TawtuiBridge['createPrReviewSession']
   | null {
   return getBridge()?.createPrReviewSession ?? null;
+}
+
+export function getDestroySessionWithWorktree():
+  | TawtuiBridge['destroySessionWithWorktree']
+  | null {
+  return getBridge()?.destroySessionWithWorktree ?? null;
 }
 
 export function getTuiExit(): (() => void) | null {

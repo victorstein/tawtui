@@ -32,11 +32,13 @@ interface TawtuiGlobal {
       repo: string,
       prNumber: number,
     ) => Promise<PrDiff>;
-    getProjectAgentConfig: (
-      projectKey: string,
-    ) => ProjectAgentConfig | null;
+    getProjectAgentConfig: (projectKey: string) => ProjectAgentConfig | null;
     setProjectAgentConfig: (cfg: ProjectAgentConfig) => void;
     removeProjectAgentConfig: (projectKey: string) => void;
+    destroySessionWithWorktree: (
+      sessionId: string,
+      cleanupWorktree: boolean,
+    ) => Promise<void>;
   };
   __tuiExit?: () => void;
 }
@@ -91,6 +93,14 @@ export class TuiService {
         this.configService.setProjectAgentConfig(cfg),
       removeProjectAgentConfig: (projectKey: string) =>
         this.configService.removeProjectAgentConfig(projectKey),
+      destroySessionWithWorktree: (
+        sessionId: string,
+        cleanupWorktree: boolean,
+      ) =>
+        this.terminalService.destroySessionWithWorktree(
+          sessionId,
+          cleanupWorktree,
+        ),
     };
 
     // Set up the exit promise before rendering so the App component
@@ -106,6 +116,7 @@ export class TuiService {
     await render(App, {
       useAlternateScreen: true,
       useMouse: true,
+      exitOnCtrlC: false,
     });
 
     // Keep the process alive until the user presses 'q'.

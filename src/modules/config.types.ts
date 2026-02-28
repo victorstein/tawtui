@@ -32,6 +32,8 @@ export interface ProjectAgentConfig {
   autoApprove: boolean;
   /** Optional working directory override (defaults to process.cwd()) */
   cwd?: string;
+  /** Files to copy from clone to worktree (e.g. [".env", ".env.local"]) */
+  worktreeEnvFiles?: string[];
 }
 
 export interface AppConfig {

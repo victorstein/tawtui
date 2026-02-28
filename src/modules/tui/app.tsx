@@ -94,8 +94,11 @@ function AppContent() {
       return;
     }
 
-    // Quit — show confirmation dialog
-    if (key.name === 'q' && !key.ctrl && !key.meta) {
+    // Quit — show confirmation dialog (q or Ctrl+C)
+    if (
+      (key.name === 'q' && !key.ctrl && !key.meta) ||
+      (key.name === 'c' && key.ctrl)
+    ) {
       dialog.show(
         () => (
           <DialogConfirm

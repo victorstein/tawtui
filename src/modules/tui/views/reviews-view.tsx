@@ -29,6 +29,7 @@ import { TerminalOutput } from '../components/terminal-output';
 import { DialogPrDetail } from '../components/dialog-pr-detail';
 import { DialogProjectAgentConfig } from '../components/dialog-project-agent-config';
 import { DialogConfirm } from '../components/dialog-confirm';
+import { DialogSelect } from '../components/dialog-select';
 import { DialogPrompt } from '../components/dialog-prompt';
 import { DialogSetupWizard } from '../components/dialog-setup-wizard';
 import { AgentForm } from '../components/agent-form';
@@ -504,24 +505,60 @@ export default function ReviewsView(props: ReviewsViewProps) {
     if (!ts) return;
 
     const agent = sel.agent;
-    dialog.show(
-      () => (
-        <DialogConfirm
-          message={`Kill agent "${agent.name}"?`}
-          onConfirm={async () => {
-            dialog.close();
-            try {
-              await ts.destroySession(agent.id);
-            } catch {
-              showError('Failed to destroy session');
-            }
-            loadAgents();
-          }}
-          onCancel={() => dialog.close()}
-        />
-      ),
-      { size: 'small' },
-    );
+
+    if (agent.worktreeId) {
+      // Worktree-aware kill dialog with 3 options
+      const bridge = (globalThis as Record<string, any>).__tawtui;
+      if (!bridge?.destroySessionWithWorktree) return;
+
+      dialog.show(
+        () => (
+          <DialogSelect
+            title={`Kill agent "${agent.name}"?`}
+            options={[
+              { label: 'Kill + remove worktree', value: 'kill-remove' },
+              { label: 'Kill only (keep worktree)', value: 'kill-keep' },
+              { label: 'Cancel', value: 'cancel' },
+            ]}
+            onSelect={async (value: string) => {
+              dialog.close();
+              if (value === 'cancel') return;
+              try {
+                await bridge.destroySessionWithWorktree(
+                  agent.id,
+                  value === 'kill-remove',
+                );
+              } catch {
+                showError('Failed to destroy session');
+              }
+              loadAgents();
+            }}
+            onCancel={() => dialog.close()}
+          />
+        ),
+        { size: 'small' },
+      );
+    } else {
+      // Simple confirm for non-worktree agents
+      dialog.show(
+        () => (
+          <DialogConfirm
+            message={`Kill agent "${agent.name}"?`}
+            onConfirm={async () => {
+              dialog.close();
+              try {
+                await ts.destroySession(agent.id);
+              } catch {
+                showError('Failed to destroy session');
+              }
+              loadAgents();
+            }}
+            onCancel={() => dialog.close()}
+          />
+        ),
+        { size: 'small' },
+      );
+    }
   }
 
   function showProjectAgentConfigDialog(): void {
@@ -632,6 +669,20 @@ export default function ReviewsView(props: ReviewsViewProps) {
     const bridge = (globalThis as Record<string, any>).__tawtui;
     if (!bridge?.createPrReviewSession) return;
 
+    dialog.show(
+      () => (
+        <box flexDirection="column" paddingX={1} paddingY={1}>
+          <text fg={FG_DIM}>Preparing review environment...</text>
+          <box height={1} />
+          <text fg={FG_DIM}>
+            Cloning {repo.owner}/{repo.repo} and creating worktree for PR #
+            {prDetail.number}...
+          </text>
+        </box>
+      ),
+      { size: 'medium' },
+    );
+
     try {
       // Fetch diff
       let prDiff: PrDiff | undefined;
@@ -668,6 +719,8 @@ export default function ReviewsView(props: ReviewsViewProps) {
         projectConfig,
       );
 
+      dialog.close();
+
       loadAgents();
       // Select the newly created agent by its session ID
       const ts = getTerminalService();
@@ -679,6 +732,7 @@ export default function ReviewsView(props: ReviewsViewProps) {
         }
       }
     } catch {
+      dialog.close();
       dialog.show(
         () => (
           <box flexDirection="column" paddingX={1} paddingY={1}>
