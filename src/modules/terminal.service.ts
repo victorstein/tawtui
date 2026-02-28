@@ -290,6 +290,8 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
       'capture-pane',
       '-p',
       '-e',
+      '-S',
+      '-',
       '-t',
       session.tmuxPaneId,
     ]);

@@ -9,6 +9,7 @@ import {
   Match,
 } from 'solid-js';
 import { useKeyboard, useTerminalDimensions } from '@opentui/solid';
+import type { ScrollBoxRenderable } from '@opentui/core';
 import type { RepoConfig } from '../../../shared/types';
 import type {
   PullRequest,
@@ -100,6 +101,10 @@ export default function ReviewsView(props: ReviewsViewProps) {
 
   // Terminal capture state
   const [capture, setCapture] = createSignal<CaptureResult | null>(null);
+
+  // Terminal scroll ref
+  const [terminalScrollRef, setTerminalScrollRef] =
+    createSignal<ScrollBoxRenderable | undefined>();
 
   // Interactive mode state
   const [interactive, setInteractive] = createSignal(false);
@@ -847,14 +852,44 @@ export default function ReviewsView(props: ReviewsViewProps) {
       return;
     }
 
+    // Terminal scroll: Ctrl+D / Ctrl+U (half-page)
+    if (key.ctrl && key.name === 'd') {
+      if (pane === 'right' && rightPaneMode() === 'terminal') {
+        terminalScrollRef()?.scrollBy(0.5, 'viewport');
+        return;
+      }
+    }
+    if (key.ctrl && key.name === 'u') {
+      if (pane === 'right' && rightPaneMode() === 'terminal') {
+        terminalScrollRef()?.scrollBy(-0.5, 'viewport');
+        return;
+      }
+    }
+
+    // Terminal scroll: g/G (jump to top/bottom)
+    if (key.name === 'g' && !key.shift) {
+      if (pane === 'right' && rightPaneMode() === 'terminal') {
+        terminalScrollRef()?.scrollTo(0);
+        return;
+      }
+    }
+    if (key.name === 'g' && key.shift) {
+      if (pane === 'right' && rightPaneMode() === 'terminal') {
+        const ref = terminalScrollRef();
+        ref?.scrollTo(ref.scrollHeight);
+        return;
+      }
+    }
+
     // Within-pane navigation: j/k or Down/Up
     if (key.name === 'j' || key.name === 'down') {
       if (pane === 'left') {
         setCursorIndex((i) => Math.min(i + 1, Math.max(totalItems() - 1, 0)));
       } else if (rightPaneMode() === 'prs') {
         setPrIndex((i) => Math.min(i + 1, Math.max(prs().length - 1, 0)));
+      } else if (rightPaneMode() === 'terminal') {
+        terminalScrollRef()?.scrollBy(1, 'step');
       }
-      // terminal mode: no-op for j/k
       return;
     }
     if ((key.name === 'k' && !key.shift) || key.name === 'up') {
@@ -862,6 +897,8 @@ export default function ReviewsView(props: ReviewsViewProps) {
         setCursorIndex((i) => Math.max(i - 1, 0));
       } else if (rightPaneMode() === 'prs') {
         setPrIndex((i) => Math.max(i - 1, 0));
+      } else if (rightPaneMode() === 'terminal') {
+        terminalScrollRef()?.scrollBy(-1, 'step');
       }
       return;
     }
@@ -1006,6 +1043,7 @@ export default function ReviewsView(props: ReviewsViewProps) {
                 const sel = selectedItem();
                 return sel.kind === 'agent' ? sel.agent.name : null;
               })()}
+              onScrollRef={setTerminalScrollRef}
             />
           </Match>
         </Switch>
