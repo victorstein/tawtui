@@ -881,8 +881,12 @@ export default function ReviewsView(props: ReviewsViewProps) {
         }
         return;
       }
-      if (pane === 'right' && rightPaneMode() === 'prs') {
-        openPrDetailDialog();
+      if (pane === 'right') {
+        if (rightPaneMode() === 'prs') {
+          openPrDetailDialog();
+        } else if (rightPaneMode() === 'terminal') {
+          setInteractive(true);
+        }
       }
       return;
     }
