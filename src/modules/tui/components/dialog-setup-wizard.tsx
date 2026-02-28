@@ -49,10 +49,7 @@ export function DialogSetupWizard(props: DialogSetupWizardProps) {
   const hasMissing = () =>
     !ghStatus().installed ||
     !ghStatus().authenticated ||
-    !taskStatus().installed ||
-    !gogStatus().installed ||
-    !gogStatus().hasCredentials ||
-    !gogStatus().authenticated;
+    !taskStatus().installed;
 
   useKeyboard((key) => {
     if (checking()) return;
@@ -150,10 +147,13 @@ export function DialogSetupWizard(props: DialogSetupWizardProps) {
       </box>
       <box height={1} />
 
-      {/* Google Calendar CLI section */}
-      <text fg={FG_NORMAL} attributes={1}>
-        {'  Google Calendar CLI (gog)'}
-      </text>
+      {/* Google Calendar CLI section (optional) */}
+      <box flexDirection="row">
+        <text fg={FG_NORMAL} attributes={1}>
+          {'  Google Calendar CLI (gog) '}
+        </text>
+        <text fg={FG_DIM}>{'(Optional)'}</text>
+      </box>
       <box flexDirection="row">
         <text>{'    '}</text>
         <text fg={gogStatus().installed ? COLOR_SUCCESS : COLOR_ERROR}>

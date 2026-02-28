@@ -9,7 +9,10 @@ import type {
 
 @Injectable()
 export class CalendarService {
-  private async execGog(args: string[]): Promise<{
+  private async execGog(
+    args: string[],
+    timeoutMs?: number,
+  ): Promise<{
     stdout: string;
     stderr: string;
     exitCode: number;
@@ -20,14 +23,33 @@ export class CalendarService {
         stderr: 'pipe',
       });
 
+      let timedOut = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      if (timeoutMs) {
+        timer = setTimeout(() => {
+          timedOut = true;
+          proc.kill();
+        }, timeoutMs);
+      }
+
       const [stdout, stderr, exitCode] = await Promise.all([
         new Response(proc.stdout).text(),
         new Response(proc.stderr).text(),
         proc.exited,
       ]);
 
+      if (timer) clearTimeout(timer);
+      if (timedOut) {
+        throw new Error(
+          `gog command timed out after ${timeoutMs}ms: gog ${args.join(' ')}`,
+        );
+      }
+
       return { stdout, stderr, exitCode };
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.message.includes('timed out')) {
+        throw err;
+      }
       return {
         stdout: '',
         stderr: 'gog binary not found',
@@ -37,12 +59,12 @@ export class CalendarService {
   }
 
   async isInstalled(): Promise<boolean> {
-    const result = await this.execGog(['--version']);
+    const result = await this.execGog(['--version'], 5000);
     return result.exitCode === 0;
   }
 
   async isAuthenticated(): Promise<boolean> {
-    const result = await this.execGog(['auth', 'list', '--json']);
+    const result = await this.execGog(['auth', 'list', '--json'], 10000);
     if (result.exitCode !== 0) return false;
 
     try {
@@ -74,7 +96,7 @@ export class CalendarService {
   }
 
   async importCredentials(filePath: string): Promise<AuthResult> {
-    const result = await this.execGog(['auth', 'credentials', filePath]);
+    const result = await this.execGog(['auth', 'credentials', filePath], 10000);
 
     if (result.exitCode === 0) {
       return { success: true };
@@ -86,13 +108,10 @@ export class CalendarService {
   }
 
   async startAuth(email: string): Promise<AuthResult> {
-    const result = await this.execGog([
-      'auth',
-      'add',
-      email,
-      '--services',
-      'calendar',
-    ]);
+    const result = await this.execGog(
+      ['auth', 'add', email, '--services', 'calendar'],
+      120000,
+    );
 
     if (result.exitCode === 0) {
       return { success: true };
@@ -100,8 +119,8 @@ export class CalendarService {
     return { success: false, error: result.stderr || 'Authentication failed' };
   }
 
-  private async getDefaultAccount(): Promise<string | null> {
-    const result = await this.execGog(['auth', 'list', '--json']);
+  async getDefaultAccount(): Promise<string | null> {
+    const result = await this.execGog(['auth', 'list', '--json'], 10000);
     if (result.exitCode !== 0) return null;
 
     try {
@@ -124,18 +143,21 @@ export class CalendarService {
       );
     }
 
-    const result = await this.execGog([
-      'calendar',
-      'events',
-      calendarId,
-      '--account',
-      account,
-      '--from',
-      options.from,
-      '--to',
-      options.to,
-      '--json',
-    ]);
+    const result = await this.execGog(
+      [
+        'calendar',
+        'events',
+        calendarId,
+        '--account',
+        account,
+        '--from',
+        options.from,
+        '--to',
+        options.to,
+        '--json',
+      ],
+      30000,
+    );
 
     if (result.exitCode !== 0) {
       throw new Error(
@@ -145,7 +167,10 @@ export class CalendarService {
 
     try {
       const parsed = JSON.parse(result.stdout) as { events: CalendarEvent[] };
-      return parsed.events ?? [];
+      const events = parsed.events ?? [];
+      return events.map((e: CalendarEvent) =>
+        e.calendarId ? e : { ...e, calendarId },
+      );
     } catch {
       throw new Error(
         `Failed to parse events response for calendar ${calendarId}: ${result.stdout}`,

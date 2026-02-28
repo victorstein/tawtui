@@ -24,14 +24,6 @@ export interface CalendarEvent {
   calendarId?: string;
 }
 
-export interface CalendarInfo {
-  id: string;
-  summary: string;
-  primary?: boolean;
-  backgroundColor?: string;
-  accessRole?: string;
-}
-
 export interface GetEventsOptions {
   calendarId?: string;
   account?: string;

@@ -21,6 +21,7 @@ export interface Task {
   parent?: string; // for recurring task instances
   mask?: string;
   imask?: number;
+  calendar_event_id?: string;
   [key: string]: unknown; // preserve UDAs
 }
 

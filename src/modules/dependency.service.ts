@@ -53,13 +53,8 @@ export class DependencyService {
         instructions: this.getTaskInstallInstructions(platform),
       },
       platform,
-      allGood:
-        ghInstalled &&
-        ghAuthenticated &&
-        taskInstalled &&
-        gogInstalled &&
-        gogAuthenticated &&
-        gogHasCredentials,
+      allGood: ghInstalled && ghAuthenticated && taskInstalled,
+      calendarReady: gogInstalled && gogAuthenticated && gogHasCredentials,
     };
   }
 
@@ -90,7 +85,7 @@ export class DependencyService {
       case 'darwin':
         return 'brew install steipete/tap/gogcli';
       case 'linux':
-        return 'brew install steipete/tap/gogcli';
+        return 'go install github.com/steipete/gogcli@latest';
       default:
         return 'See https://github.com/steipete/gogcli for installation instructions';
     }
