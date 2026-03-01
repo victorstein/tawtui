@@ -47,14 +47,10 @@ brew install tawtui
 
 ### Manual download
 
-Download the binary for your architecture from [GitHub Releases](https://github.com/victorstein/tawtui/releases):
+Download the binary from [GitHub Releases](https://github.com/victorstein/tawtui/releases) (Apple Silicon only):
 
 ```sh
-# Apple Silicon
 curl -L https://github.com/victorstein/tawtui/releases/latest/download/tawtui-darwin-arm64 -o tawtui
-# Intel
-curl -L https://github.com/victorstein/tawtui/releases/latest/download/tawtui-darwin-x64 -o tawtui
-
 chmod +x tawtui
 mv tawtui /usr/local/bin/
 ```

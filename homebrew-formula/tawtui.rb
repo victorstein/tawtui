@@ -7,21 +7,14 @@ class Tawtui < Formula
   version "0.1.0"
   license "MIT"
 
-  on_macos do
-    if Hardware::CPU.arm?
-      url "https://github.com/victorstein/tawtui/releases/download/v#{version}/tawtui-darwin-arm64"
-      sha256 "PLACEHOLDER_ARM64_SHA256"
-    else
-      url "https://github.com/victorstein/tawtui/releases/download/v#{version}/tawtui-darwin-x64"
-      sha256 "PLACEHOLDER_X64_SHA256"
-    end
-  end
+  url "https://github.com/victorstein/tawtui/releases/download/v#{version}/tawtui-darwin-arm64"
+  sha256 "PLACEHOLDER_SHA256"
 
+  depends_on arch: :arm64
   depends_on :macos
 
   def install
-    binary_name = Hardware::CPU.arm? ? "tawtui-darwin-arm64" : "tawtui-darwin-x64"
-    bin.install binary_name => "tawtui"
+    bin.install "tawtui-darwin-arm64" => "tawtui"
   end
 
   def caveats
