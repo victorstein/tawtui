@@ -2,8 +2,12 @@
   "name": "tawtui",
   "version": "0.1.0",
   "description": "A TUI on top of Taskwarrior for task management and PR review",
-  "author": "",
-  "private": true,
+  "author": "Alfonso Emilio Gomez Selva <stein.hakase.vs@gmail.com>",
+  "private": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/victorstein/tawtui.git"
+  },
   "license": "MIT",
   "bin": {
     "tawtui": "./src/main.ts"
@@ -18,7 +22,8 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "build:release": "./scripts/build-release.sh"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
