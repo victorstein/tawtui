@@ -1,14 +1,6 @@
 import { createSignal, For } from 'solid-js';
 import { useKeyboard } from '@opentui/solid';
-import {
-  ACCENT_PRIMARY,
-  BG_SELECTED,
-  BORDER_DIM,
-  FG_PRIMARY,
-  FG_NORMAL,
-  FG_DIM,
-  COLOR_SUCCESS,
-} from '../theme';
+import { ACCENT_PRIMARY, FG_PRIMARY, FG_NORMAL, FG_DIM } from '../theme';
 
 interface SelectOption {
   label: string;
@@ -26,6 +18,10 @@ export function DialogSelect(props: DialogSelectProps) {
   const [selectedIndex, setSelectedIndex] = createSignal(0);
 
   useKeyboard((key) => {
+    if (key.name === 'escape') {
+      props.onCancel();
+      return;
+    }
     if (key.name === 'j' || key.name === 'down') {
       setSelectedIndex((prev) =>
         prev < props.options.length - 1 ? prev + 1 : prev,
@@ -41,10 +37,6 @@ export function DialogSelect(props: DialogSelectProps) {
       if (option) {
         props.onSelect(option.value);
       }
-      return;
-    }
-    if (key.name === 'escape') {
-      props.onCancel();
       return;
     }
   });
@@ -72,32 +64,7 @@ export function DialogSelect(props: DialogSelectProps) {
         }}
       </For>
       <box height={1} />
-      <box flexDirection="row" gap={1}>
-        <box
-          border={true}
-          borderStyle="rounded"
-          borderColor={BORDER_DIM}
-          backgroundColor={BG_SELECTED}
-          paddingX={3}
-        >
-          <text fg={COLOR_SUCCESS} attributes={1}>
-            {'Enter '}
-          </text>
-          <text fg={FG_PRIMARY}>{'Select'}</text>
-        </box>
-        <box
-          border={true}
-          borderStyle="rounded"
-          borderColor={BORDER_DIM}
-          backgroundColor={BG_SELECTED}
-          paddingX={3}
-        >
-          <text fg={ACCENT_PRIMARY} attributes={1}>
-            {'Esc '}
-          </text>
-          <text fg={FG_PRIMARY}>{'Cancel'}</text>
-        </box>
-      </box>
+      <text fg={FG_DIM}>{'  [Enter] Select  [Esc] Cancel'}</text>
     </box>
   );
 }

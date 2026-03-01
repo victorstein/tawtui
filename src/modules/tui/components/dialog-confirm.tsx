@@ -1,32 +1,12 @@
 import { createSignal, For } from 'solid-js';
 import { useKeyboard } from '@opentui/solid';
 import { FG_NORMAL } from '../theme';
+import { darkenHex, lerpHex, LEFT_CAP, RIGHT_CAP } from '../utils';
 
 interface DialogConfirmProps {
   message: string;
   onConfirm: () => void;
   onCancel: () => void;
-}
-
-function darkenHex(hex: string, factor: number): string {
-  const r = Math.round(parseInt(hex.slice(1, 3), 16) * factor);
-  const g = Math.round(parseInt(hex.slice(3, 5), 16) * factor);
-  const b = Math.round(parseInt(hex.slice(5, 7), 16) * factor);
-  const clamp = (v: number) => Math.min(255, Math.max(0, v));
-  return `#${clamp(r).toString(16).padStart(2, '0')}${clamp(g).toString(16).padStart(2, '0')}${clamp(b).toString(16).padStart(2, '0')}`;
-}
-
-function lerpHex(a: string, b: string, t: number): string {
-  const ar = parseInt(a.slice(1, 3), 16);
-  const ag = parseInt(a.slice(3, 5), 16);
-  const ab = parseInt(a.slice(5, 7), 16);
-  const br = parseInt(b.slice(1, 3), 16);
-  const bg = parseInt(b.slice(3, 5), 16);
-  const bb = parseInt(b.slice(5, 7), 16);
-  const r = Math.round(ar + (br - ar) * t);
-  const g = Math.round(ag + (bg - ag) * t);
-  const blue = Math.round(ab + (bb - ab) * t);
-  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${blue.toString(16).padStart(2, '0')}`;
 }
 
 const BUTTONS = [
@@ -84,7 +64,7 @@ export function DialogConfirm(props: DialogConfirmProps) {
                 <box flexDirection="row">
                   {isFocused() ? (
                     <>
-                      <text fg={btn.gradStart}>{'\uE0B6'}</text>
+                      <text fg={btn.gradStart}>{LEFT_CAP}</text>
                       <For each={chars}>
                         {(char, i) => {
                           const t =
@@ -100,15 +80,15 @@ export function DialogConfirm(props: DialogConfirmProps) {
                           );
                         }}
                       </For>
-                      <text fg={btn.gradEnd}>{'\uE0B4'}</text>
+                      <text fg={btn.gradEnd}>{RIGHT_CAP}</text>
                     </>
                   ) : (
                     <>
-                      <text fg={dimBg}>{'\uE0B6'}</text>
+                      <text fg={dimBg}>{LEFT_CAP}</text>
                       <text fg={btn.gradStart} bg={dimBg}>
                         {btn.label}
                       </text>
-                      <text fg={dimBg}>{'\uE0B4'}</text>
+                      <text fg={dimBg}>{RIGHT_CAP}</text>
                     </>
                   )}
                 </box>
