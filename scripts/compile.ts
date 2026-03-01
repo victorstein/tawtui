@@ -1,4 +1,4 @@
-import { renameSync, existsSync } from 'fs';
+import { renameSync } from 'fs';
 import { join } from 'path';
 import solidTransformPlugin from '@opentui/solid/bun-plugin';
 
@@ -12,33 +12,25 @@ const external = [
 
 console.log('==> Building darwin-arm64...');
 
-// Temporarily hide bunfig.toml so the compiled binary doesn't embed
-// the preload directive (JSX is already transformed by the build plugin)
-const bunfig = 'bunfig.toml';
-const bunfigBak = 'bunfig.toml.bak';
-const hasBunfig = existsSync(bunfig);
-if (hasBunfig) renameSync(bunfig, bunfigBak);
+const result = await Bun.build({
+  entrypoints: ['src/main.ts'],
+  outdir: 'dist',
+  target: 'bun-darwin-arm64',
+  compile: {
+    autoloadBunfig: false,
+    autoloadDotenv: false,
+  },
+  plugins: [solidTransformPlugin],
+  external,
+});
 
-try {
-  const result = await Bun.build({
-    entrypoints: ['src/main.ts'],
-    outdir: 'dist',
-    target: 'bun-darwin-arm64',
-    compile: true,
-    plugins: [solidTransformPlugin],
-    external,
-  });
-
-  if (!result.success) {
-    console.error('Build failed:');
-    for (const log of result.logs) {
-      console.error(log);
-    }
-    process.exit(1);
+if (!result.success) {
+  console.error('Build failed:');
+  for (const log of result.logs) {
+    console.error(log);
   }
-
-  renameSync(join('dist', 'main'), join('dist', 'tawtui-darwin-arm64'));
-  console.log('    ✓ dist/tawtui-darwin-arm64');
-} finally {
-  if (hasBunfig) renameSync(bunfigBak, bunfig);
+  process.exit(1);
 }
+
+renameSync(join('dist', 'main'), join('dist', 'tawtui-darwin-arm64'));
+console.log('    ✓ dist/tawtui-darwin-arm64');

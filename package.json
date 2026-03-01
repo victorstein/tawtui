@@ -1,6 +1,6 @@
 {
   "name": "tawtui",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A TUI on top of Taskwarrior for task management and PR review",
   "author": "Alfonso Emilio Gomez Selva <stein.hakase.vs@gmail.com>",
   "private": false,
