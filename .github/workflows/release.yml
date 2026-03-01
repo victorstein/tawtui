@@ -9,8 +9,15 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
-    runs-on: macos-latest
+  build:
+    strategy:
+      matrix:
+        include:
+          - runner: macos-latest
+            arch: arm64
+          - runner: macos-13
+            arch: x64
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,17 +30,33 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Build binaries
+      - name: Build binary
         run: |
           mkdir -p dist
-          bun build --compile --target=bun-darwin-arm64 src/main.ts --outfile dist/tawtui-darwin-arm64
-          bun build --compile --target=bun-darwin-x64 src/main.ts --outfile dist/tawtui-darwin-x64
+          bun run scripts/compile.ts
 
-      - name: Generate checksums
+      - name: Generate checksum
         run: |
           cd dist
-          shasum -a 256 tawtui-darwin-arm64 > tawtui-darwin-arm64.sha256
-          shasum -a 256 tawtui-darwin-x64 > tawtui-darwin-x64.sha256
+          shasum -a 256 tawtui-darwin-${{ matrix.arch }} > tawtui-darwin-${{ matrix.arch }}.sha256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tawtui-darwin-${{ matrix.arch }}
+          path: |
+            dist/tawtui-darwin-${{ matrix.arch }}
+            dist/tawtui-darwin-${{ matrix.arch }}.sha256
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

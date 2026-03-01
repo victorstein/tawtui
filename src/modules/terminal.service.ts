@@ -144,7 +144,11 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
     // Keep the pane alive after the process exits so we can detect completion
     // and the user can still read/scroll the final output.
     await this.execTmux([
-      'set-option', '-t', tmuxSessionName, 'remain-on-exit', 'on',
+      'set-option',
+      '-t',
+      tmuxSessionName,
+      'remain-on-exit',
+      'on',
     ]);
 
     // Determine the pane ID for this session (the first — and only — pane).
@@ -327,7 +331,11 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
         };
       }
       // Detect pane death — the process inside the pane has exited
-      if (parts.length >= 3 && parts[2] === '1' && session.status === 'running') {
+      if (
+        parts.length >= 3 &&
+        parts[2] === '1' &&
+        session.status === 'running'
+      ) {
         this.updateSessionStatus(id, 'done');
       }
     }
