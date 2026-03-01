@@ -400,7 +400,7 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
   ): Promise<{ sessionId: string }> {
     // Check for existing PR review task before creating a new one
     const existingTasks = this.taskwarriorService.getTasks(
-      `project:${repoOwner}/${repoName} +pr-review status:pending or project:${repoOwner}/${repoName} +pr-review status:waiting`,
+      `project:${repoOwner}/${repoName} +pr-review \\( status:pending or status:waiting or status:started \\)`,
     );
     const existingTask = existingTasks.find((t) =>
       t.description.includes(`PR #${prNumber}`),
