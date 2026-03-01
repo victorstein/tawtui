@@ -358,11 +358,11 @@ export function AgentsView(props: AgentsViewProps) {
 
     // Scroll terminal output (half-page)
     if (activePane() === 'terminal') {
-      if (key.name === 'u') {
+      if (key.ctrl && key.name === 'u') {
         terminalScrollRef()?.scrollBy(-0.5, 'viewport');
         return;
       }
-      if (key.name === 'd') {
+      if (key.ctrl && key.name === 'd') {
         terminalScrollRef()?.scrollBy(0.5, 'viewport');
         return;
       }
