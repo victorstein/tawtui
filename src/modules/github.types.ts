@@ -41,3 +41,12 @@ export interface PullRequestDetail extends PullRequest {
     createdAt: string;
   }>;
 }
+
+export interface PrDiff {
+  /** The raw unified diff text from `gh pr diff` */
+  raw: string;
+  /** PR number this diff belongs to */
+  prNumber: number;
+  /** Combined owner/repo identifier */
+  repoFullName: string;
+}

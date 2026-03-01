@@ -1,4 +1,5 @@
 import { For, Show } from 'solid-js';
+import type { ScrollBoxRenderable } from '@opentui/core';
 import type { CaptureResult } from '../../terminal.types';
 import {
   AGENT_GRAD,
@@ -16,9 +17,12 @@ interface TerminalOutputProps {
   isActivePane: boolean;
   isInteractive: boolean;
   agentName: string | null;
+  onScrollRef?: (ref: ScrollBoxRenderable) => void;
 }
 
 export function TerminalOutput(props: TerminalOutputProps) {
+  let scrollRef: ScrollBoxRenderable | undefined;
+
   const headerText = () => {
     if (props.isInteractive) {
       return 'INTERACTIVE MODE - ESC to exit';
@@ -83,7 +87,16 @@ export function TerminalOutput(props: TerminalOutputProps) {
       </box>
 
       {/* Content area */}
-      <box flexGrow={1} width="100%" flexDirection="column">
+      <scrollbox
+        ref={(el: ScrollBoxRenderable) => {
+          scrollRef = el;
+          props.onScrollRef?.(el);
+        }}
+        flexGrow={1}
+        width="100%"
+        stickyScroll={true}
+        stickyStart="bottom"
+      >
         <Show
           when={props.agentName}
           fallback={
@@ -125,19 +138,12 @@ export function TerminalOutput(props: TerminalOutputProps) {
                       )}
                     </For>
                   </box>
-
-                  {/* Cursor position indicator */}
-                  <box height={1} width="100%" paddingX={1}>
-                    <text fg={FG_DIM}>
-                      {`cursor: ${capture().cursor.x},${capture().cursor.y}`}
-                    </text>
-                  </box>
                 </box>
               );
             }}
           </Show>
         </Show>
-      </box>
+      </scrollbox>
     </box>
   );
 }

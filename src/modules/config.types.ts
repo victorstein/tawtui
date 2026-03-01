@@ -23,9 +23,23 @@ export interface UserPreferences {
   defaultFilter: string; // default taskwarrior filter
 }
 
+export interface ProjectAgentConfig {
+  /** Taskwarrior project key — e.g. "org/repo-1" */
+  projectKey: string;
+  /** Agent type ID to use for PR reviews in this project (e.g. 'claude-code') */
+  agentTypeId: string;
+  /** Whether to auto-approve the agent (uses the agentType's autoApproveFlag) */
+  autoApprove: boolean;
+  /** Optional working directory override (defaults to process.cwd()) */
+  cwd?: string;
+  /** Files to copy from clone to worktree (e.g. [".env", ".env.local"]) */
+  worktreeEnvFiles?: string[];
+}
+
 export interface AppConfig {
   repos: import('../shared/types').RepoConfig[];
   preferences: UserPreferences;
   agents?: { types: AgentDefinition[] };
+  projectAgentConfigs?: ProjectAgentConfig[];
   calendar?: CalendarConfig;
 }

@@ -11,6 +11,7 @@ import { homedir } from 'os';
 import type {
   AgentDefinition,
   AppConfig,
+  ProjectAgentConfig,
   CalendarConfig,
   RepoConfig,
   UserPreferences,
@@ -24,6 +25,7 @@ const DEFAULT_CONFIG: AppConfig = {
     archiveTime: 'midnight',
     defaultFilter: 'status:pending',
   },
+  projectAgentConfigs: [],
 };
 
 const DEFAULT_AGENT_TYPES: AgentDefinition[] = [
@@ -134,6 +136,35 @@ export class ConfigService {
   getAgentTypes(): AgentDefinition[] {
     const config = this.load();
     return config.agents?.types ?? DEFAULT_AGENT_TYPES;
+  }
+
+  getProjectAgentConfig(projectKey: string): ProjectAgentConfig | null {
+    const config = this.load();
+    return (
+      config.projectAgentConfigs?.find((c) => c.projectKey === projectKey) ??
+      null
+    );
+  }
+
+  setProjectAgentConfig(cfg: ProjectAgentConfig): void {
+    const config = this.load();
+    const existing = config.projectAgentConfigs ?? [];
+    const idx = existing.findIndex((c) => c.projectKey === cfg.projectKey);
+    if (idx >= 0) {
+      existing[idx] = cfg;
+    } else {
+      existing.push(cfg);
+    }
+    config.projectAgentConfigs = existing;
+    this.save(config);
+  }
+
+  removeProjectAgentConfig(projectKey: string): void {
+    const config = this.load();
+    config.projectAgentConfigs = (config.projectAgentConfigs ?? []).filter(
+      (c) => c.projectKey !== projectKey,
+    );
+    this.save(config);
   }
 
   getCalendarConfig(): CalendarConfig {

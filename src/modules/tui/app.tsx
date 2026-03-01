@@ -2,9 +2,9 @@ import { createSignal, Match, Switch, onMount } from 'solid-js';
 import { useKeyboard, useRenderer } from '@opentui/solid';
 import { TabBar } from './components/tab-bar';
 import { StatusBar } from './components/status-bar';
+import type { ReviewsHintContext } from './components/status-bar';
 import { TasksView } from './views/tasks-view';
-import { ReposView } from './views/repos-view';
-import { AgentsView } from './views/agents-view';
+import ReviewsView from './views/reviews-view';
 import { CalendarView } from './views/calendar-view';
 import { DialogProvider, useDialog } from './context/dialog';
 import { DialogConfirm } from './components/dialog-confirm';
@@ -12,12 +12,7 @@ import { DialogSetupWizard } from './components/dialog-setup-wizard';
 import { getDependencyService, getTuiExit } from './bridge';
 import type { DependencyStatus } from '../dependency.types';
 
-const TABS = [
-  { name: 'Tasks' },
-  { name: 'Repos' },
-  { name: 'Agents' },
-  { name: 'Calendar' },
-];
+const TABS = [{ name: 'Tasks' }, { name: 'Reviews' }, { name: 'Calendar' }];
 
 export function App() {
   return (
@@ -34,6 +29,9 @@ function AppContent() {
   const [archiveMode, setArchiveMode] = createSignal(false);
   const [inputCaptured, setInputCaptured] = createSignal(false);
   const [refreshTrigger, setRefreshTrigger] = createSignal(0);
+  const [reviewsHintCtx, setReviewsHintCtx] = createSignal<ReviewsHintContext>({
+    mode: 'empty',
+  });
   const [pendingTaskUuid, setPendingTaskUuid] = createSignal<string | null>(
     null,
   );
@@ -85,10 +83,6 @@ function AppContent() {
       setActiveTab(2);
       return;
     }
-    if (key.name === '4') {
-      setActiveTab(3);
-      return;
-    }
 
     // Tab cycling
     if (key.name === 'tab' && !key.shift) {
@@ -100,8 +94,11 @@ function AppContent() {
       return;
     }
 
-    // Quit — show confirmation dialog
-    if (key.name === 'q' && !key.ctrl && !key.meta) {
+    // Quit — show confirmation dialog (q or Ctrl+C)
+    if (
+      (key.name === 'q' && !key.ctrl && !key.meta) ||
+      (key.name === 'c' && key.ctrl)
+    ) {
       dialog.show(
         () => (
           <DialogConfirm
@@ -139,14 +136,13 @@ function AppContent() {
             />
           </Match>
           <Match when={activeTab() === 1}>
-            <ReposView refreshTrigger={refreshTrigger} />
-          </Match>
-          <Match when={activeTab() === 2}>
-            <AgentsView
+            <ReviewsView
+              refreshTrigger={refreshTrigger}
               onInputCapturedChange={(captured) => setInputCaptured(captured)}
+              onHintContextChange={(ctx) => setReviewsHintCtx(ctx)}
             />
           </Match>
-          <Match when={activeTab() === 3}>
+          <Match when={activeTab() === 2}>
             <CalendarView
               refreshTrigger={refreshTrigger}
               onNavigateToTask={handleNavigateToTask}
@@ -155,7 +151,11 @@ function AppContent() {
         </Switch>
       </box>
 
-      <StatusBar activeTab={activeTab} archiveMode={archiveMode} />
+      <StatusBar
+        activeTab={activeTab}
+        archiveMode={archiveMode}
+        reviewsHintCtx={reviewsHintCtx}
+      />
     </box>
   );
 }

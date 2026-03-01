@@ -1,12 +1,13 @@
 import { createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js';
 import { useKeyboard, useTerminalDimensions } from '@opentui/solid';
+import type { ScrollBoxRenderable } from '@opentui/core';
 import type { TerminalSession, CaptureResult } from '../../terminal.types';
 import { AgentList } from '../components/agent-list';
 import { TerminalOutput } from '../components/terminal-output';
 import { useDialog } from '../context/dialog';
 import { DialogConfirm } from '../components/dialog-confirm';
 import { AgentForm } from '../components/agent-form';
-import { getTerminalService, getTaskwarriorService } from '../bridge';
+import { getTerminalService } from '../bridge';
 import { COLOR_ERROR } from '../theme';
 
 /** Pane identifiers for the split-pane layout. */
@@ -32,6 +33,10 @@ export function AgentsView(props: AgentsViewProps) {
 
   // Interactive mode state
   const [interactive, setInteractive] = createSignal(false);
+
+  // Terminal scroll ref
+  const [terminalScrollRef, setTerminalScrollRef] =
+    createSignal<ScrollBoxRenderable | undefined>();
 
   // Error display state
   const [error, setError] = createSignal<string | null>(null);
@@ -231,18 +236,6 @@ export function AgentsView(props: AgentsViewProps) {
                 command: data.command || undefined,
               });
 
-              // If a task was linked, start it in Taskwarrior
-              if (data.taskUuid) {
-                const tw = getTaskwarriorService();
-                if (tw) {
-                  try {
-                    await tw.startTask(data.taskUuid);
-                  } catch {
-                    // Non-fatal — session was still created
-                  }
-                }
-              }
-
               loadAgents();
               const updated = ts.listSessions();
               const newIdx = updated.findIndex((s) => s.id === session.id);
@@ -363,6 +356,18 @@ export function AgentsView(props: AgentsViewProps) {
       return;
     }
 
+    // Scroll terminal output (half-page)
+    if (activePane() === 'terminal') {
+      if (key.ctrl && key.name === 'u') {
+        terminalScrollRef()?.scrollBy(-0.5, 'viewport');
+        return;
+      }
+      if (key.ctrl && key.name === 'd') {
+        terminalScrollRef()?.scrollBy(0.5, 'viewport');
+        return;
+      }
+    }
+
     // Within-pane navigation: j/k or Down/Up (only in agents pane)
     if (key.name === 'j' || key.name === 'down') {
       if (activePane() === 'agents') {
@@ -440,6 +445,7 @@ export function AgentsView(props: AgentsViewProps) {
           isActivePane={activePane() === 'terminal'}
           isInteractive={interactive()}
           agentName={selectedAgent()?.name ?? null}
+          onScrollRef={setTerminalScrollRef}
         />
       </box>
     </box>

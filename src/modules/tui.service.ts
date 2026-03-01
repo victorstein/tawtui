@@ -7,6 +7,8 @@ import { ConfigService } from './config.service';
 import { TerminalService } from './terminal.service';
 import { DependencyService } from './dependency.service';
 import { CalendarService } from './calendar.service';
+import type { PullRequestDetail, PrDiff } from './github.types';
+import type { ProjectAgentConfig } from './config.types';
 
 interface TawtuiGlobal {
   __tawtui?: {
@@ -21,7 +23,22 @@ interface TawtuiGlobal {
       repoOwner: string,
       repoName: string,
       prTitle: string,
-    ) => Promise<{ taskUuid: string; sessionId: string }>;
+      prDetail?: PullRequestDetail,
+      prDiff?: PrDiff,
+      projectAgentConfig?: ProjectAgentConfig,
+    ) => Promise<{ sessionId: string }>;
+    getPrDiff: (
+      owner: string,
+      repo: string,
+      prNumber: number,
+    ) => Promise<PrDiff>;
+    getProjectAgentConfig: (projectKey: string) => ProjectAgentConfig | null;
+    setProjectAgentConfig: (cfg: ProjectAgentConfig) => void;
+    removeProjectAgentConfig: (projectKey: string) => void;
+    destroySessionWithWorktree: (
+      sessionId: string,
+      cleanupWorktree: boolean,
+    ) => Promise<void>;
   };
   __tuiExit?: () => void;
 }
@@ -55,12 +72,34 @@ export class TuiService {
         repoOwner: string,
         repoName: string,
         prTitle: string,
+        prDetail?: PullRequestDetail,
+        prDiff?: PrDiff,
+        projectAgentConfig?: ProjectAgentConfig,
       ) =>
         this.terminalService.createPrReviewSession(
           prNumber,
           repoOwner,
           repoName,
           prTitle,
+          prDetail,
+          prDiff,
+          projectAgentConfig,
+        ),
+      getPrDiff: (owner: string, repo: string, prNumber: number) =>
+        this.githubService.getPrDiff(owner, repo, prNumber),
+      getProjectAgentConfig: (projectKey: string) =>
+        this.configService.getProjectAgentConfig(projectKey),
+      setProjectAgentConfig: (cfg: ProjectAgentConfig) =>
+        this.configService.setProjectAgentConfig(cfg),
+      removeProjectAgentConfig: (projectKey: string) =>
+        this.configService.removeProjectAgentConfig(projectKey),
+      destroySessionWithWorktree: (
+        sessionId: string,
+        cleanupWorktree: boolean,
+      ) =>
+        this.terminalService.destroySessionWithWorktree(
+          sessionId,
+          cleanupWorktree,
         ),
     };
 
@@ -77,6 +116,7 @@ export class TuiService {
     await render(App, {
       useAlternateScreen: true,
       useMouse: true,
+      exitOnCtrlC: false,
     });
 
     // Keep the process alive until the user presses 'q'.
