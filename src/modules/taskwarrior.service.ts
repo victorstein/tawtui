@@ -397,7 +397,7 @@ export class TaskwarriorService {
   }
 
   getLinkedCalendarEventMap(): Map<string, string> {
-    const tasks = this.getTasks('calendar_event_id.any:');
+    const tasks = this.getTasks('status.not:deleted calendar_event_id.any:');
     const map = new Map<string, string>();
     for (const task of tasks) {
       const id = task.calendar_event_id;

@@ -21,4 +21,5 @@ export interface DependencyStatus {
   task: DepStatus;
   platform: NodeJS.Platform;
   allGood: boolean;
+  calendarReady: boolean;
 }

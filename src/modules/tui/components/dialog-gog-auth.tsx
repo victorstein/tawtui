@@ -1,4 +1,4 @@
-import { createSignal, createEffect, Show } from 'solid-js';
+import { createSignal, createEffect, onCleanup, Show } from 'solid-js';
 import { useKeyboard } from '@opentui/solid';
 import { getCalendarService } from '../bridge';
 import type { AuthResult } from '../../calendar.types';
@@ -16,6 +16,7 @@ import {
 } from '../theme';
 
 interface DialogGogAuthProps {
+  initialEmail?: string;
   onSuccess: () => void;
   onCancel: () => void;
 }
@@ -29,8 +30,8 @@ type Mode =
   | 'result';
 
 export function DialogGogAuth(props: DialogGogAuthProps) {
-  const [mode, setMode] = createSignal<Mode>('checking');
-  const [email, setEmail] = createSignal('');
+  const [mode, setMode] = createSignal<Mode>(props.initialEmail ? 'authenticating' : 'checking');
+  const [email, setEmail] = createSignal(props.initialEmail ?? '');
   const [credPath, setCredPath] = createSignal('');
   const [result, setResult] = createSignal<AuthResult | null>(null);
   const [errorSource, setErrorSource] = createSignal<'credentials' | 'auth'>(
@@ -38,6 +39,19 @@ export function DialogGogAuth(props: DialogGogAuthProps) {
   );
 
   let cancelled = false;
+  let autoAuthFired = false;
+  const [emailError, setEmailError] = createSignal('');
+
+  onCleanup(() => {
+    cancelled = true;
+  });
+
+  function isValidEmail(addr: string): boolean {
+    const atIndex = addr.indexOf('@');
+    if (atIndex < 1) return false;
+    const afterAt = addr.slice(atIndex + 1);
+    return afterAt.includes('.');
+  }
 
   // Check credentials on mount
   createEffect(() => {
@@ -58,6 +72,27 @@ export function DialogGogAuth(props: DialogGogAuthProps) {
       } else {
         setMode('credentials');
       }
+    });
+  });
+
+  // Auto-trigger auth when initialEmail is provided
+  createEffect(() => {
+    if (!props.initialEmail || mode() !== 'authenticating' || autoAuthFired) return;
+    autoAuthFired = true;
+
+    const calService = getCalendarService();
+    if (!calService) {
+      setResult({ success: false, error: 'Calendar service not available' });
+      setErrorSource('auth');
+      setMode('result');
+      return;
+    }
+
+    void calService.startAuth(email()).then((res) => {
+      if (cancelled) return;
+      setResult(res);
+      setErrorSource('auth');
+      setMode('result');
     });
   });
 
@@ -91,6 +126,12 @@ export function DialogGogAuth(props: DialogGogAuthProps) {
     const addr = email().trim();
     if (!addr) return;
 
+    if (!isValidEmail(addr)) {
+      setEmailError('Please enter a valid email address');
+      return;
+    }
+
+    setEmailError('');
     setMode('authenticating');
     cancelled = false;
 
@@ -149,6 +190,9 @@ export function DialogGogAuth(props: DialogGogAuthProps) {
           // Retry — go back to the step that failed
           if (errorSource() === 'credentials') {
             setMode('credentials');
+          } else if (props.initialEmail) {
+            autoAuthFired = false;
+            setMode('authenticating');
           } else {
             setMode('email');
           }
@@ -162,7 +206,7 @@ export function DialogGogAuth(props: DialogGogAuthProps) {
     <box flexDirection="column" paddingX={2} paddingY={1}>
       {/* Title */}
       <text fg={FG_PRIMARY} attributes={1}>
-        {'  Google Calendar Authentication'}
+        {props.initialEmail ? '  Re-authenticating Google Account' : '  Google Calendar Authentication'}
       </text>
       <box height={1} />
 
@@ -234,9 +278,18 @@ export function DialogGogAuth(props: DialogGogAuthProps) {
             focused={true}
             backgroundColor={BG_INPUT_FOCUS}
             textColor={FG_NORMAL}
-            onInput={(val: string) => setEmail(val)}
+            onInput={(val: string) => {
+              setEmail(val);
+              setEmailError('');
+            }}
           />
         </box>
+        <Show when={emailError()}>
+          <box flexDirection="row">
+            <box width={8} />
+            <text fg={COLOR_ERROR}>{emailError()}</text>
+          </box>
+        </Show>
         <box height={1} />
         <box flexDirection="row">
           <text fg={COLOR_SUCCESS} attributes={1}>

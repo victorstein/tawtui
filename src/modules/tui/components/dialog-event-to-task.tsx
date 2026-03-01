@@ -7,6 +7,7 @@ import type {
 } from '../../calendar.types';
 import type { CreateTaskDto } from '../../taskwarrior.types';
 import { darkenHex, formatTimeRange, lerpHex } from '../utils';
+import { getConfigService } from '../bridge';
 import {
   BG_INPUT,
   BG_INPUT_FOCUS,
@@ -37,8 +38,17 @@ const BUTTONS = [
 ] as const;
 
 function formatTaskwarriorDate(start: CalendarEventDateTime): string {
-  if (start.dateTime) return start.dateTime;
-  if (start.date) return start.date;
+  if (start.dateTime) {
+    const d = new Date(start.dateTime);
+    const y = d.getUTCFullYear();
+    const mo = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const dy = String(d.getUTCDate()).padStart(2, '0');
+    const h = String(d.getUTCHours()).padStart(2, '0');
+    const mi = String(d.getUTCMinutes()).padStart(2, '0');
+    const s = String(d.getUTCSeconds()).padStart(2, '0');
+    return `${y}${mo}${dy}T${h}${mi}${s}Z`;
+  }
+  if (start.date) return start.date.replace(/-/g, '');
   return '';
 }
 
@@ -105,11 +115,18 @@ export function DialogEventToTask(props: DialogEventToTaskProps) {
     const desc = title().trim();
     if (!desc) return;
 
+    const config = getConfigService();
+    const calConfig = config?.getCalendarConfig();
+    const configTags = calConfig?.defaultTaskTags ?? [];
+    const mergedTags = [...new Set([...configTags, 'meeting'])];
+    const project = calConfig?.defaultTaskProject;
+
     const dto: CreateTaskDto = {
       description: desc,
       scheduled: scheduledDate() || undefined,
       due: dueDate() || undefined,
-      tags: ['meeting'],
+      tags: mergedTags,
+      project: project || undefined,
       annotation: buildAnnotation(props.event),
       calendar_event_id: props.event.id,
     };

@@ -1,4 +1,4 @@
-import { createSignal, createEffect, on, onMount, Show, For } from 'solid-js';
+import { createSignal, createEffect, on, onMount, onCleanup, Show, For } from 'solid-js';
 import { useKeyboard, useTerminalDimensions } from '@opentui/solid';
 import type { CalendarEvent } from '../../calendar.types';
 import type { CreateTaskDto } from '../../taskwarrior.types';
@@ -6,6 +6,7 @@ import type { DependencyStatus } from '../../dependency.types';
 import { EventCard } from '../components/event-card';
 import { DialogEventToTask } from '../components/dialog-event-to-task';
 import { DialogSetupWizard } from '../components/dialog-setup-wizard';
+import { DialogGogAuth } from '../components/dialog-gog-auth';
 import { useDialog } from '../context/dialog';
 import {
   getCalendarService,
@@ -19,6 +20,7 @@ import {
   FG_DIM,
   FG_MUTED,
   COLOR_ERROR,
+  COLOR_SUCCESS,
   CALENDAR_GRAD,
 } from '../theme';
 import { lerpHex, LEFT_CAP, RIGHT_CAP } from '../utils';
@@ -98,6 +100,29 @@ export function CalendarView(props: CalendarViewProps) {
   const [linkedEventMap, setLinkedEventMap] = createSignal<Map<string, string>>(
     new Map(),
   );
+  const [statusMsg, setStatusMsg] = createSignal('');
+  const [statusIsError, setStatusIsError] = createSignal(false);
+
+  const isAuthError = () => {
+    const e = error();
+    return e !== null && (e.includes('invalid_grant') || e.includes('Token has been expired') || e.includes('insufficientPermissions'));
+  };
+
+  let statusTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function showStatus(msg: string, isError = false): void {
+    if (statusTimer) clearTimeout(statusTimer);
+    setStatusMsg(msg);
+    setStatusIsError(isError);
+    statusTimer = setTimeout(() => {
+      setStatusMsg('');
+      setStatusIsError(false);
+    }, 3000);
+  }
+
+  onCleanup(() => {
+    if (statusTimer) clearTimeout(statusTimer);
+  });
 
   function loadLinkedEventIds(): void {
     const tw = getTaskwarriorService();
@@ -210,11 +235,19 @@ export function CalendarView(props: CalendarViewProps) {
               try {
                 tw.createTask(dto);
                 loadLinkedEventIds();
-              } catch {
-                // Task creation failed — still close the dialog
+                dialog.close();
+                showStatus('Task created');
+              } catch (err) {
+                dialog.close();
+                showStatus(
+                  err instanceof Error ? err.message : 'Failed to create task',
+                  true,
+                );
               }
+            } else {
+              dialog.close();
+              showStatus('TaskWarrior service not available', true);
             }
-            dialog.close();
           }}
           onCancel={() => dialog.close()}
         />
@@ -229,6 +262,33 @@ export function CalendarView(props: CalendarViewProps) {
 
   useKeyboard((key) => {
     if (dialog.isOpen()) return;
+
+    // Re-authenticate on token error
+    if (key.name === 'a' && isAuthError()) {
+      const cal = getCalendarService();
+      if (!cal) return;
+      void cal.getDefaultAccount().then((account) => {
+        if (dialog.isOpen()) return;
+        dialog.show(
+          () => (
+            <DialogGogAuth
+              initialEmail={account ?? undefined}
+              onSuccess={() => {
+                dialog.close();
+                loadEvents(selectedDate());
+              }}
+              onCancel={() => dialog.close()}
+            />
+          ),
+          {
+            size: 'large',
+            gradStart: CALENDAR_GRAD[0],
+            gradEnd: CALENDAR_GRAD[1],
+          },
+        );
+      });
+      return;
+    }
 
     // Setup wizard on error
     if (key.name === 's' && error()) {
@@ -472,7 +532,9 @@ export function CalendarView(props: CalendarViewProps) {
               <text fg={COLOR_ERROR}>{error()}</text>
               <box height={1} />
               <text fg={FG_DIM}>
-                {'Press [s] to open setup wizard, [r] to retry'}
+                {isAuthError()
+                  ? 'Press [a] to re-authenticate, [s] for setup wizard, [r] to retry'
+                  : 'Press [s] to open setup wizard, [r] to retry'}
               </text>
             </box>
           </Show>
@@ -511,6 +573,15 @@ export function CalendarView(props: CalendarViewProps) {
             <box height={1} paddingX={1}>
               <text fg={FG_DIM}>
                 {'[j/k] navigate  [Enter] convert/view task  [r] refresh'}
+              </text>
+            </box>
+          </Show>
+
+          {/* Status message */}
+          <Show when={statusMsg()}>
+            <box height={1} paddingX={1}>
+              <text fg={statusIsError() ? COLOR_ERROR : COLOR_SUCCESS} attributes={1}>
+                {statusMsg()}
               </text>
             </box>
           </Show>

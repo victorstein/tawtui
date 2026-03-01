@@ -104,6 +104,7 @@ export const ALLOWED_TAGS = [
   'urgent',
   'review',
   'chore',
+  'meeting',
 ] as const;
 
 export const TAG_GRADIENTS: { start: string; end: string }[] = [
@@ -113,6 +114,7 @@ export const TAG_GRADIENTS: { start: string; end: string }[] = [
   { start: '#6a88a8', end: '#8a7aaa' }, // review — blue→purple (analytical)
   { start: '#c8a070', end: '#5a6a75' }, // chore — tan→gray (routine)
   { start: '#5aaaa0', end: '#2a7a8a' }, // pr-review — teal (system tag)
+  { start: '#5aaaa0', end: '#2a8a7a' }, // meeting — calendar teal
 ];
 
 const TAG_GRADIENT_MAP: Record<string, { start: string; end: string }> = {
@@ -122,6 +124,7 @@ const TAG_GRADIENT_MAP: Record<string, { start: string; end: string }> = {
   review: TAG_GRADIENTS[3],
   chore: TAG_GRADIENTS[4],
   'pr-review': TAG_GRADIENTS[5],
+  meeting: TAG_GRADIENTS[6],
 };
 
 /** Convert HSL (h: 0-360, s: 0-100, l: 0-100) to hex color. */
