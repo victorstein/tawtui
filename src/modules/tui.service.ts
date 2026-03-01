@@ -26,7 +26,7 @@ interface TawtuiGlobal {
       prDetail?: PullRequestDetail,
       prDiff?: PrDiff,
       projectAgentConfig?: ProjectAgentConfig,
-    ) => Promise<{ taskUuid: string; sessionId: string }>;
+    ) => Promise<{ sessionId: string }>;
     getPrDiff: (
       owner: string,
       repo: string,

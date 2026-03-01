@@ -1,7 +1,6 @@
 import { createSignal, createEffect, onMount, For, Show } from 'solid-js';
 import { useKeyboard } from '@opentui/solid';
 import type { AgentDefinition } from '../../config.types';
-import type { Task } from '../../taskwarrior.types';
 import {
   BG_INPUT,
   BG_INPUT_FOCUS,
@@ -14,7 +13,7 @@ import {
   COLOR_ERROR,
 } from '../theme';
 import { darkenHex, lerpHex } from '../utils';
-import { getConfigService, getTaskwarriorService } from '../bridge';
+import { getConfigService } from '../bridge';
 
 const FORM_BUTTONS = [
   {
@@ -35,18 +34,16 @@ interface AgentFormProps {
   onSubmit: (data: {
     name: string;
     command: string;
-    taskUuid?: string;
   }) => void;
   onCancel: () => void;
 }
 
-const FIELDS = ['name', 'agentType', 'linkTask', 'autoApprove'] as const;
+const FIELDS = ['name', 'agentType', 'autoApprove'] as const;
 type FieldName = (typeof FIELDS)[number];
 
 const FIELD_LABELS: Record<FieldName, string> = {
   name: 'Name',
   agentType: 'Agent Type',
-  linkTask: 'Link Task',
   autoApprove: 'Auto-approve',
 };
 
@@ -58,11 +55,6 @@ export function AgentForm(props: AgentFormProps) {
   // Agent type select
   const [agentTypes, setAgentTypes] = createSignal<AgentDefinition[]>([]);
   const [agentCursor, setAgentCursor] = createSignal(0);
-
-  // Task linking
-  const [pendingTasks, setPendingTasks] = createSignal<Task[]>([]);
-  const [taskCursor, setTaskCursor] = createSignal(-1); // -1 means "None" selected
-  const [taskFilter, setTaskFilter] = createSignal('');
 
   // Auto-approve toggle
   const [autoApprove, setAutoApprove] = createSignal(false);
@@ -82,17 +74,6 @@ export function AgentForm(props: AgentFormProps) {
   };
 
   const currentField = (): FieldName => visibleFields()[focusedField()];
-
-  /** Filtered pending tasks based on user search text. */
-  const filteredTasks = (): Task[] => {
-    const filter = taskFilter().toLowerCase();
-    if (!filter) return pendingTasks();
-    return pendingTasks().filter(
-      (t) =>
-        t.description.toLowerCase().includes(filter) ||
-        (t.project?.toLowerCase().includes(filter) ?? false),
-    );
-  };
 
   // Auto-populate name when agent type changes
   createEffect(() => {
@@ -134,17 +115,6 @@ export function AgentForm(props: AgentFormProps) {
         // Silently fail — will show empty list
       }
     }
-
-    // Load pending tasks
-    const tw = getTaskwarriorService();
-    if (tw) {
-      try {
-        const tasks = tw.getTasks('status:pending') as Task[];
-        setPendingTasks(tasks);
-      } catch {
-        // Silently fail — will show empty list
-      }
-    }
   });
 
   const handleSubmit = () => {
@@ -160,15 +130,9 @@ export function AgentForm(props: AgentFormProps) {
       }
     }
 
-    const tasks = filteredTasks();
-    const taskIdx = taskCursor();
-    const linkedTask =
-      taskIdx >= 0 && taskIdx < tasks.length ? tasks[taskIdx] : undefined;
-
     props.onSubmit({
       name: trimmedName,
       command,
-      taskUuid: linkedTask?.uuid,
     });
   };
 
@@ -281,38 +245,6 @@ export function AgentForm(props: AgentFormProps) {
         key.preventDefault();
         key.stopPropagation();
         setAgentCursor((prev) => (prev > 0 ? prev - 1 : prev));
-        return;
-      }
-    }
-
-    // Link task field (j/k navigation, typing to filter)
-    if (currentField() === 'linkTask') {
-      const tasks = filteredTasks();
-      if (key.name === 'j' || key.name === 'down') {
-        key.preventDefault();
-        key.stopPropagation();
-        setTaskCursor((prev) => (prev < tasks.length - 1 ? prev + 1 : prev));
-        return;
-      }
-      if (key.name === 'k' || key.name === 'up') {
-        key.preventDefault();
-        key.stopPropagation();
-        setTaskCursor((prev) => (prev > -1 ? prev - 1 : prev));
-        return;
-      }
-      if (key.name === 'backspace') {
-        key.preventDefault();
-        key.stopPropagation();
-        setTaskFilter((prev) => prev.slice(0, -1));
-        setTaskCursor(-1);
-        return;
-      }
-      // Printable character for filtering
-      if (key.sequence && key.sequence.length === 1 && !key.ctrl && !key.meta) {
-        key.preventDefault();
-        key.stopPropagation();
-        setTaskFilter((prev) => prev + key.sequence);
-        setTaskCursor(-1);
         return;
       }
     }
@@ -434,99 +366,6 @@ export function AgentForm(props: AgentFormProps) {
                 <text fg={FG_DIM}>{'[j/k] navigate'}</text>
               </box>
             </Show>
-          </box>
-        </Show>
-      </box>
-      <box height={1} />
-
-      {/* Link Task field — search/select from pending tasks */}
-      <box flexDirection="row">
-        <box width={14} height={1}>
-          <text
-            fg={labelColor(fieldIndex('linkTask'))}
-            attributes={isFieldFocused(fieldIndex('linkTask')) ? 1 : 0}
-          >
-            {isFieldFocused(fieldIndex('linkTask')) ? '> ' : '  '}
-            {FIELD_LABELS.linkTask}
-          </text>
-        </box>
-        <Show
-          when={isFieldFocused(fieldIndex('linkTask'))}
-          fallback={
-            <box height={1}>
-              <text fg={FG_DIM}>
-                {(() => {
-                  const tasks = filteredTasks();
-                  const idx = taskCursor();
-                  if (idx >= 0 && idx < tasks.length) {
-                    return tasks[idx].description;
-                  }
-                  return 'None';
-                })()}
-              </text>
-            </box>
-          }
-        >
-          <box flexDirection="column" width={60}>
-            {/* Search input */}
-            <box
-              height={1}
-              flexDirection="row"
-              backgroundColor={BG_INPUT_FOCUS}
-              paddingX={1}
-            >
-              <text fg={FG_DIM}>{'/ '}</text>
-              <text fg={FG_NORMAL}>{taskFilter() || ''}</text>
-              <text fg={FG_MUTED}>
-                {taskFilter() ? '' : 'type to filter...'}
-              </text>
-            </box>
-            {/* Task list */}
-            <box
-              flexDirection="column"
-              backgroundColor={BG_INPUT_FOCUS}
-              paddingX={1}
-            >
-              {/* "None" option */}
-              <box height={1} flexDirection="row">
-                <text fg={taskCursor() === -1 ? ACCENT_PRIMARY : FG_DIM}>
-                  {taskCursor() === -1 ? '> ' : '  '}
-                </text>
-                <text
-                  fg={taskCursor() === -1 ? FG_PRIMARY : FG_DIM}
-                  attributes={taskCursor() === -1 ? 1 : 0}
-                >
-                  (none)
-                </text>
-              </box>
-              <For each={filteredTasks().slice(0, 8)}>
-                {(task, index) => {
-                  const isSelected = () => taskCursor() === index();
-                  return (
-                    <box height={1} flexDirection="row">
-                      <text fg={isSelected() ? ACCENT_PRIMARY : FG_DIM}>
-                        {isSelected() ? '> ' : '  '}
-                      </text>
-                      <text
-                        fg={isSelected() ? FG_PRIMARY : FG_NORMAL}
-                        attributes={isSelected() ? 1 : 0}
-                        truncate
-                      >
-                        {task.description}
-                      </text>
-                      <Show when={task.project}>
-                        <text fg={FG_DIM}> [{task.project}]</text>
-                      </Show>
-                    </box>
-                  );
-                }}
-              </For>
-            </box>
-            <box height={1} paddingX={1}>
-              <text fg={FG_DIM}>
-                {'[j/k] navigate  [type] filter  [backspace] clear'}
-              </text>
-            </box>
           </box>
         </Show>
       </box>

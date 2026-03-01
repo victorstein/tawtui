@@ -111,7 +111,6 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
     prNumber?: number;
     repoOwner?: string;
     repoName?: string;
-    taskUuid?: string;
     worktreeId?: string;
     worktreePath?: string;
   }): Promise<TerminalSession> {
@@ -191,7 +190,6 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
       prNumber: opts.prNumber,
       repoOwner: opts.repoOwner,
       repoName: opts.repoName,
-      taskUuid: opts.taskUuid,
       worktreeId: opts.worktreeId,
       worktreePath: opts.worktreePath,
     };
@@ -399,7 +397,7 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
     prDetail?: PullRequestDetail,
     prDiff?: PrDiff,
     projectAgentConfig?: ProjectAgentConfig,
-  ): Promise<{ taskUuid: string; sessionId: string }> {
+  ): Promise<{ sessionId: string }> {
     // Check for existing PR review task before creating a new one
     const existingTasks = this.taskwarriorService.getTasks(
       `project:${repoOwner}/${repoName} +pr-review status:pending or project:${repoOwner}/${repoName} +pr-review status:waiting`,
@@ -437,7 +435,7 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
       this.logger.log(
         `Reusing existing session ${existingSession.id} for PR #${prNumber}`,
       );
-      return { taskUuid, sessionId: existingSession.id };
+      return { sessionId: existingSession.id };
     }
 
     // Create (or reuse) a worktree for this PR
@@ -520,7 +518,6 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
       prNumber,
       repoOwner,
       repoName,
-      taskUuid,
       worktreeId: worktreeInfo.id,
       worktreePath: worktreeInfo.path,
     });
@@ -532,7 +529,7 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
       `Created PR review session: task=${taskUuid}, session=${session.id}, worktree=${worktreeInfo.id}`,
     );
 
-    return { taskUuid, sessionId: session.id };
+    return { sessionId: session.id };
   }
 
   /**
@@ -571,19 +568,6 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
 
     session.status = status;
     this.persistSessions();
-
-    // Auto-complete the linked TaskWarrior task when the session finishes
-    // successfully. Failed sessions intentionally keep the task open for
-    // human follow-up.
-    if (status === 'done' && session.taskUuid) {
-      try {
-        this.taskwarriorService.completeTask(session.taskUuid);
-      } catch (error) {
-        this.logger.warn(
-          `Failed to complete task ${session.taskUuid}: ${error}`,
-        );
-      }
-    }
   }
 
   // ---------------------------------------------------------------------------
@@ -663,7 +647,6 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
         prNumber: meta?.prNumber,
         repoOwner: meta?.repoOwner,
         repoName: meta?.repoName,
-        taskUuid: meta?.taskUuid,
         worktreeId: meta?.worktreeId,
         worktreePath: meta?.worktreePath,
       };
@@ -697,7 +680,6 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
         prNumber: s.prNumber,
         repoOwner: s.repoOwner,
         repoName: s.repoName,
-        taskUuid: s.taskUuid,
         worktreeId: s.worktreeId,
         worktreePath: s.worktreePath,
       }));
@@ -724,7 +706,6 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
             prNumber: item.prNumber as number | undefined,
             repoOwner: item.repoOwner as string | undefined,
             repoName: item.repoName as string | undefined,
-            taskUuid: item.taskUuid as string | undefined,
             worktreeId: item.worktreeId as string | undefined,
             worktreePath: item.worktreePath as string | undefined,
           });

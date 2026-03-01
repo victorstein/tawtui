@@ -6,7 +6,7 @@ import { TerminalOutput } from '../components/terminal-output';
 import { useDialog } from '../context/dialog';
 import { DialogConfirm } from '../components/dialog-confirm';
 import { AgentForm } from '../components/agent-form';
-import { getTerminalService, getTaskwarriorService } from '../bridge';
+import { getTerminalService } from '../bridge';
 import { COLOR_ERROR } from '../theme';
 
 /** Pane identifiers for the split-pane layout. */
@@ -230,18 +230,6 @@ export function AgentsView(props: AgentsViewProps) {
                 cwd: process.cwd(),
                 command: data.command || undefined,
               });
-
-              // If a task was linked, start it in Taskwarrior
-              if (data.taskUuid) {
-                const tw = getTaskwarriorService();
-                if (tw) {
-                  try {
-                    await tw.startTask(data.taskUuid);
-                  } catch {
-                    // Non-fatal — session was still created
-                  }
-                }
-              }
 
               loadAgents();
               const updated = ts.listSessions();

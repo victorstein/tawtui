@@ -227,9 +227,6 @@ export default function StackedList(props: StackedListProps) {
               if (agent.prNumber != null) {
                 parts.push(`PR #${agent.prNumber}`);
               }
-              if (agent.taskUuid) {
-                parts.push(`task:${agent.taskUuid.slice(0, 8)}`);
-              }
               return parts.length > 0 ? parts.join(' | ') : null;
             };
 

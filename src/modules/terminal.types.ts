@@ -10,7 +10,6 @@ export interface TerminalSession {
   prNumber?: number; // associated PR if any
   repoOwner?: string;
   repoName?: string;
-  taskUuid?: string; // associated taskwarrior task UUID
   worktreeId?: string; // linked worktree ID
   worktreePath?: string; // denormalized path for UI display
 }

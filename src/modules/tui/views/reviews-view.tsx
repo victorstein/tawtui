@@ -475,17 +475,6 @@ export default function ReviewsView(props: ReviewsViewProps) {
                 command: data.command || undefined,
               });
 
-              if (data.taskUuid) {
-                const tw = (globalThis as any).__tawtui?.taskwarriorService;
-                if (tw) {
-                  try {
-                    await tw.startTask(data.taskUuid);
-                  } catch {
-                    // Non-fatal
-                  }
-                }
-              }
-
               loadAgents();
               const updated = ts.listSessions();
               const newIdx = updated.findIndex((s) => s.id === session.id);

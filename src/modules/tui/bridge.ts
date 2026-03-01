@@ -22,7 +22,7 @@ export interface TawtuiBridge {
     prDetail?: PullRequestDetail,
     prDiff?: PrDiff,
     projectAgentConfig?: ProjectAgentConfig,
-  ) => Promise<{ taskUuid: string; sessionId: string }>;
+  ) => Promise<{ sessionId: string }>;
   getPrDiff: (owner: string, repo: string, prNumber: number) => Promise<PrDiff>;
   getProjectAgentConfig: (projectKey: string) => ProjectAgentConfig | null;
   setProjectAgentConfig: (cfg: ProjectAgentConfig) => void;
