@@ -142,6 +142,12 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
       );
     }
 
+    // Keep the pane alive after the process exits so we can detect completion
+    // and the user can still read/scroll the final output.
+    await this.execTmux([
+      'set-option', '-t', tmuxSessionName, 'remain-on-exit', 'on',
+    ]);
+
     // Determine the pane ID for this session (the first — and only — pane).
     const paneResult = await this.execTmux([
       'list-panes',
@@ -310,17 +316,21 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
       '-t',
       session.tmuxPaneId,
       '-p',
-      '#{cursor_x},#{cursor_y}',
+      '#{cursor_x},#{cursor_y},#{pane_dead}',
     ]);
 
     let cursor: CursorPosition = { x: 0, y: 0 };
     if (cursorResult.exitCode === 0) {
       const parts = cursorResult.stdout.trim().split(',');
-      if (parts.length === 2) {
+      if (parts.length >= 2) {
         cursor = {
           x: parseInt(parts[0], 10) || 0,
           y: parseInt(parts[1], 10) || 0,
         };
+      }
+      // Detect pane death — the process inside the pane has exited
+      if (parts.length >= 3 && parts[2] === '1' && session.status === 'running') {
+        this.updateSessionStatus(id, 'done');
       }
     }
 
@@ -415,6 +425,21 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
       taskUuid = task.uuid;
     }
 
+    // Return the existing session if one is already running for this PR
+    const existingSession = Array.from(this.sessions.values()).find(
+      (s) =>
+        s.prNumber === prNumber &&
+        s.repoOwner === repoOwner &&
+        s.repoName === repoName &&
+        s.status === 'running',
+    );
+    if (existingSession) {
+      this.logger.log(
+        `Reusing existing session ${existingSession.id} for PR #${prNumber}`,
+      );
+      return { taskUuid, sessionId: existingSession.id };
+    }
+
     // Create (or reuse) a worktree for this PR
     const worktreeInfo = await this.worktreeService.createWorktree(
       repoOwner,
@@ -484,7 +509,7 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
         'Provide a thorough code review covering: code quality, potential bugs, security concerns, and suggested improvements.',
       ].join(' ');
       const escaped = reviewPrompt.replace(/'/g, "'\\''");
-      command = `${command} -p '${escaped}'`;
+      command = `${command} '${escaped}'`;
     }
 
     // Create a terminal session for the review agent in the worktree directory
@@ -546,6 +571,19 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
 
     session.status = status;
     this.persistSessions();
+
+    // Auto-complete the linked TaskWarrior task when the session finishes
+    // successfully. Failed sessions intentionally keep the task open for
+    // human follow-up.
+    if (status === 'done' && session.taskUuid) {
+      try {
+        this.taskwarriorService.completeTask(session.taskUuid);
+      } catch (error) {
+        this.logger.warn(
+          `Failed to complete task ${session.taskUuid}: ${error}`,
+        );
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------
