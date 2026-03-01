@@ -1,4 +1,4 @@
-import { For, Show, createEffect } from 'solid-js';
+import { For, Show } from 'solid-js';
 import type { ScrollBoxRenderable } from '@opentui/core';
 import type { CaptureResult } from '../../terminal.types';
 import {
@@ -22,14 +22,6 @@ interface TerminalOutputProps {
 
 export function TerminalOutput(props: TerminalOutputProps) {
   let scrollRef: ScrollBoxRenderable | undefined;
-
-  createEffect(() => {
-    if (props.capture) {
-      // Access content to track it reactively
-      props.capture.content;
-      scrollRef?.scrollTo(scrollRef.scrollHeight);
-    }
-  });
 
   const headerText = () => {
     if (props.isInteractive) {
@@ -102,6 +94,8 @@ export function TerminalOutput(props: TerminalOutputProps) {
         }}
         flexGrow={1}
         width="100%"
+        stickyScroll={true}
+        stickyStart="bottom"
       >
         <Show
           when={props.agentName}
