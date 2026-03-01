@@ -17,7 +17,7 @@ interface StatusBarProps {
 
 const TAB_HINTS = [
   '1-3 switch tab | j/k navigate | n new | enter detail | m/M move | x archive | / filter | q quit',
-  '1-3 switch tab | h/l panes | j/k navigate | a add repo | x remove | c config agent | n new agent | i interactive | K kill | r refresh | q quit',
+  '1-3 switch tab | h/l panes | j/k navigate | a add repo | x remove | n new agent | i interactive | K kill | r refresh | q quit',
   '1-3 switch tab | h/l day | j/k events | [ / ] week | t today | enter convert | r refresh | q quit',
 ];
 
@@ -31,7 +31,7 @@ function getReviewsHint(ctx: ReviewsHintContext): string {
     case 'interactive':
       return 'ESC ESC exit interactive | all keys forwarded to agent';
     case 'repo-left':
-      return `${base} | h/l panes | j/k navigate | enter PRs | a add repo | x remove | c config agent | n new agent | r refresh | q quit`;
+      return `${base} | h/l panes | j/k navigate | enter PRs | a add repo | x remove | n new agent | r refresh | q quit`;
     case 'agent-left':
       return `${base} | h/l panes | j/k navigate | enter interactive | K kill | n new agent | r refresh | q quit`;
     case 'prs-right':

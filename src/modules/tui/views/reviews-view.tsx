@@ -28,7 +28,6 @@ import StackedList from '../components/stacked-list';
 import { PrList } from '../components/pr-list';
 import { TerminalOutput } from '../components/terminal-output';
 import { DialogPrDetail } from '../components/dialog-pr-detail';
-import { DialogProjectAgentConfig } from '../components/dialog-project-agent-config';
 import { DialogConfirm } from '../components/dialog-confirm';
 import { DialogSelect } from '../components/dialog-select';
 import { DialogPrompt } from '../components/dialog-prompt';
@@ -555,29 +554,6 @@ export default function ReviewsView(props: ReviewsViewProps) {
     }
   }
 
-  function showProjectAgentConfigDialog(): void {
-    const sel = selectedItem();
-    if (sel.kind !== 'repo') return;
-
-    const projectKey = `${sel.repo.owner}/${sel.repo.repo}`;
-    const bridge = (globalThis as Record<string, any>).__tawtui;
-    if (!bridge?.setProjectAgentConfig) return;
-
-    dialog.show(
-      () => (
-        <DialogProjectAgentConfig
-          projectKey={projectKey}
-          onConfirm={(cfg: ProjectAgentConfig) => {
-            dialog.close();
-            bridge.setProjectAgentConfig(cfg);
-          }}
-          onCancel={() => dialog.close()}
-        />
-      ),
-      { size: 'large' },
-    );
-  }
-
   function openPrDetailDialog(): void {
     const sel = selectedItem();
     if (sel.kind !== 'repo') return;
@@ -971,14 +947,6 @@ export default function ReviewsView(props: ReviewsViewProps) {
       return;
     }
 
-    // Project agent config (only when repo selected)
-    if (key.name === 'c') {
-      const sel = selectedItem();
-      if (sel.kind === 'repo') {
-        showProjectAgentConfigDialog();
-      }
-      return;
-    }
   });
 
   // ── Layout calculations ─────────────────────────────────────────
