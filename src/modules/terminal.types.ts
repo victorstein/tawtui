@@ -12,6 +12,7 @@ export interface TerminalSession {
   repoName?: string;
   worktreeId?: string; // linked worktree ID
   worktreePath?: string; // denormalized path for UI display
+  branchName?: string; // PR head branch name for UI display
 }
 
 export interface CursorPosition {

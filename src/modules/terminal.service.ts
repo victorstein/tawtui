@@ -113,6 +113,7 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
     repoName?: string;
     worktreeId?: string;
     worktreePath?: string;
+    branchName?: string;
   }): Promise<TerminalSession> {
     if (!(await this.isTmuxInstalled())) {
       throw new Error('tmux is not installed or not available on PATH');
@@ -196,6 +197,7 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
       repoName: opts.repoName,
       worktreeId: opts.worktreeId,
       worktreePath: opts.worktreePath,
+      branchName: opts.branchName,
     };
 
     this.sessions.set(id, session);
@@ -528,6 +530,7 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
       repoName,
       worktreeId: worktreeInfo.id,
       worktreePath: worktreeInfo.path,
+      branchName: prDetail?.headRefName,
     });
 
     // Link the session to the worktree for bidirectional tracking
@@ -657,6 +660,7 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
         repoName: meta?.repoName,
         worktreeId: meta?.worktreeId,
         worktreePath: meta?.worktreePath,
+        branchName: meta?.branchName,
       };
 
       this.sessions.set(session.id, session);
@@ -690,6 +694,7 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
         repoName: s.repoName,
         worktreeId: s.worktreeId,
         worktreePath: s.worktreePath,
+        branchName: s.branchName,
       }));
       writeFileSync(this.sessionsPath, JSON.stringify(data, null, 2), 'utf-8');
     } catch {
@@ -716,6 +721,7 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
             repoName: item.repoName as string | undefined,
             worktreeId: item.worktreeId as string | undefined,
             worktreePath: item.worktreePath as string | undefined,
+            branchName: item.branchName as string | undefined,
           });
         }
       }
