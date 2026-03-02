@@ -61,8 +61,12 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
   /** Content hashes keyed by session ID, used for change detection. */
   private readonly contentHashes = new Map<string, number | bigint>();
 
+  /** Persistent mapping of PR key (owner/repo#number) to Taskwarrior task UUID. */
+  private readonly prTaskMap = new Map<string, string>();
+
   private readonly sessionsDir = join(homedir(), '.config', 'tawtui');
   private readonly sessionsPath = join(this.sessionsDir, 'sessions.json');
+  private readonly prTaskMapPath = join(this.sessionsDir, 'pr-tasks.json');
 
   constructor(
     private readonly taskwarriorService: TaskwarriorService,
@@ -75,6 +79,7 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
   // ---------------------------------------------------------------------------
 
   async onModuleInit(): Promise<void> {
+    this.loadPrTaskMap();
     await this.discoverExistingSessions();
   }
 
@@ -408,22 +413,30 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
     prDiff?: PrDiff,
     projectAgentConfig?: ProjectAgentConfig,
   ): Promise<{ sessionId: string }> {
-    // Check for existing PR review task before creating a new one
-    const existingTasks = this.taskwarriorService.getTasks(
-      `project:${repoOwner}/${repoName} +pr-review \\( status:pending or status:waiting or status:started \\)`,
-    );
-    const existingTask = existingTasks.find((t) =>
-      t.description.includes(`PR #${prNumber}`),
-    );
+    // Look up (or create) the Taskwarrior task via persistent PR-to-task map
+    const prKey = `${repoOwner}/${repoName}#${prNumber}`;
 
-    let taskUuid: string;
-    if (existingTask) {
-      taskUuid = existingTask.uuid;
-      // Restart the task if it's not already active
-      if (!existingTask.start) {
-        this.taskwarriorService.startTask(taskUuid);
+    let taskUuid: string | undefined = this.prTaskMap.get(prKey);
+
+    if (taskUuid) {
+      // Verify the task still exists and isn't completed/deleted
+      const existing = this.taskwarriorService.getTask(taskUuid);
+      if (
+        existing &&
+        existing.status !== 'completed' &&
+        existing.status !== 'deleted'
+      ) {
+        // Reuse existing task — restart if not active
+        if (!existing.start) {
+          this.taskwarriorService.startTask(taskUuid);
+        }
+      } else {
+        // Task was completed/deleted — create fresh
+        taskUuid = undefined;
       }
-    } else {
+    }
+
+    if (!taskUuid) {
       const task = this.taskwarriorService.createTask({
         description: `Review PR #${prNumber}: ${prTitle}`,
         project: `${repoOwner}/${repoName}`,
@@ -431,6 +444,8 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
       });
       this.taskwarriorService.startTask(task.uuid);
       taskUuid = task.uuid;
+      this.prTaskMap.set(prKey, taskUuid);
+      this.persistPrTaskMap();
     }
 
     // Return the existing session if one is already running for this PR
@@ -699,6 +714,35 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
       writeFileSync(this.sessionsPath, JSON.stringify(data, null, 2), 'utf-8');
     } catch {
       this.logger.warn('Failed to persist session metadata');
+    }
+  }
+
+  /** Persist the PR-to-task UUID mapping to disk. */
+  private persistPrTaskMap(): void {
+    try {
+      if (!existsSync(this.sessionsDir)) {
+        mkdirSync(this.sessionsDir, { recursive: true });
+      }
+      const data = Object.fromEntries(this.prTaskMap);
+      writeFileSync(this.prTaskMapPath, JSON.stringify(data, null, 2), 'utf-8');
+    } catch {
+      this.logger.warn('Failed to persist PR task map');
+    }
+  }
+
+  /** Load the PR-to-task UUID mapping from disk. */
+  private loadPrTaskMap(): void {
+    try {
+      if (!existsSync(this.prTaskMapPath)) return;
+      const text = readFileSync(this.prTaskMapPath, 'utf-8');
+      const data = JSON.parse(text) as Record<string, string>;
+      for (const [key, value] of Object.entries(data)) {
+        if (typeof key === 'string' && typeof value === 'string') {
+          this.prTaskMap.set(key, value);
+        }
+      }
+    } catch {
+      this.logger.warn('Failed to load PR task map');
     }
   }
 
