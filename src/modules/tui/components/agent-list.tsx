@@ -129,13 +129,9 @@ export function AgentList(props: AgentListProps) {
                 props.isActivePane && index() === props.selectedIndex;
               const statusColor = () => STATUS_COLORS[agent.status] ?? FG_DIM;
 
-              /** Build the metadata line (PR or task association). */
+              /** Build the metadata line (branch name or task association). */
               const metaText = () => {
-                const parts: string[] = [];
-                if (agent.prNumber != null) {
-                  parts.push(`PR #${agent.prNumber}`);
-                }
-                return parts.length > 0 ? parts.join(' | ') : null;
+                return agent.branchName || null;
               };
 
               return (
