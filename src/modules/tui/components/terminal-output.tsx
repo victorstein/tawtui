@@ -1,4 +1,4 @@
-import { For, Show } from 'solid-js';
+import { createMemo, For, Show } from 'solid-js';
 import type { ScrollBoxRenderable } from '@opentui/core';
 import type { CaptureResult } from '../../terminal.types';
 import {
@@ -10,7 +10,11 @@ import {
   FG_DIM,
 } from '../theme';
 import { lerpHex } from '../utils';
-import { parseAnsiText } from '../utils/ansi-parser';
+import {
+  parseAnsiTextCached,
+  type AnsiSegment,
+  type ParsedLine,
+} from '../utils/ansi-parser';
 
 interface TerminalOutputProps {
   capture: CaptureResult | null;
@@ -114,7 +118,22 @@ export function TerminalOutput(props: TerminalOutputProps) {
             }
           >
             {(capture) => {
-              const parsedLines = () => parseAnsiText(capture().content);
+              const lineCache = new Map<string, AnsiSegment[]>();
+              let lastContent = '';
+              let previousParsed: ParsedLine[] = [];
+
+              const parsedLines = createMemo<ParsedLine[]>(() => {
+                const cap = capture();
+                if (!cap.content) {
+                  lineCache.clear();
+                  return [];
+                }
+                if (cap.content === lastContent) return previousParsed;
+                lastContent = cap.content;
+                previousParsed = parseAnsiTextCached(cap.content, lineCache);
+                if (lineCache.size > 2000) lineCache.clear();
+                return previousParsed;
+              });
 
               return (
                 <box flexDirection="column" flexGrow={1} width="100%">

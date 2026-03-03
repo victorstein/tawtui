@@ -8,7 +8,7 @@ import {
   Switch,
   Match,
 } from 'solid-js';
-import { useKeyboard, useTerminalDimensions } from '@opentui/solid';
+import { useKeyboard, useTerminalDimensions, usePaste, useRenderer } from '@opentui/solid';
 import type { ScrollBoxRenderable } from '@opentui/core';
 import type { RepoConfig } from '../../../shared/types';
 import type {
@@ -80,6 +80,7 @@ interface ReviewsViewProps {
 export default function ReviewsView(props: ReviewsViewProps) {
   const dimensions = useTerminalDimensions();
   const dialog = useDialog();
+  const renderer = useRenderer();
 
   // ── State signals ───────────────────────────────────────────────
   const [activePane, setActivePane] = createSignal<Pane>('left');
@@ -277,22 +278,9 @@ export default function ReviewsView(props: ReviewsViewProps) {
     }
   }
 
-  // ── Poll overlap guard ──────────────────────────────────────────
-
-  let isPolling = false;
-
-  async function doPoll(): Promise<void> {
-    if (isPolling) return;
-    isPolling = true;
-    try {
-      await refreshCapture();
-    } finally {
-      isPolling = false;
-    }
-  }
-
   // ── Adaptive polling ────────────────────────────────────────────
 
+  let pollVersion = 0;
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
 
   function getPollInterval(): number {
@@ -303,10 +291,24 @@ export default function ReviewsView(props: ReviewsViewProps) {
     return 2000;
   }
 
-  function schedulePoll(): void {
+  function schedulePoll(version: number): void {
     pollTimer = setTimeout(() => {
-      void doPoll().then(() => schedulePoll());
+      if (version !== pollVersion) return;
+      void (async () => {
+        if (version !== pollVersion) return;
+        await refreshCapture();
+        if (version === pollVersion) schedulePoll(version);
+      })();
     }, getPollInterval());
+  }
+
+  function restartPolling(): void {
+    pollVersion++;
+    if (pollTimer !== null) {
+      clearTimeout(pollTimer);
+      pollTimer = null;
+    }
+    schedulePoll(pollVersion);
   }
 
   // ── Effects and lifecycle ───────────────────────────────────────
@@ -354,10 +356,7 @@ export default function ReviewsView(props: ReviewsViewProps) {
     activePane();
     void agents().length;
     void selectedItem().kind;
-    if (pollTimer !== null) {
-      clearTimeout(pollTimer);
-    }
-    schedulePoll();
+    restartPolling();
   });
 
   onMount(() => {
@@ -368,6 +367,7 @@ export default function ReviewsView(props: ReviewsViewProps) {
   });
 
   onCleanup(() => {
+    pollVersion++;
     if (pollTimer !== null) {
       clearTimeout(pollTimer);
       pollTimer = null;
@@ -727,6 +727,36 @@ export default function ReviewsView(props: ReviewsViewProps) {
   let escTimer: ReturnType<typeof setTimeout> | null = null;
 
   useKeyboard((key) => {
+    // Alt+C: Copy selected text to clipboard
+    if ((key.option && key.name === 'c') || key.sequence === 'ç') {
+      const selection = renderer.getSelection();
+      if (selection && selection.isActive) {
+        const text = selection.getSelectedText();
+        if (text) {
+          renderer.copyToClipboardOSC52(text);
+          renderer.clearSelection();
+        }
+      }
+      return;
+    }
+
+    // Alt+V: Paste system clipboard to tmux
+    if ((key.option && key.name === 'v') || key.sequence === '√') {
+      const sel = selectedItem();
+      if (sel.kind !== 'agent') return;
+      const ts = getTerminalService();
+      if (!ts) return;
+      void (async () => {
+        try {
+          const proc = Bun.spawn(['pbpaste'], { stdout: 'pipe', stderr: 'pipe' });
+          const text = await new Response(proc.stdout).text();
+          await proc.exited;
+          if (text) await ts.pasteText(sel.agent.id, text);
+        } catch { showError('Clipboard read failed'); }
+      })();
+      return;
+    }
+
     // Interactive mode: forward all keys to tmux except ESC (double-ESC exits)
     if (interactive()) {
       if (key.name === 'escape') {
@@ -947,6 +977,14 @@ export default function ReviewsView(props: ReviewsViewProps) {
       return;
     }
 
+  });
+
+  usePaste((event) => {
+    if (!interactive() && !(activePane() === 'right' && rightPaneMode() === 'terminal')) return;
+    const ts = getTerminalService();
+    const sel = selectedItem();
+    if (!ts || sel.kind !== 'agent') return;
+    ts.pasteText(sel.agent.id, event.text).catch(() => showError('Paste failed'));
   });
 
   // ── Layout calculations ─────────────────────────────────────────

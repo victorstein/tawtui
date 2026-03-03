@@ -61,6 +61,18 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
   /** Content hashes keyed by session ID, used for change detection. */
   private readonly contentHashes = new Map<string, number | bigint>();
 
+  /** Cached cursor positions keyed by session ID. */
+  private readonly cursorCache = new Map<string, CursorPosition>();
+
+  /** Poll counters keyed by session ID, used to periodically refresh cursor. */
+  private readonly pollCounters = new Map<string, number>();
+
+  /** Number of scrollback lines to capture from tmux. */
+  private static readonly CAPTURE_SCROLLBACK = 500;
+
+  /** Maximum lines to keep after capture (safety net). */
+  private static readonly MAX_CAPTURE_LINES = 500;
+
   /** Persistent mapping of PR key (owner/repo#number) to Taskwarrior task UUID. */
   private readonly prTaskMap = new Map<string, string>();
 
@@ -88,6 +100,8 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
     this.persistSessions();
     this.sessions.clear();
     this.contentHashes.clear();
+    this.cursorCache.clear();
+    this.pollCounters.clear();
   }
 
   // ---------------------------------------------------------------------------
@@ -235,6 +249,8 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
 
     this.sessions.delete(id);
     this.contentHashes.delete(id);
+    this.cursorCache.delete(id);
+    this.pollCounters.delete(id);
     this.persistSessions();
     this.logger.log(
       `Destroyed tmux session "${session.tmuxSessionName}" (id=${id})`,
@@ -257,7 +273,7 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
     // Normalise the input via the KEY_MAP (e.g. "return" -> "Enter").
     const mapped = KEY_MAP[input.toLowerCase()] ?? input;
 
-    if (SPECIAL_KEYS.has(mapped)) {
+    if (SPECIAL_KEYS.has(mapped) || /^C-[a-zA-Z]$/.test(mapped)) {
       // Send as a named key (no -l flag).
       const result = await this.execTmux([
         'send-keys',
@@ -290,9 +306,54 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
   }
 
   /**
+   * Paste text into a tmux pane using the tmux paste buffer.
+   *
+   * Uses `set-buffer` + `paste-buffer -p` which sends text as a single block
+   * wrapped in bracketed paste sequences, unlike `send-keys -l` which sends
+   * characters one at a time.
+   */
+  async pasteText(id: string, text: string): Promise<void> {
+    const session = this.sessions.get(id);
+    if (!session) throw new Error(`Session not found: ${id}`);
+    if (!text) return;
+
+    // Load text into tmux's paste buffer
+    const setResult = await this.execTmux(['set-buffer', '--', text]);
+
+    if (setResult.exitCode !== 0) {
+      // Fallback to send-keys for small text
+      this.logger.warn(
+        `set-buffer failed, falling back to send-keys: ${setResult.stderr.trim()}`,
+      );
+      await this.sendInput(id, text);
+      return;
+    }
+
+    // Paste from buffer into the pane (-p enables bracketed paste wrapping)
+    const pasteResult = await this.execTmux([
+      'paste-buffer',
+      '-t',
+      session.tmuxPaneId,
+      '-p',
+    ]);
+
+    if (pasteResult.exitCode !== 0) {
+      throw new Error(
+        `Failed to paste into session ${id}: ${pasteResult.stderr.trim()}`,
+      );
+    }
+  }
+
+  /**
    * Capture the current visible content of the tmux pane together with the
    * cursor position.  The `changed` flag indicates whether the content differs
    * from the previous capture for the same session.
+   *
+   * Optimised to:
+   * 1. Only capture the last {@link CAPTURE_SCROLLBACK} lines of scrollback.
+   * 2. Cap output to {@link MAX_CAPTURE_LINES} as a safety net.
+   * 3. Skip the cursor query when content is unchanged and a cached cursor
+   *    exists (refreshes every 10th poll to catch cursor-only moves).
    */
   async captureOutput(id: string): Promise<CaptureResult> {
     const session = this.sessions.get(id);
@@ -301,12 +362,13 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
     }
 
     // Capture pane content (with ANSI color sequences preserved).
+    // Only capture the last N lines of scrollback to avoid progressive lag.
     const captureResult = await this.execTmux([
       'capture-pane',
       '-p',
       '-e',
       '-S',
-      '-',
+      String(-TerminalService.CAPTURE_SCROLLBACK),
       '-t',
       session.tmuxPaneId,
     ]);
@@ -317,9 +379,26 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
       );
     }
 
-    const content = this.sanitizeOutput(captureResult.stdout);
+    const content = this.capLines(this.sanitizeOutput(captureResult.stdout));
 
-    // Query cursor position.
+    // Change detection via Bun.hash (fast, good distribution).
+    const hash = Bun.hash(content);
+    const previousHash = this.contentHashes.get(id);
+    const changed = previousHash !== hash;
+    this.contentHashes.set(id, hash);
+
+    // Increment poll counter for this session.
+    const pollCount = (this.pollCounters.get(id) ?? 0) + 1;
+    this.pollCounters.set(id, pollCount % 10);
+
+    // When content is unchanged, a cached cursor exists, and this is not a
+    // periodic refresh poll → return early without spawning a cursor query.
+    const cachedCursor = this.cursorCache.get(id);
+    if (!changed && cachedCursor && pollCount % 10 !== 0) {
+      return { content, cursor: cachedCursor, changed: false };
+    }
+
+    // Query cursor position (only when content changed or periodic refresh).
     const cursorResult = await this.execTmux([
       'display-message',
       '-t',
@@ -347,11 +426,8 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
       }
     }
 
-    // Change detection via Bun.hash (fast, good distribution).
-    const hash = Bun.hash(content);
-    const previousHash = this.contentHashes.get(id);
-    const changed = previousHash !== hash;
-    this.contentHashes.set(id, hash);
+    // Cache the cursor for future unchanged polls.
+    this.cursorCache.set(id, cursor);
 
     return { content, cursor, changed };
   }
@@ -620,6 +696,21 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
       .replace(TerminalService.RE_ALT_SCREEN, '')
       .replace(TerminalService.RE_SGR_MOUSE, '')
       .replace(TerminalService.RE_OSC, '');
+  }
+
+  /**
+   * Truncate text to the last {@link MAX_CAPTURE_LINES} lines.
+   * Uses a fast-path that skips `split()` when the line count is within bounds.
+   */
+  private capLines(text: string): string {
+    let count = 0;
+    for (let i = 0; i < text.length; i++) {
+      if (text[i] === '\n') count++;
+      if (count > TerminalService.MAX_CAPTURE_LINES + 10) break;
+    }
+    if (count <= TerminalService.MAX_CAPTURE_LINES) return text;
+    const lines = text.split('\n');
+    return lines.slice(-TerminalService.MAX_CAPTURE_LINES).join('\n');
   }
 
   /**

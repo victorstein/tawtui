@@ -1,5 +1,5 @@
 import { createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js';
-import { useKeyboard, useTerminalDimensions } from '@opentui/solid';
+import { useKeyboard, useTerminalDimensions, usePaste, useRenderer } from '@opentui/solid';
 import type { ScrollBoxRenderable } from '@opentui/core';
 import type { TerminalSession, CaptureResult } from '../../terminal.types';
 import { AgentList } from '../components/agent-list';
@@ -20,6 +20,7 @@ interface AgentsViewProps {
 export function AgentsView(props: AgentsViewProps) {
   const dimensions = useTerminalDimensions();
   const dialog = useDialog();
+  const renderer = useRenderer();
 
   // Pane state
   const [activePane, setActivePane] = createSignal<Pane>('agents');
@@ -288,6 +289,36 @@ export function AgentsView(props: AgentsViewProps) {
   let escTimer: ReturnType<typeof setTimeout> | null = null;
 
   useKeyboard((key) => {
+    // Alt+C: Copy selected text to clipboard
+    if ((key.option && key.name === 'c') || key.sequence === 'ç') {
+      const selection = renderer.getSelection();
+      if (selection && selection.isActive) {
+        const text = selection.getSelectedText();
+        if (text) {
+          renderer.copyToClipboardOSC52(text);
+          renderer.clearSelection();
+        }
+      }
+      return;
+    }
+
+    // Alt+V: Paste system clipboard to tmux
+    if ((key.option && key.name === 'v') || key.sequence === '√') {
+      const agent = selectedAgent();
+      if (!agent) return;
+      const ts = getTerminalService();
+      if (!ts) return;
+      void (async () => {
+        try {
+          const proc = Bun.spawn(['pbpaste'], { stdout: 'pipe', stderr: 'pipe' });
+          const text = await new Response(proc.stdout).text();
+          await proc.exited;
+          if (text) await ts.pasteText(agent.id, text);
+        } catch { showError('Clipboard read failed'); }
+      })();
+      return;
+    }
+
     // When in interactive mode, forward everything to tmux except ESC
     if (interactive()) {
       if (key.name === 'escape') {
@@ -411,6 +442,14 @@ export function AgentsView(props: AgentsViewProps) {
       showNewAgentDialog();
       return;
     }
+  });
+
+  usePaste((event) => {
+    if (!interactive() && activePane() !== 'terminal') return;
+    const ts = getTerminalService();
+    const agent = selectedAgent();
+    if (!ts || !agent) return;
+    ts.pasteText(agent.id, event.text).catch(() => showError('Paste failed'));
   });
 
   // ------------------------------------------------------------------
