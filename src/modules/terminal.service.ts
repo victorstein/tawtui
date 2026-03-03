@@ -273,7 +273,7 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
     // Normalise the input via the KEY_MAP (e.g. "return" -> "Enter").
     const mapped = KEY_MAP[input.toLowerCase()] ?? input;
 
-    if (SPECIAL_KEYS.has(mapped)) {
+    if (SPECIAL_KEYS.has(mapped) || /^C-[a-zA-Z]$/.test(mapped)) {
       // Send as a named key (no -l flag).
       const result = await this.execTmux([
         'send-keys',
@@ -302,6 +302,45 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
           `Failed to send text to session ${id}: ${result.stderr.trim()}`,
         );
       }
+    }
+  }
+
+  /**
+   * Paste text into a tmux pane using the tmux paste buffer.
+   *
+   * Uses `set-buffer` + `paste-buffer -p` which sends text as a single block
+   * wrapped in bracketed paste sequences, unlike `send-keys -l` which sends
+   * characters one at a time.
+   */
+  async pasteText(id: string, text: string): Promise<void> {
+    const session = this.sessions.get(id);
+    if (!session) throw new Error(`Session not found: ${id}`);
+    if (!text) return;
+
+    // Load text into tmux's paste buffer
+    const setResult = await this.execTmux(['set-buffer', '--', text]);
+
+    if (setResult.exitCode !== 0) {
+      // Fallback to send-keys for small text
+      this.logger.warn(
+        `set-buffer failed, falling back to send-keys: ${setResult.stderr.trim()}`,
+      );
+      await this.sendInput(id, text);
+      return;
+    }
+
+    // Paste from buffer into the pane (-p enables bracketed paste wrapping)
+    const pasteResult = await this.execTmux([
+      'paste-buffer',
+      '-t',
+      session.tmuxPaneId,
+      '-p',
+    ]);
+
+    if (pasteResult.exitCode !== 0) {
+      throw new Error(
+        `Failed to paste into session ${id}: ${pasteResult.stderr.trim()}`,
+      );
     }
   }
 

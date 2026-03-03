@@ -29,7 +29,7 @@ function getReviewsHint(ctx: ReviewsHintContext): string {
 
   switch (ctx.mode) {
     case 'interactive':
-      return 'ESC ESC exit interactive | all keys forwarded to agent';
+      return 'ESC ESC exit | Alt+C copy | Alt+V paste | keys forwarded to agent';
     case 'repo-left':
       return `${base} | h/l panes | j/k navigate | enter PRs | a add repo | x remove | n new agent | r refresh | q quit`;
     case 'agent-left':
@@ -37,7 +37,7 @@ function getReviewsHint(ctx: ReviewsHintContext): string {
     case 'prs-right':
       return `${base} | h/l panes | j/k navigate | enter detail/spawn | r refresh | q quit`;
     case 'terminal-right':
-      return `${base} | h/l panes | C-d/C-u scroll | i interactive | K kill | r refresh | q quit`;
+      return `${base} | h/l panes | C-d/C-u scroll | i interactive | Alt+C copy | Alt+V paste | K kill | r refresh | q quit`;
     case 'empty':
       return `${base} | a add repo | n new agent | q quit`;
   }
