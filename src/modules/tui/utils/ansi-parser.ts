@@ -161,6 +161,69 @@ const ESC_RE =
   /\x1b\[([0-9;]*)([A-Za-z@`])|\x1b\](?:[^\x07\x1b]*(?:\x07|\x1b\\))/g;
 
 /**
+ * Parse a single raw line of ANSI text into styled segments.
+ * Mutates `state` as a side effect to track style changes across lines.
+ */
+function parseSingleLine(rawLine: string, state: AnsiState): AnsiSegment[] {
+  const segments: AnsiSegment[] = [];
+  let lastIndex = 0;
+  let currentText = '';
+
+  ESC_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = ESC_RE.exec(rawLine)) !== null) {
+    // Collect text before this escape sequence
+    if (match.index > lastIndex) {
+      currentText += rawLine.slice(lastIndex, match.index);
+    }
+    lastIndex = match.index + match[0].length;
+
+    // Check if this is a CSI sequence (not an OSC)
+    if (match[2] !== undefined) {
+      if (match[2] === 'm') {
+        // SGR sequence — flush current text segment, then apply style changes
+        if (currentText.length > 0) {
+          pushSegment(segments, currentText, state);
+          currentText = '';
+        }
+
+        const paramStr = match[1];
+        if (paramStr === '' || paramStr === undefined) {
+          // \x1b[m is equivalent to \x1b[0m
+          applySgrParams([0], state);
+        } else {
+          const params = paramStr.split(';').map((s) => parseInt(s, 10) || 0);
+          applySgrParams(params, state);
+        }
+      }
+      // All other CSI sequences (cursor movement, etc.) are stripped
+    }
+    // OSC sequences are also stripped (captured but ignored)
+  }
+
+  // Remaining text after last escape sequence
+  if (lastIndex < rawLine.length) {
+    currentText += rawLine.slice(lastIndex);
+  }
+
+  if (currentText.length > 0) {
+    pushSegment(segments, currentText, state);
+  }
+
+  // If the line is empty (no segments), push an empty line
+  if (segments.length === 0) {
+    segments.push({ text: '', attrs: 0 });
+  }
+
+  return segments;
+}
+
+function isResetState(state: AnsiState): boolean {
+  return state.fg === undefined && state.bg === undefined && state.attrs === 0;
+}
+
+/**
  * Parse ANSI-encoded text into lines of styled segments.
  * Only handles SGR sequences (\x1b[...m). All other escape sequences are stripped.
  */
@@ -172,55 +235,75 @@ export function parseAnsiText(input: string): ParsedLine[] {
   const rawLines = input.split('\n');
 
   for (const rawLine of rawLines) {
-    const segments: AnsiSegment[] = [];
-    let lastIndex = 0;
-    let currentText = '';
+    lines.push(parseSingleLine(rawLine, state));
+  }
 
-    ESC_RE.lastIndex = 0;
-    let match: RegExpExecArray | null;
+  return lines;
+}
 
-    while ((match = ESC_RE.exec(rawLine)) !== null) {
-      // Collect text before this escape sequence
-      if (match.index > lastIndex) {
-        currentText += rawLine.slice(lastIndex, match.index);
+interface ExitState {
+  exitFg: string | undefined;
+  exitBg: string | undefined;
+  exitAttrs: number;
+}
+
+// Associates each caller-supplied segment cache with an internal exit state map.
+// Uses WeakMap so that when the caller's cache is garbage-collected, the state map is too.
+const exitStateRegistry = new WeakMap<
+  Map<string, AnsiSegment[]>,
+  Map<string, ExitState>
+>();
+
+function getExitStateMap(
+  cache: Map<string, AnsiSegment[]>,
+): Map<string, ExitState> {
+  let stateMap = exitStateRegistry.get(cache);
+  if (!stateMap) {
+    stateMap = new Map();
+    exitStateRegistry.set(cache, stateMap);
+  }
+  return stateMap;
+}
+
+/**
+ * Parse ANSI-encoded text with per-line caching.
+ * Lines entered with a reset state (no fg, bg, or attrs) are eligible for caching.
+ * Cached lines skip full parsing and only scan SGR sequences to track state changes.
+ */
+export function parseAnsiTextCached(
+  input: string,
+  cache: Map<string, AnsiSegment[]>,
+): ParsedLine[] {
+  const stateMap = getExitStateMap(cache);
+
+  const lines: ParsedLine[] = [];
+  const state: AnsiState = { fg: undefined, bg: undefined, attrs: 0 };
+  const rawLines = input.split('\n');
+
+  for (const rawLine of rawLines) {
+    const reset = isResetState(state);
+
+    if (reset) {
+      const cachedSegments = cache.get(rawLine);
+      const cachedExit = stateMap.get(rawLine);
+      if (cachedSegments && cachedExit) {
+        lines.push(cachedSegments);
+        state.fg = cachedExit.exitFg;
+        state.bg = cachedExit.exitBg;
+        state.attrs = cachedExit.exitAttrs;
+        continue;
       }
-      lastIndex = match.index + match[0].length;
-
-      // Check if this is a CSI sequence (not an OSC)
-      if (match[2] !== undefined) {
-        if (match[2] === 'm') {
-          // SGR sequence — flush current text segment, then apply style changes
-          if (currentText.length > 0) {
-            pushSegment(segments, currentText, state);
-            currentText = '';
-          }
-
-          const paramStr = match[1];
-          if (paramStr === '' || paramStr === undefined) {
-            // \x1b[m is equivalent to \x1b[0m
-            applySgrParams([0], state);
-          } else {
-            const params = paramStr.split(';').map((s) => parseInt(s, 10) || 0);
-            applySgrParams(params, state);
-          }
-        }
-        // All other CSI sequences (cursor movement, etc.) are stripped
-      }
-      // OSC sequences are also stripped (captured but ignored)
     }
 
-    // Remaining text after last escape sequence
-    if (lastIndex < rawLine.length) {
-      currentText += rawLine.slice(lastIndex);
-    }
+    const segments = parseSingleLine(rawLine, state);
 
-    if (currentText.length > 0) {
-      pushSegment(segments, currentText, state);
-    }
-
-    // If the line is empty (no segments), push an empty line
-    if (segments.length === 0) {
-      segments.push({ text: '', attrs: 0 });
+    if (reset) {
+      cache.set(rawLine, segments);
+      stateMap.set(rawLine, {
+        exitFg: state.fg,
+        exitBg: state.bg,
+        exitAttrs: state.attrs,
+      });
     }
 
     lines.push(segments);

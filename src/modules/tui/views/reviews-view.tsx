@@ -277,22 +277,9 @@ export default function ReviewsView(props: ReviewsViewProps) {
     }
   }
 
-  // ── Poll overlap guard ──────────────────────────────────────────
-
-  let isPolling = false;
-
-  async function doPoll(): Promise<void> {
-    if (isPolling) return;
-    isPolling = true;
-    try {
-      await refreshCapture();
-    } finally {
-      isPolling = false;
-    }
-  }
-
   // ── Adaptive polling ────────────────────────────────────────────
 
+  let pollVersion = 0;
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
 
   function getPollInterval(): number {
@@ -303,10 +290,24 @@ export default function ReviewsView(props: ReviewsViewProps) {
     return 2000;
   }
 
-  function schedulePoll(): void {
+  function schedulePoll(version: number): void {
     pollTimer = setTimeout(() => {
-      void doPoll().then(() => schedulePoll());
+      if (version !== pollVersion) return;
+      void (async () => {
+        if (version !== pollVersion) return;
+        await refreshCapture();
+        if (version === pollVersion) schedulePoll(version);
+      })();
     }, getPollInterval());
+  }
+
+  function restartPolling(): void {
+    pollVersion++;
+    if (pollTimer !== null) {
+      clearTimeout(pollTimer);
+      pollTimer = null;
+    }
+    schedulePoll(pollVersion);
   }
 
   // ── Effects and lifecycle ───────────────────────────────────────
@@ -354,10 +355,7 @@ export default function ReviewsView(props: ReviewsViewProps) {
     activePane();
     void agents().length;
     void selectedItem().kind;
-    if (pollTimer !== null) {
-      clearTimeout(pollTimer);
-    }
-    schedulePoll();
+    restartPolling();
   });
 
   onMount(() => {
@@ -368,6 +366,7 @@ export default function ReviewsView(props: ReviewsViewProps) {
   });
 
   onCleanup(() => {
+    pollVersion++;
     if (pollTimer !== null) {
       clearTimeout(pollTimer);
       pollTimer = null;
