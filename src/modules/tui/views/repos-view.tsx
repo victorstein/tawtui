@@ -89,6 +89,7 @@ export function ReposView(props: ReposViewProps) {
       const prList = await gh.listPRs(repo.owner, repo.repo);
       // Discard stale response if user switched repos while loading
       if (version !== prLoadVersion) return;
+
       setPrs(prList);
       if (prIndex() >= prList.length) {
         setPrIndex(Math.max(prList.length - 1, 0));
