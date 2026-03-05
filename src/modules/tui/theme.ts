@@ -97,3 +97,6 @@ export const INTERACTIVE_GRAD: [string, string] = [P.green, P.tertiary];
 
 // Calendar pane gradient (bright teal → dark teal)
 export const CALENDAR_GRAD: [string, string] = [P.tealBright, P.tealGreen];
+
+// Archive pane gradient (warm amber → slate)
+export const ARCHIVE_GRAD: [string, string] = [P.amber, P.secondary];

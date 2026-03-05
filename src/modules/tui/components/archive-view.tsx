@@ -1,9 +1,8 @@
 import {
   createSignal,
   createEffect,
-  onMount,
-  Show,
-  For,
+  createMemo,
+  on,
   type Accessor,
 } from 'solid-js';
 import { useKeyboard, useTerminalDimensions } from '@opentui/solid';
@@ -11,25 +10,10 @@ import type { Task } from '../../taskwarrior.types';
 import { DialogConfirm } from './dialog-confirm';
 import { useDialog } from '../context/dialog';
 import { getTaskwarriorService } from '../bridge';
-import {
-  BG_SELECTED,
-  FG_PRIMARY,
-  FG_NORMAL,
-  FG_DIM,
-  SEPARATOR_COLOR,
-  COLOR_ERROR,
-  PRIORITY_H,
-  PRIORITY_M,
-  PRIORITY_L,
-} from '../theme';
+import { DateList, type DateGroup } from './date-list';
+import ArchiveTaskList from './archive-task-list';
 
-const PRIORITY_COLORS: Record<string, string> = {
-  H: PRIORITY_H,
-  M: PRIORITY_M,
-  L: PRIORITY_L,
-};
-
-const MONTH_NAMES = [
+export const MONTH_NAMES = [
   'Jan',
   'Feb',
   'Mar',
@@ -44,10 +28,8 @@ const MONTH_NAMES = [
   'Dec',
 ];
 
-/**
- * Parse a Taskwarrior date string (YYYYMMDDTHHMMSSZ) into a Date object.
- */
-function parseTwDate(dateStr: string): Date | null {
+/** Parse a Taskwarrior date string (YYYYMMDDTHHMMSSZ) into a Date object. */
+export function parseTwDate(dateStr: string): Date | null {
   try {
     const y = parseInt(dateStr.slice(0, 4), 10);
     const m = parseInt(dateStr.slice(4, 6), 10) - 1;
@@ -61,9 +43,7 @@ function parseTwDate(dateStr: string): Date | null {
   }
 }
 
-/**
- * Format a Date as "Mon DD, YYYY" (e.g., "Feb 13, 2026").
- */
+/** Format a Date as "Mon DD, YYYY" (e.g., "Feb 13, 2026"). */
 function formatDateHeader(date: Date): string {
   const month = MONTH_NAMES[date.getMonth()];
   const day = date.getDate();
@@ -71,22 +51,7 @@ function formatDateHeader(date: Date): string {
   return `${month} ${day}, ${year}`;
 }
 
-/**
- * Format a Taskwarrior date string for display as a short date/time.
- */
-function formatCompletionDate(dateStr: string): string {
-  const date = parseTwDate(dateStr);
-  if (!date) return dateStr;
-  const month = MONTH_NAMES[date.getMonth()];
-  const day = date.getDate();
-  const hours = date.getHours().toString().padStart(2, '0');
-  const mins = date.getMinutes().toString().padStart(2, '0');
-  return `${month} ${day} ${hours}:${mins}`;
-}
-
-/**
- * Get the date-only key (YYYY-MM-DD in local time) from a Taskwarrior date string.
- */
+/** Get the date-only key (YYYY-MM-DD in local time) from a Taskwarrior date string. */
 function getDateKey(dateStr: string): string {
   const date = parseTwDate(dateStr);
   if (!date) return 'unknown';
@@ -96,18 +61,11 @@ function getDateKey(dateStr: string): string {
   return `${y}-${m}-${d}`;
 }
 
-interface DateGroup {
-  dateKey: string;
-  label: string;
-  tasks: Task[];
-}
-
 /**
  * Group tasks by their completion date (local time), sorted by date descending.
  * Tasks within each group are sorted by end date descending.
  */
 function groupByDate(tasks: Task[]): DateGroup[] {
-  // Sort all tasks by end date descending
   const sorted = [...tasks].sort((a, b) => {
     const aEnd = a.end ?? '';
     const bEnd = b.end ?? '';
@@ -127,36 +85,16 @@ function groupByDate(tasks: Task[]): DateGroup[] {
     groups.get(key)!.tasks.push(task);
   }
 
-  // Convert to array (already ordered by descending date since tasks were sorted)
   const result: DateGroup[] = [];
-  for (const [dateKey, group] of groups) {
-    result.push({ dateKey, label: group.label, tasks: group.tasks });
+  for (const [date, group] of groups) {
+    result.push({ date, label: group.label, tasks: group.tasks });
   }
 
   return result;
 }
 
-/**
- * A flat list item: either a date header or a task row.
- */
-type FlatItem =
-  | { type: 'header'; label: string }
-  | { type: 'task'; task: Task };
-
-/**
- * Flatten grouped tasks into a list of headers and task rows
- * for linear navigation.
- */
-function flattenGroups(groups: DateGroup[]): FlatItem[] {
-  const items: FlatItem[] = [];
-  for (const group of groups) {
-    items.push({ type: 'header', label: group.label });
-    for (const task of group.tasks) {
-      items.push({ type: 'task', task });
-    }
-  }
-  return items;
-}
+/** Pane identifiers for the split-pane layout. */
+type Pane = 'dates' | 'tasks';
 
 interface ArchiveViewProps {
   isActive: Accessor<boolean>;
@@ -166,46 +104,54 @@ export function ArchiveView(props: ArchiveViewProps) {
   const dimensions = useTerminalDimensions();
   const dialog = useDialog();
 
+  // Active pane state
+  const [activePane, setActivePane] = createSignal<Pane>('dates');
+
+  // Raw task data
   const [tasks, setTasks] = createSignal<Task[]>([]);
   const [loading, setLoading] = createSignal(true);
-  const [error, setError] = createSignal<string | null>(null);
-  const [selectedIndex, setSelectedIndex] = createSignal(0);
+  const [, setError] = createSignal<string | null>(null);
 
-  // Derived: grouped and flattened items
-  const groups = () => groupByDate(tasks());
-  const flatItems = () => flattenGroups(groups());
+  // Pane selection indices
+  const [dateIndex, setDateIndex] = createSignal(0);
+  const [taskIndex, setTaskIndex] = createSignal(0);
 
-  // Find the indices that correspond to task items (skipping headers)
-  const taskIndices = () => {
-    const items = flatItems();
-    const indices: number[] = [];
-    for (let i = 0; i < items.length; i++) {
-      if (items[i].type === 'task') {
-        indices.push(i);
-      }
+  // Derived: date groups from raw tasks
+  const dateGroups = createMemo(() => groupByDate(tasks()));
+
+  // Derived: tasks for the currently selected date group
+  const selectedDateTasks = createMemo(() => {
+    const groups = dateGroups();
+    const idx = dateIndex();
+    if (groups.length === 0 || idx >= groups.length) return [];
+    return groups[idx].tasks;
+  });
+
+  // Reset task index when the selected date changes
+  createEffect(
+    on(dateIndex, () => {
+      setTaskIndex(0);
+    }),
+  );
+
+  // Clamp dateIndex when date groups change
+  createEffect(() => {
+    const maxIdx = dateGroups().length - 1;
+    if (dateIndex() > maxIdx) {
+      setDateIndex(Math.max(maxIdx, 0));
     }
-    return indices;
-  };
+  });
 
-  // The currently selected task-item index within taskIndices
-  const selectedTaskIdx = () => {
-    const tIdx = taskIndices();
-    const sel = selectedIndex();
-    if (sel < 0 || sel >= tIdx.length) return -1;
-    return tIdx[sel];
-  };
-
-  // The currently selected task
-  const selectedTask = (): Task | null => {
-    const idx = selectedTaskIdx();
-    if (idx < 0) return null;
-    const item = flatItems()[idx];
-    if (item?.type === 'task') return item.task;
-    return null;
-  };
+  // Clamp taskIndex when tasks for selected date change
+  createEffect(() => {
+    const maxIdx = selectedDateTasks().length - 1;
+    if (taskIndex() > maxIdx) {
+      setTaskIndex(Math.max(maxIdx, 0));
+    }
+  });
 
   /** Fetch archived (completed before today) tasks. */
-  async function loadArchive(): Promise<void> {
+  function loadArchive(): void {
     const tw = getTaskwarriorService();
     if (!tw) {
       setError('TaskwarriorService not available');
@@ -217,7 +163,7 @@ export function ArchiveView(props: ArchiveViewProps) {
     setError(null);
 
     try {
-      const completed = await tw.getTasks('status:completed end.before:today');
+      const completed = tw.getTasks('status:completed end.before:today');
       setTasks(completed);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load archive');
@@ -226,14 +172,6 @@ export function ArchiveView(props: ArchiveViewProps) {
     }
   }
 
-  // Clamp selected index when data changes
-  createEffect(() => {
-    const maxIdx = taskIndices().length - 1;
-    if (selectedIndex() > maxIdx) {
-      setSelectedIndex(Math.max(maxIdx, 0));
-    }
-  });
-
   // Load archive when the view becomes active
   createEffect(() => {
     if (props.isActive()) {
@@ -241,51 +179,74 @@ export function ArchiveView(props: ArchiveViewProps) {
     }
   });
 
-  // Also load on mount if already active
-  onMount(() => {
-    if (props.isActive()) {
-      loadArchive();
-    }
-  });
+  /** Get the currently selected task from the right pane. */
+  function selectedTask(): Task | null {
+    const taskList = selectedDateTasks();
+    const idx = taskIndex();
+    return taskList[idx] ?? null;
+  }
 
   // Keyboard navigation
   useKeyboard((key) => {
     if (!props.isActive()) return;
     if (dialog.isOpen()) return;
 
-    // Navigate down
+    const pane = activePane();
+
+    // Pane switching: h/l or Left/Right
+    if (key.name === 'h' || key.name === 'left') {
+      setActivePane('dates');
+      return;
+    }
+    if (key.name === 'l' || key.name === 'right') {
+      if (dateGroups().length > 0) {
+        setActivePane('tasks');
+      }
+      return;
+    }
+
+    // Within-pane navigation: j/k
     if (key.name === 'j' || key.name === 'down') {
-      const maxIdx = taskIndices().length - 1;
-      setSelectedIndex((i) => Math.min(i + 1, Math.max(maxIdx, 0)));
+      if (pane === 'dates') {
+        setDateIndex((i) =>
+          Math.min(i + 1, Math.max(dateGroups().length - 1, 0)),
+        );
+      } else {
+        setTaskIndex((i) =>
+          Math.min(i + 1, Math.max(selectedDateTasks().length - 1, 0)),
+        );
+      }
       return;
     }
-
-    // Navigate up
     if (key.name === 'k' || key.name === 'up') {
-      setSelectedIndex((i) => Math.max(i - 1, 0));
+      if (pane === 'dates') {
+        setDateIndex((i) => Math.max(i - 1, 0));
+      } else {
+        setTaskIndex((i) => Math.max(i - 1, 0));
+      }
       return;
     }
 
-    // Undo: mark completed task as pending again
+    // Undo: mark completed task as pending again (right pane only)
     if (key.name === 'u' && !key.shift) {
+      if (pane !== 'tasks') return;
       const task = selectedTask();
       if (!task) return;
 
-      (async () => {
-        const tw = getTaskwarriorService();
-        if (!tw) return;
-        try {
-          await tw.undoComplete(task.uuid);
-        } catch {
-          // Silently ignore; refresh will show current state
-        }
-        await loadArchive();
-      })();
+      const tw = getTaskwarriorService();
+      if (!tw) return;
+      try {
+        tw.undoComplete(task.uuid);
+      } catch {
+        // Silently ignore; refresh will show current state
+      }
+      loadArchive();
       return;
     }
 
-    // Delete: permanently delete task (with confirmation)
+    // Delete: permanently delete task (with confirmation, right pane only)
     if (key.name === 'D' || (key.name === 'd' && key.shift)) {
+      if (pane !== 'tasks') return;
       const task = selectedTask();
       if (!task) return;
 
@@ -293,15 +254,15 @@ export function ArchiveView(props: ArchiveViewProps) {
         () => (
           <DialogConfirm
             message={`Permanently delete "${task.description}"?`}
-            onConfirm={async () => {
+            onConfirm={() => {
               const tw = getTaskwarriorService();
               if (tw) {
                 try {
-                  await tw.deleteTask(task.uuid);
+                  tw.deleteTask(task.uuid);
                 } catch {
                   // Silently ignore
                 }
-                await loadArchive();
+                loadArchive();
               }
               dialog.close();
             }}
@@ -320,146 +281,30 @@ export function ArchiveView(props: ArchiveViewProps) {
     }
   });
 
-  const contentWidth = () => dimensions().width;
+  // Calculate pane widths from terminal dimensions
+  const width = () => dimensions().width;
+
+  const datePaneWidth = () => Math.max(Math.floor(width() * 0.3), 25);
+  const taskPaneWidth = () => width() - datePaneWidth();
 
   return (
     <box flexDirection="column" flexGrow={1} width="100%">
-      {/* Archive header */}
-      <box height={1} paddingX={1}>
-        <text fg={FG_NORMAL} attributes={1}>
-          {'ARCHIVE'}
-        </text>
-        <text fg={FG_DIM}>
-          {` \u2014 ${tasks().length} completed task${tasks().length !== 1 ? 's' : ''}`}
-        </text>
+      <box flexDirection="row" flexGrow={1} width="100%">
+        <DateList
+          dates={dateGroups()}
+          selectedIndex={dateIndex()}
+          isActivePane={activePane() === 'dates'}
+          width={datePaneWidth()}
+        />
+        <ArchiveTaskList
+          tasks={selectedDateTasks()}
+          selectedIndex={taskIndex()}
+          isActivePane={activePane() === 'tasks'}
+          width={taskPaneWidth()}
+          dateLabel={dateGroups()[dateIndex()]?.label ?? null}
+          loading={loading()}
+        />
       </box>
-
-      {/* Separator */}
-      <box height={1} paddingX={1}>
-        <text fg={SEPARATOR_COLOR} truncate>
-          {'\u2500'.repeat(Math.max(contentWidth() - 2, 1))}
-        </text>
-      </box>
-
-      {/* Loading */}
-      <Show when={loading() && tasks().length === 0}>
-        <box height={1} paddingX={1}>
-          <text fg={FG_DIM}>Loading archive...</text>
-        </box>
-      </Show>
-
-      {/* Error */}
-      <Show when={error()}>
-        <box height={1} paddingX={1}>
-          <text fg={COLOR_ERROR}>Error: {error()}</text>
-        </box>
-      </Show>
-
-      {/* Empty state */}
-      <Show when={!loading() && !error() && tasks().length === 0}>
-        <box paddingX={2} paddingY={1}>
-          <text fg={FG_DIM}>No archived tasks found.</text>
-        </box>
-      </Show>
-
-      {/* Task list grouped by date */}
-      <Show when={flatItems().length > 0}>
-        <scrollbox flexGrow={1} width="100%">
-          <For each={flatItems()}>
-            {(item, flatIdx) => (
-              <Show
-                when={item.type === 'header'}
-                fallback={
-                  <ArchiveTaskRow
-                    task={(item as { type: 'task'; task: Task }).task}
-                    isSelected={selectedTaskIdx() === flatIdx()}
-                    width={contentWidth()}
-                  />
-                }
-              >
-                <box height={1} paddingX={1} marginTop={flatIdx() > 0 ? 1 : 0}>
-                  <text fg={FG_NORMAL} attributes={1}>
-                    {(item as { type: 'header'; label: string }).label}
-                  </text>
-                </box>
-              </Show>
-            )}
-          </For>
-        </scrollbox>
-      </Show>
-    </box>
-  );
-}
-
-interface ArchiveTaskRowProps {
-  task: Task;
-  isSelected: boolean;
-  width: number;
-}
-
-function ArchiveTaskRow(props: ArchiveTaskRowProps) {
-  const task = () => props.task;
-  const selected = () => props.isSelected;
-
-  const priorityBadge = () => {
-    const p = task().priority;
-    if (!p) return '';
-    return `[${p}]`;
-  };
-
-  const priorityColor = () => {
-    const p = task().priority;
-    if (!p) return FG_DIM;
-    return PRIORITY_COLORS[p] ?? FG_DIM;
-  };
-
-  const metaLine = () => {
-    const parts: string[] = [];
-
-    // Completion date/time
-    if (task().end) {
-      parts.push(`completed ${formatCompletionDate(task().end!)}`);
-    }
-
-    // Project
-    if (task().project) {
-      parts.push(`+${task().project}`);
-    }
-
-    return parts.join('  ');
-  };
-
-  return (
-    <box
-      flexDirection="column"
-      width="100%"
-      backgroundColor={selected() ? BG_SELECTED : undefined}
-      paddingX={2}
-    >
-      {/* First line: priority badge + description */}
-      <box height={1} width="100%">
-        <Show when={priorityBadge()}>
-          <text fg={priorityColor()} attributes={1}>
-            {priorityBadge() + ' '}
-          </text>
-        </Show>
-        <text
-          fg={selected() ? FG_PRIMARY : FG_NORMAL}
-          attributes={selected() ? 1 : 0}
-          truncate
-        >
-          {task().description}
-        </text>
-      </box>
-
-      {/* Second line: completion date, project */}
-      <Show when={metaLine()}>
-        <box height={1} width="100%">
-          <text fg={FG_DIM} truncate>
-            {'  ' + metaLine()}
-          </text>
-        </box>
-      </Show>
     </box>
   );
 }
