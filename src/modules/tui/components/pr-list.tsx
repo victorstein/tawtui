@@ -1,4 +1,5 @@
-import { For, Show, createSignal, onMount, onCleanup } from 'solid-js';
+import { For, Show, createSignal, createEffect, onMount, onCleanup } from 'solid-js';
+import type { ScrollBoxRenderable } from '@opentui/core';
 import type { PullRequest } from '../../github.types';
 import type { TerminalSession } from '../../terminal.types';
 import {
@@ -42,16 +43,17 @@ interface PrListProps {
 function getReviewIcon(decision: string | null): {
   char: string;
   color: string;
+  label: string;
 } {
   switch (decision) {
     case 'APPROVED':
-      return { char: '\u2713', color: COLOR_SUCCESS };
+      return { char: '\u2713', color: COLOR_SUCCESS, label: 'Approved' };
     case 'CHANGES_REQUESTED':
-      return { char: '\u2717', color: COLOR_ERROR };
+      return { char: '\u2717', color: COLOR_ERROR, label: 'Changes' };
     case 'REVIEW_REQUIRED':
-      return { char: '\u25CF', color: COLOR_WARNING };
+      return { char: '\u25CF', color: COLOR_WARNING, label: 'Review' };
     default:
-      return { char: '\u25CB', color: FG_MUTED };
+      return { char: '\u25CB', color: FG_MUTED, label: 'None' };
   }
 }
 
@@ -60,16 +62,16 @@ function getReviewIcon(decision: string | null): {
  */
 function getCiIcon(
   checks: Array<{ name: string; status: string; conclusion: string | null }>,
-): { char: string; color: string } {
+): { char: string; color: string; label: string } {
   if (checks.length === 0) {
-    return { char: '\u25CB', color: FG_MUTED };
+    return { char: '\u25CB', color: FG_MUTED, label: 'CI' };
   }
 
   const anyFailing = checks.some(
     (c) => c.conclusion === 'FAILURE' || c.conclusion === 'ERROR',
   );
   if (anyFailing) {
-    return { char: '\u2717', color: COLOR_ERROR };
+    return { char: '\u2717', color: COLOR_ERROR, label: 'CI' };
   }
 
   const allPassed = checks.every(
@@ -79,14 +81,35 @@ function getCiIcon(
       c.conclusion === 'SKIPPED',
   );
   if (allPassed) {
-    return { char: '\u2713', color: COLOR_SUCCESS };
+    return { char: '\u2713', color: COLOR_SUCCESS, label: 'CI' };
   }
 
   // Some are still pending
-  return { char: '\u25CF', color: COLOR_WARNING };
+  return { char: '\u25CF', color: COLOR_WARNING, label: 'CI' };
 }
 
+const REVIEW_PRIORITY: Record<string, number> = {
+  REVIEW_REQUIRED: 1,
+  CHANGES_REQUESTED: 2,
+  APPROVED: 3,
+};
+
 export function PrList(props: PrListProps) {
+  let scrollRef: ScrollBoxRenderable | undefined;
+
+  const sortedPrs = () =>
+    [...props.prs].sort(
+      (a, b) =>
+        (REVIEW_PRIORITY[a.reviewDecision ?? ''] ?? 0) -
+        (REVIEW_PRIORITY[b.reviewDecision ?? ''] ?? 0),
+    );
+
+  createEffect(() => {
+    const idx = props.selectedIndex;
+    const rowHeight = 3;
+    scrollRef?.scrollTo(idx * rowHeight);
+  });
+
   const spinnerFrames = [
     '\u280B',
     '\u2819',
@@ -233,9 +256,15 @@ export function PrList(props: PrListProps) {
       </Show>
 
       {/* PR list (scrollbox only mounted when there are PRs) */}
-      <Show when={props.prs.length > 0}>
-        <scrollbox flexGrow={1} width="100%">
-          <For each={props.prs}>
+      <Show when={sortedPrs().length > 0}>
+        <scrollbox
+          ref={(el: ScrollBoxRenderable) => {
+            scrollRef = el;
+          }}
+          flexGrow={1}
+          width="100%"
+        >
+          <For each={sortedPrs()}>
             {(pr, index) => {
               const isSelected = () =>
                 props.isActivePane && index() === props.selectedIndex;
@@ -319,11 +348,17 @@ export function PrList(props: PrListProps) {
                     <text fg={FG_DIM}>/</text>
                     <text fg={COLOR_ERROR}>{`-${pr.deletions}`}</text>
                     <text fg={FG_DIM}>{'  '}</text>
-                    <text fg={FG_MUTED}>{'Rev '}</text>
-                    <text fg={review().color}>{review().char}</text>
-                    <text fg={FG_DIM}>{'  '}</text>
-                    <text fg={FG_MUTED}>{'CI '}</text>
-                    <text fg={ci().color}>{ci().char}</text>
+                    <box backgroundColor={darkenHex(review().color, 0.7)}>
+                      <text
+                        fg={FG_NORMAL}
+                      >{` ${review().char} ${review().label} `}</text>
+                    </box>
+                    <text> </text>
+                    <box backgroundColor={darkenHex(ci().color, 0.7)}>
+                      <text
+                        fg={FG_NORMAL}
+                      >{` ${ci().char} ${ci().label} `}</text>
+                    </box>
                   </box>
                 </box>
               );

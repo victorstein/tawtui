@@ -1,7 +1,12 @@
 import { createSignal, createEffect, on, onMount } from 'solid-js';
 import { useKeyboard, useTerminalDimensions } from '@opentui/solid';
 import type { RepoConfig } from '../../../shared/types';
-import type { PullRequest, PullRequestDetail } from '../../github.types';
+import type {
+  PullRequest,
+  PullRequestDetail,
+  PrDiff,
+} from '../../github.types';
+import type { ProjectAgentConfig } from '../../config.types';
 import { RepoList } from '../components/repo-list';
 import { PrList } from '../components/pr-list';
 import { DialogPrDetail } from '../components/dialog-pr-detail';
@@ -84,6 +89,12 @@ export function ReposView(props: ReposViewProps) {
       const prList = await gh.listPRs(repo.owner, repo.repo);
       // Discard stale response if user switched repos while loading
       if (version !== prLoadVersion) return;
+      prList.sort((a, b) => {
+        const aApproved = a.reviewDecision === 'APPROVED' ? 1 : 0;
+        const bApproved = b.reviewDecision === 'APPROVED' ? 1 : 0;
+        if (aApproved !== bApproved) return aApproved - bApproved;
+        return b.number - a.number;
+      });
       setPrs(prList);
       if (prIndex() >= prList.length) {
         setPrIndex(Math.max(prList.length - 1, 0));
@@ -306,16 +317,66 @@ export function ReposView(props: ReposViewProps) {
               () => (
                 <DialogPrDetail
                   pr={detail}
-                  onSendToAgent={() => {
+                  onSendToAgent={async () => {
                     dialog.close();
+                    const bridge = (globalThis as Record<string, unknown>)
+                      .__tawtui as Record<string, unknown> | undefined;
                     const createSession = getCreatePrReviewSession();
                     if (!createSession) return;
-                    createSession(
-                      detail.number,
-                      repo.owner,
-                      repo.repo,
-                      detail.title,
-                    ).catch(() => {
+
+                    try {
+                      let prDiff: PrDiff | undefined;
+                      if (
+                        bridge &&
+                        typeof bridge.getPrDiff === 'function'
+                      ) {
+                        try {
+                          prDiff = (await (
+                            bridge.getPrDiff as (
+                              owner: string,
+                              repo: string,
+                              number: number,
+                            ) => Promise<PrDiff>
+                          )(
+                            repo.owner,
+                            repo.repo,
+                            detail.number,
+                          )) as PrDiff | undefined;
+                        } catch {
+                          // Non-fatal
+                        }
+                      }
+
+                      let projectConfig: ProjectAgentConfig | undefined;
+                      const projectKey = `${repo.owner}/${repo.repo}`;
+                      if (
+                        bridge &&
+                        typeof bridge.getProjectAgentConfig === 'function'
+                      ) {
+                        try {
+                          projectConfig =
+                            ((
+                              bridge.getProjectAgentConfig as (
+                                key: string,
+                              ) => ProjectAgentConfig | null
+                            )(projectKey) ?? undefined) as
+                              | ProjectAgentConfig
+                              | undefined;
+                        } catch {
+                          // Non-fatal
+                        }
+                      }
+
+                      await createSession(
+                        detail.number,
+                        repo.owner,
+                        repo.repo,
+                        detail.title,
+                        detail,
+                        prDiff,
+                        projectConfig,
+                      );
+                    } catch {
                       dialog.show(
                         () => (
                           <box flexDirection="column" paddingX={1} paddingY={1}>
@@ -333,7 +394,7 @@ export function ReposView(props: ReposViewProps) {
                         ),
                         { size: 'medium' },
                       );
-                    });
+                    }
                   }}
                   onClose={() => dialog.close()}
                 />

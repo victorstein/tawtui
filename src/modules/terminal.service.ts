@@ -19,6 +19,24 @@ import type { ExecResult } from '../shared/types';
 import type { PrDiff, PullRequestDetail } from './github.types';
 import type { ProjectAgentConfig } from './config.types';
 
+/**
+ * Strip control characters and backslashes from user-controlled input,
+ * then truncate to a safe length. Used before interpolating into shell
+ * commands or markdown headings.
+ */
+function sanitizeForShellPrompt(input: string, maxLen = 200): string {
+  // eslint-disable-next-line no-control-regex
+  return input.replace(/[\x00-\x1f\x7f\\]/g, '').slice(0, maxLen);
+}
+
+/**
+ * Prevent content from breaking out of a markdown code fence by inserting
+ * a zero-width space after runs of three or more backticks.
+ */
+function escapeCodeFenceContent(input: string): string {
+  return input.replace(/`{3,}/g, (match) => match + '\u200B');
+}
+
 const KEY_MAP: Record<string, string> = {
   return: 'Enter',
   escape: 'Escape',
@@ -552,7 +570,7 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
       const contextFilePath = join(worktreeInfo.path, '.tawtui-pr-context.md');
 
       const sections: string[] = [
-        `# PR Review Context: #${prNumber} — ${prTitle}`,
+        `# PR Review Context: #${prNumber} — ${sanitizeForShellPrompt(prTitle)}`,
         ``,
         `**Repository:** ${repoOwner}/${repoName}`,
         `**Branch:** ${prDetail.headRefName} → ${prDetail.baseRefName}`,
@@ -561,7 +579,9 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
         ``,
         `## Description`,
         ``,
-        prDetail.body || '_No description provided._',
+        '```',
+        escapeCodeFenceContent(prDetail.body || '_No description provided._'),
+        '```',
         ``,
       ];
 
@@ -569,14 +589,20 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
         sections.push(`## Changed Files`, ``);
         for (const file of prDetail.files) {
           sections.push(
-            `- \`${file.path}\` (+${file.additions}/-${file.deletions})`,
+            `- \`${sanitizeForShellPrompt(file.path, 500)}\` (+${file.additions}/-${file.deletions})`,
           );
         }
         sections.push(``);
       }
 
       if (prDiff) {
-        sections.push(`## Diff`, ``, '```diff', prDiff.raw, '```');
+        sections.push(
+          `## Diff`,
+          ``,
+          '```diff',
+          escapeCodeFenceContent(prDiff.raw),
+          '```',
+        );
       }
 
       writeFileSync(contextFilePath, sections.join('\n'), 'utf-8');
@@ -602,11 +628,65 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
     // Build an interactive agent command with the review prompt
     if (command) {
       const reviewPrompt = [
-        `Review PR #${prNumber} in ${repoOwner}/${repoName}: "${prTitle}".`,
+        `Review PR #${prNumber} in ${repoOwner}/${repoName}: "${sanitizeForShellPrompt(prTitle)}".`,
         'Read .tawtui-pr-context.md for full context including description, changed files, and diff.',
         'You have full access to the codebase at the PR branch.',
-        'Provide a thorough code review covering: code quality, potential bugs, security concerns, and suggested improvements.',
-      ].join(' ');
+        '',
+        '## Gathering Context',
+        '**Diffs alone are not enough.** After getting the diff, read the entire file(s) being modified to understand the full context. Code that looks wrong in isolation may be correct given surrounding logic—and vice versa.',
+        '- Use the diff to identify which files changed',
+        '- Use `git status --short` to identify untracked files, then read their full contents',
+        '- Read the full file to understand existing patterns, control flow, and error handling',
+        '- Check for existing style guide or conventions files (CONVENTIONS.md, AGENTS.md, .editorconfig, etc.)',
+        '',
+        '## What to Look For',
+        '**Bugs** — Your primary focus.',
+        '- Logic errors, off-by-one mistakes, incorrect conditionals',
+        '- If-else guards: missing guards, incorrect branching, unreachable code paths',
+        '- Edge cases: null/empty/undefined inputs, error conditions, race conditions',
+        '- Security issues: injection, auth bypass, data exposure',
+        '- Broken error handling that swallows failures, throws unexpectedly, or returns error types that are not caught',
+        '**Structure** — Does the code fit the codebase?',
+        '- Does it follow existing patterns and conventions?',
+        "- Are there established abstractions it should use but doesn't?",
+        '- Excessive nesting that could be flattened with early returns or extraction',
+        '**Performance** — Only flag if obviously problematic.',
+        '- O(n²) on unbounded data, N+1 queries, blocking I/O on hot paths',
+        "**Behavior Changes** — If a behavioral change is introduced, raise it (especially if it's possibly unintentional).",
+        '',
+        '## Before You Flag Something',
+        "**Be certain.** If you're going to call something a bug, you need to be confident it actually is one.",
+        "- Only review the changes — do not review pre-existing code that wasn't modified",
+        "- Don't flag something as a bug if you're unsure — investigate first",
+        "- Don't invent hypothetical problems — if an edge case matters, explain the realistic scenario where it breaks",
+        '- If you need more context to be sure, read the surrounding code and verify',
+        "**Don't be a zealot about style.** When checking code against conventions:",
+        "- Verify the code is *actually* in violation. Don't complain about else statements if early returns are already being used correctly.",
+        '- Some "violations" are acceptable when they\'re the simplest option. A `let` statement is fine if the alternative is convoluted.',
+        '- Excessive nesting is a legitimate concern regardless of other style choices.',
+        "- Don't flag style preferences as issues unless they clearly violate established project conventions.",
+        '',
+        '## Output Format',
+        'For each issue found, use:',
+        '### [SEVERITY] file:line — Short description',
+        'Explanation of the problem and the specific scenario where it breaks.',
+        '// the problematic code',
+        'Suggested fix if applicable.',
+        '',
+        'Severity levels:',
+        '- **BUG** — Will cause incorrect behavior under realistic conditions',
+        '- **ISSUE** — Likely to cause problems but depends on specific conditions',
+        '- **NITS** — Minor improvements, style, or readability concerns',
+        '',
+        '## Output Rules',
+        '1. If there is a bug, be direct and clear about why it is a bug.',
+        '2. Clearly communicate severity of issues. Do not overstate severity.',
+        '3. Critiques should clearly and explicitly communicate the scenarios, environments, or inputs that are necessary for the bug to arise.',
+        '4. Your tone should be matter-of-fact — not accusatory or overly positive.',
+        '5. Write so the reader can quickly understand the issue without reading too closely.',
+        '6. AVOID flattery. No "Great job...", "Thanks for...", or "Overall the code looks good...".',
+        '7. If there are no issues worth flagging, say "No issues found." and nothing else.',
+      ].join('\n');
       const escaped = reviewPrompt.replace(/'/g, "'\\''");
       command = `${command} '${escaped}'`;
     }
