@@ -19,6 +19,24 @@ import type { ExecResult } from '../shared/types';
 import type { PrDiff, PullRequestDetail } from './github.types';
 import type { ProjectAgentConfig } from './config.types';
 
+/**
+ * Strip control characters and backslashes from user-controlled input,
+ * then truncate to a safe length. Used before interpolating into shell
+ * commands or markdown headings.
+ */
+function sanitizeForShellPrompt(input: string, maxLen = 200): string {
+  // eslint-disable-next-line no-control-regex
+  return input.replace(/[\x00-\x1f\x7f\\]/g, '').slice(0, maxLen);
+}
+
+/**
+ * Prevent content from breaking out of a markdown code fence by inserting
+ * a zero-width space after runs of three or more backticks.
+ */
+function escapeCodeFenceContent(input: string): string {
+  return input.replace(/`{3,}/g, (match) => match + '\u200B');
+}
+
 const KEY_MAP: Record<string, string> = {
   return: 'Enter',
   escape: 'Escape',
@@ -552,7 +570,7 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
       const contextFilePath = join(worktreeInfo.path, '.tawtui-pr-context.md');
 
       const sections: string[] = [
-        `# PR Review Context: #${prNumber} — ${prTitle}`,
+        `# PR Review Context: #${prNumber} — ${sanitizeForShellPrompt(prTitle)}`,
         ``,
         `**Repository:** ${repoOwner}/${repoName}`,
         `**Branch:** ${prDetail.headRefName} → ${prDetail.baseRefName}`,
@@ -561,7 +579,9 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
         ``,
         `## Description`,
         ``,
-        prDetail.body || '_No description provided._',
+        '```',
+        escapeCodeFenceContent(prDetail.body || '_No description provided._'),
+        '```',
         ``,
       ];
 
@@ -569,14 +589,20 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
         sections.push(`## Changed Files`, ``);
         for (const file of prDetail.files) {
           sections.push(
-            `- \`${file.path}\` (+${file.additions}/-${file.deletions})`,
+            `- \`${sanitizeForShellPrompt(file.path, 500)}\` (+${file.additions}/-${file.deletions})`,
           );
         }
         sections.push(``);
       }
 
       if (prDiff) {
-        sections.push(`## Diff`, ``, '```diff', prDiff.raw, '```');
+        sections.push(
+          `## Diff`,
+          ``,
+          '```diff',
+          escapeCodeFenceContent(prDiff.raw),
+          '```',
+        );
       }
 
       writeFileSync(contextFilePath, sections.join('\n'), 'utf-8');
@@ -602,7 +628,7 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
     // Build an interactive agent command with the review prompt
     if (command) {
       const reviewPrompt = [
-        `Review PR #${prNumber} in ${repoOwner}/${repoName}: "${prTitle}".`,
+        `Review PR #${prNumber} in ${repoOwner}/${repoName}: "${sanitizeForShellPrompt(prTitle)}".`,
         'Read .tawtui-pr-context.md for full context including description, changed files, and diff.',
         'You have full access to the codebase at the PR branch.',
         'Provide a thorough code review covering: code quality, potential bugs, security concerns, and suggested improvements.',
