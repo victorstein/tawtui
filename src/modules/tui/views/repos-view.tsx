@@ -1,4 +1,4 @@
-import { createSignal, createEffect, on, onMount } from 'solid-js';
+import { createSignal, createEffect, createMemo, on, onMount } from 'solid-js';
 import { useKeyboard, useTerminalDimensions } from '@opentui/solid';
 import type { RepoConfig } from '../../../shared/types';
 import type {
@@ -22,6 +22,12 @@ import {
 } from '../bridge';
 import { ACCENT_PRIMARY, FG_DIM, COLOR_ERROR } from '../theme';
 import type { DependencyStatus } from '../../dependency.types';
+
+const REVIEW_PRIORITY: Record<string, number> = {
+  REVIEW_REQUIRED: 1,
+  CHANGES_REQUESTED: 2,
+  APPROVED: 3,
+};
 
 /** Pane identifiers for the split-pane layout. */
 type Pane = 'repos' | 'prs';
@@ -49,6 +55,15 @@ export function ReposView(props: ReposViewProps) {
 
   // Version counter to prevent stale async PR responses
   let prLoadVersion = 0;
+
+  const sortedPrs = createMemo(() =>
+    [...prs()].sort((a, b) => {
+      const pa = REVIEW_PRIORITY[a.reviewDecision ?? ''] ?? 0;
+      const pb = REVIEW_PRIORITY[b.reviewDecision ?? ''] ?? 0;
+      if (pa !== pb) return pa - pb;
+      return b.number - a.number;
+    }),
+  );
 
   /** Load repos from ConfigService. */
   function loadRepos(): void {
@@ -89,12 +104,6 @@ export function ReposView(props: ReposViewProps) {
       const prList = await gh.listPRs(repo.owner, repo.repo);
       // Discard stale response if user switched repos while loading
       if (version !== prLoadVersion) return;
-      prList.sort((a, b) => {
-        const aApproved = a.reviewDecision === 'APPROVED' ? 1 : 0;
-        const bApproved = b.reviewDecision === 'APPROVED' ? 1 : 0;
-        if (aApproved !== bApproved) return aApproved - bApproved;
-        return b.number - a.number;
-      });
       setPrs(prList);
       if (prIndex() >= prList.length) {
         setPrIndex(Math.max(prList.length - 1, 0));
@@ -292,7 +301,7 @@ export function ReposView(props: ReposViewProps) {
       if (pane === 'prs') {
         const repoList = repos();
         const repo = repoList[repoIndex()];
-        const prList = prs();
+        const prList = sortedPrs();
         const pr = prList[prIndex()];
         if (!pr || !repo) return;
 
@@ -464,7 +473,7 @@ export function ReposView(props: ReposViewProps) {
           width={repoPaneWidth()}
         />
         <PrList
-          prs={prs()}
+          prs={sortedPrs()}
           selectedIndex={prIndex()}
           isActivePane={activePane() === 'prs'}
           width={prPaneWidth()}

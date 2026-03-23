@@ -88,26 +88,26 @@ function getCiIcon(
   return { char: '\u25CF', color: COLOR_WARNING, label: 'CI' };
 }
 
-const REVIEW_PRIORITY: Record<string, number> = {
-  REVIEW_REQUIRED: 1,
-  CHANGES_REQUESTED: 2,
-  APPROVED: 3,
-};
-
 export function PrList(props: PrListProps) {
   let scrollRef: ScrollBoxRenderable | undefined;
-
-  const sortedPrs = () =>
-    [...props.prs].sort(
-      (a, b) =>
-        (REVIEW_PRIORITY[a.reviewDecision ?? ''] ?? 0) -
-        (REVIEW_PRIORITY[b.reviewDecision ?? ''] ?? 0),
-    );
 
   createEffect(() => {
     const idx = props.selectedIndex;
     const rowHeight = 3;
-    scrollRef?.scrollTo(idx * rowHeight);
+    const itemTop = idx * rowHeight;
+    const itemBottom = itemTop + rowHeight;
+
+    if (!scrollRef) return;
+
+    const viewTop = scrollRef.scrollTop;
+    const viewHeight = scrollRef.viewport.height;
+    const viewBottom = viewTop + viewHeight;
+
+    if (itemBottom > viewBottom) {
+      scrollRef.scrollTo(itemBottom - viewHeight);
+    } else if (itemTop < viewTop) {
+      scrollRef.scrollTo(itemTop);
+    }
   });
 
   const spinnerFrames = [
@@ -256,7 +256,7 @@ export function PrList(props: PrListProps) {
       </Show>
 
       {/* PR list (scrollbox only mounted when there are PRs) */}
-      <Show when={sortedPrs().length > 0}>
+      <Show when={props.prs.length > 0}>
         <scrollbox
           ref={(el: ScrollBoxRenderable) => {
             scrollRef = el;
@@ -264,7 +264,7 @@ export function PrList(props: PrListProps) {
           flexGrow={1}
           width="100%"
         >
-          <For each={sortedPrs()}>
+          <For each={props.prs}>
             {(pr, index) => {
               const isSelected = () =>
                 props.isActivePane && index() === props.selectedIndex;
