@@ -383,6 +383,7 @@ export function ReposView(props: ReposViewProps) {
                         detail.title,
                         detail,
                         prDiff,
+                        undefined,
                         projectConfig,
                       );
                     } catch {

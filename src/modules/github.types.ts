@@ -50,3 +50,13 @@ export interface PrDiff {
   /** Combined owner/repo identifier */
   repoFullName: string;
 }
+
+export interface PrReviewComment {
+  id: number;
+  user: { login: string };
+  body: string;
+  path: string;
+  line: number | null;
+  created_at: string;
+  in_reply_to_id?: number;
+}

@@ -7,7 +7,11 @@ import { ConfigService } from './config.service';
 import { TerminalService } from './terminal.service';
 import { DependencyService } from './dependency.service';
 import { CalendarService } from './calendar.service';
-import type { PullRequestDetail, PrDiff } from './github.types';
+import type {
+  PullRequestDetail,
+  PrDiff,
+  PrReviewComment,
+} from './github.types';
 import type { ProjectAgentConfig } from './config.types';
 
 interface TawtuiGlobal {
@@ -25,6 +29,7 @@ interface TawtuiGlobal {
       prTitle: string,
       prDetail?: PullRequestDetail,
       prDiff?: PrDiff,
+      prReviewComments?: PrReviewComment[],
       projectAgentConfig?: ProjectAgentConfig,
     ) => Promise<{ sessionId: string }>;
     getPrDiff: (
@@ -32,6 +37,11 @@ interface TawtuiGlobal {
       repo: string,
       prNumber: number,
     ) => Promise<PrDiff>;
+    getPrReviewComments: (
+      owner: string,
+      repo: string,
+      prNumber: number,
+    ) => Promise<PrReviewComment[]>;
     getProjectAgentConfig: (projectKey: string) => ProjectAgentConfig | null;
     setProjectAgentConfig: (cfg: ProjectAgentConfig) => void;
     removeProjectAgentConfig: (projectKey: string) => void;
@@ -74,6 +84,7 @@ export class TuiService {
         prTitle: string,
         prDetail?: PullRequestDetail,
         prDiff?: PrDiff,
+        prReviewComments?: PrReviewComment[],
         projectAgentConfig?: ProjectAgentConfig,
       ) =>
         this.terminalService.createPrReviewSession(
@@ -83,10 +94,13 @@ export class TuiService {
           prTitle,
           prDetail,
           prDiff,
+          prReviewComments,
           projectAgentConfig,
         ),
       getPrDiff: (owner: string, repo: string, prNumber: number) =>
         this.githubService.getPrDiff(owner, repo, prNumber),
+      getPrReviewComments: (owner: string, repo: string, prNumber: number) =>
+        this.githubService.getPrReviewComments(owner, repo, prNumber),
       getProjectAgentConfig: (projectKey: string) =>
         this.configService.getProjectAgentConfig(projectKey),
       setProjectAgentConfig: (cfg: ProjectAgentConfig) =>
