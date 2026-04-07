@@ -4,7 +4,11 @@ import type { ConfigService } from '../config.service';
 import type { TerminalService } from '../terminal.service';
 import type { DependencyService } from '../dependency.service';
 import type { CalendarService } from '../calendar.service';
-import type { PullRequestDetail, PrDiff } from '../github.types';
+import type {
+  PullRequestDetail,
+  PrDiff,
+  PrReviewComment,
+} from '../github.types';
 import type { ProjectAgentConfig } from '../config.types';
 
 export interface TawtuiBridge {
@@ -21,9 +25,15 @@ export interface TawtuiBridge {
     prTitle: string,
     prDetail?: PullRequestDetail,
     prDiff?: PrDiff,
+    prReviewComments?: PrReviewComment[],
     projectAgentConfig?: ProjectAgentConfig,
   ) => Promise<{ sessionId: string }>;
   getPrDiff: (owner: string, repo: string, prNumber: number) => Promise<PrDiff>;
+  getPrReviewComments: (
+    owner: string,
+    repo: string,
+    prNumber: number,
+  ) => Promise<PrReviewComment[]>;
   getProjectAgentConfig: (projectKey: string) => ProjectAgentConfig | null;
   setProjectAgentConfig: (cfg: ProjectAgentConfig) => void;
   removeProjectAgentConfig: (projectKey: string) => void;

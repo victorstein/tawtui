@@ -16,7 +16,11 @@ import type {
   CursorPosition,
 } from './terminal.types';
 import type { ExecResult } from '../shared/types';
-import type { PrDiff, PullRequestDetail } from './github.types';
+import type {
+  PrDiff,
+  PrReviewComment,
+  PullRequestDetail,
+} from './github.types';
 import type { ProjectAgentConfig } from './config.types';
 
 /**
@@ -505,6 +509,7 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
     prTitle: string,
     prDetail?: PullRequestDetail,
     prDiff?: PrDiff,
+    prReviewComments?: PrReviewComment[],
     projectAgentConfig?: ProjectAgentConfig,
   ): Promise<{ sessionId: string }> {
     // Look up (or create) the Taskwarrior task via persistent PR-to-task map
@@ -602,7 +607,79 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
           '```diff',
           escapeCodeFenceContent(prDiff.raw),
           '```',
+          ``,
         );
+      }
+
+      if (prDetail.reviews?.length) {
+        const reviewLines = prDetail.reviews
+          .filter((r) => r.body?.trim())
+          .map(
+            (r) =>
+              `- **@${r.author?.login ?? 'unknown'}** (${r.state}): "${escapeCodeFenceContent(r.body)}"`,
+          );
+        if (reviewLines.length) {
+          sections.push(`## Reviews`, ``, ...reviewLines, ``);
+        }
+      }
+
+      if (prDetail.comments?.length) {
+        const commentLines = prDetail.comments
+          .filter((c) => c.body?.trim())
+          .map(
+            (c) =>
+              `- **@${c.author?.login ?? 'unknown'}** (${c.createdAt?.slice(0, 10) ?? 'unknown'}): "${escapeCodeFenceContent(c.body)}"`,
+          );
+        if (commentLines.length) {
+          sections.push(`## Discussion`, ``, ...commentLines, ``);
+        }
+      }
+
+      if (prReviewComments?.length) {
+        // Group by file path
+        const byFile = new Map<string, PrReviewComment[]>();
+        for (const comment of prReviewComments) {
+          const filePath = comment.path ?? 'unknown';
+          const existing = byFile.get(filePath) ?? [];
+          existing.push(comment);
+          byFile.set(filePath, existing);
+        }
+
+        sections.push(`## Inline Review Comments`, ``);
+
+        for (const [filePath, comments] of byFile) {
+          sections.push(`### \`${sanitizeForShellPrompt(filePath, 500)}\``);
+
+          // Separate top-level comments from replies
+          const topLevel = comments.filter((c) => !c.in_reply_to_id);
+          const repliesById = new Map<number, PrReviewComment[]>();
+          for (const c of comments) {
+            if (c.in_reply_to_id) {
+              const arr = repliesById.get(c.in_reply_to_id) ?? [];
+              arr.push(c);
+              repliesById.set(c.in_reply_to_id, arr);
+            }
+          }
+
+          for (const comment of topLevel) {
+            const lineRef = comment.line != null ? `L${comment.line}` : '';
+            const lineLabel = lineRef ? ` (${lineRef})` : '';
+            sections.push(
+              `- **@${comment.user?.login ?? 'unknown'}**${lineLabel}: "${escapeCodeFenceContent(comment.body ?? '')}"`,
+            );
+
+            const replies = repliesById.get(comment.id) ?? [];
+            for (const reply of replies) {
+              const replyLineRef = reply.line != null ? `L${reply.line}` : '';
+              const replyLineLabel = replyLineRef ? ` (${replyLineRef})` : '';
+              sections.push(
+                `  - **@${reply.user?.login ?? 'unknown'}**${replyLineLabel}: "${escapeCodeFenceContent(reply.body ?? '')}"`,
+              );
+            }
+          }
+
+          sections.push(``);
+        }
       }
 
       writeFileSync(contextFilePath, sections.join('\n'), 'utf-8');
@@ -629,15 +706,18 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
     if (command) {
       const reviewPrompt = [
         `Review PR #${prNumber} in ${repoOwner}/${repoName}: "${sanitizeForShellPrompt(prTitle)}".`,
-        'Read .tawtui-pr-context.md for full context including description, changed files, and diff.',
+        'Read .tawtui-pr-context.md for full context including description, changed files, diff, and existing review comments.',
         'You have full access to the codebase at the PR branch.',
         '',
+        '# Phase 1: Initial Review',
+        '',
         '## Gathering Context',
-        '**Diffs alone are not enough.** After getting the diff, read the entire file(s) being modified to understand the full context. Code that looks wrong in isolation may be correct given surrounding logic—and vice versa.',
+        '**Diffs alone are not enough.** After reading the diff, open and read the entire file(s) being modified to understand the full context. Code that looks wrong in isolation may be correct given surrounding logic—and vice versa.',
         '- Use the diff to identify which files changed',
         '- Use `git status --short` to identify untracked files, then read their full contents',
         '- Read the full file to understand existing patterns, control flow, and error handling',
-        '- Check for existing style guide or conventions files (CONVENTIONS.md, AGENTS.md, .editorconfig, etc.)',
+        '- Check for existing style guides or conventions files (CONVENTIONS.md, AGENTS.md, .editorconfig, etc.)',
+        '- Read the "Inline Review Comments" section in the context file — these are comments already left by reviewers on specific lines. Do not re-raise issues that have already been addressed or acknowledged.',
         '',
         '## What to Look For',
         '**Bugs** — Your primary focus.',
@@ -654,38 +734,49 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
         '- O(n²) on unbounded data, N+1 queries, blocking I/O on hot paths',
         "**Behavior Changes** — If a behavioral change is introduced, raise it (especially if it's possibly unintentional).",
         '',
-        '## Before You Flag Something',
-        "**Be certain.** If you're going to call something a bug, you need to be confident it actually is one.",
-        "- Only review the changes — do not review pre-existing code that wasn't modified",
-        "- Don't flag something as a bug if you're unsure — investigate first",
-        "- Don't invent hypothetical problems — if an edge case matters, explain the realistic scenario where it breaks",
-        '- If you need more context to be sure, read the surrounding code and verify',
-        "**Don't be a zealot about style.** When checking code against conventions:",
-        "- Verify the code is *actually* in violation. Don't complain about else statements if early returns are already being used correctly.",
-        '- Some "violations" are acceptable when they\'re the simplest option. A `let` statement is fine if the alternative is convoluted.',
-        '- Excessive nesting is a legitimate concern regardless of other style choices.',
-        "- Don't flag style preferences as issues unless they clearly violate established project conventions.",
+        'Produce an internal scratch list of potential findings. Do NOT output anything yet.',
         '',
-        '## Output Format',
-        'For each issue found, use:',
+        '# Phase 2: Verification Gate',
+        '',
+        'Go back through every potential finding from Phase 1. For each one:',
+        '',
+        '1. **Re-read the source.** Open the actual file and re-read the relevant code. Does the issue you identified actually exist in the code as written?',
+        '2. **Check the surrounding context.** Does the surrounding code, the caller, a middleware, or the type system already handle the concern?',
+        '3. **Search when uncertain.** If you think something is missing (a guard, a validation, an import), grep or search the codebase to confirm it is actually missing before flagging it.',
+        '4. **Check existing review comments.** Has this issue already been raised and addressed in the PR discussion? Do not re-raise resolved points.',
+        "5. **Verdict:** If the issue survives verification, keep it and note the evidence. If it doesn't, drop it silently.",
+        '',
+        '**Drop a finding if:**',
+        '- The surrounding code already handles the case you were concerned about',
+        '- The type system makes the scenario impossible',
+        '- You assumed a function behaves a certain way but reading it shows otherwise',
+        '- The concern is hypothetical with no realistic trigger path',
+        '- It has already been discussed and resolved in the PR comments',
+        '',
+        '# Output',
+        '',
+        '## Format',
+        'For each verified issue, use:',
         '### [SEVERITY] file:line — Short description',
+        '**Evidence:** What you verified and where (e.g., "Confirmed: `foo.ts:42` receives unvalidated input from `bar.ts:15`")',
         'Explanation of the problem and the specific scenario where it breaks.',
-        '// the problematic code',
         'Suggested fix if applicable.',
         '',
-        'Severity levels:',
+        '## Severity Levels',
         '- **BUG** — Will cause incorrect behavior under realistic conditions',
         '- **ISSUE** — Likely to cause problems but depends on specific conditions',
         '- **NITS** — Minor improvements, style, or readability concerns',
         '',
-        '## Output Rules',
-        '1. If there is a bug, be direct and clear about why it is a bug.',
-        '2. Clearly communicate severity of issues. Do not overstate severity.',
-        '3. Critiques should clearly and explicitly communicate the scenarios, environments, or inputs that are necessary for the bug to arise.',
-        '4. Your tone should be matter-of-fact — not accusatory or overly positive.',
-        '5. Write so the reader can quickly understand the issue without reading too closely.',
-        '6. AVOID flattery. No "Great job...", "Thanks for...", or "Overall the code looks good...".',
-        '7. If there are no issues worth flagging, say "No issues found." and nothing else.',
+        '## Rules',
+        '1. Every finding MUST include evidence from the codebase — a file path and line number you verified.',
+        '2. If there is a bug, be direct and clear about why it is a bug.',
+        '3. Clearly communicate severity. Do not overstate.',
+        '4. Critiques must explicitly describe the scenarios, environments, or inputs necessary for the bug to arise.',
+        '5. Your tone should be matter-of-fact — not accusatory or overly positive.',
+        '6. Write so the reader can quickly understand the issue.',
+        '7. AVOID flattery. No "Great job...", "Thanks for...", or "Overall the code looks good...".',
+        '8. If there are no issues worth flagging, say "No issues found." and nothing else.',
+        "9. Do NOT flag issues in pre-existing code that wasn't modified in this PR.",
       ].join('\n');
       const escaped = reviewPrompt.replace(/'/g, "'\\''");
       command = `${command} '${escaped}'`;

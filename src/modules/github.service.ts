@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type {
   PrDiff,
+  PrReviewComment,
   PullRequest,
   PullRequestDetail,
   RepoConfig,
@@ -170,6 +171,29 @@ export class GithubService {
       prNumber,
       repoFullName: `${owner}/${repo}`,
     };
+  }
+
+  async getPrReviewComments(
+    owner: string,
+    repo: string,
+    prNumber: number,
+  ): Promise<PrReviewComment[]> {
+    const result = await this.execGh([
+      'api',
+      '--paginate',
+      '--slurp',
+      `repos/${owner}/${repo}/pulls/${prNumber}/comments`,
+    ]);
+
+    if (result.exitCode !== 0) {
+      return [];
+    }
+
+    try {
+      return JSON.parse(result.stdout) as PrReviewComment[];
+    } catch {
+      return [];
+    }
   }
 
   async validateRepo(owner: string, repo: string): Promise<boolean> {

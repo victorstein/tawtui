@@ -15,6 +15,7 @@ import type {
   PullRequest,
   PullRequestDetail,
   PrDiff,
+  PrReviewComment,
 } from '../../github.types';
 import type { TerminalSession, CaptureResult } from '../../terminal.types';
 import type { ProjectAgentConfig } from '../../config.types';
@@ -664,6 +665,20 @@ export default function ReviewsView(props: ReviewsViewProps) {
         }
       }
 
+      // Fetch inline review comments
+      let prReviewComments: PrReviewComment[] | undefined;
+      if (bridge.getPrReviewComments) {
+        try {
+          prReviewComments = await bridge.getPrReviewComments(
+            repo.owner,
+            repo.repo,
+            prDetail.number,
+          );
+        } catch {
+          // Non-fatal — proceed without inline comments
+        }
+      }
+
       // Get project agent config
       let projectConfig: ProjectAgentConfig | undefined;
       const projectKey = `${repo.owner}/${repo.repo}`;
@@ -682,6 +697,7 @@ export default function ReviewsView(props: ReviewsViewProps) {
         prDetail.title,
         prDetail,
         prDiff,
+        prReviewComments,
         projectConfig,
       );
 
