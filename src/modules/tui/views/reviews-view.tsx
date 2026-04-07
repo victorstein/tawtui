@@ -380,10 +380,6 @@ export default function ReviewsView(props: ReviewsViewProps) {
       clearTimeout(errorTimer);
       errorTimer = null;
     }
-    if (escTimer) {
-      clearTimeout(escTimer);
-      escTimer = null;
-    }
   });
 
   // Reload when parent bumps refreshTrigger
@@ -723,9 +719,6 @@ export default function ReviewsView(props: ReviewsViewProps) {
 
   // ── Keyboard handling ───────────────────────────────────────────
 
-  let lastEscTime = 0;
-  let escTimer: ReturnType<typeof setTimeout> | null = null;
-
   useKeyboard((key) => {
     // Alt+C: Copy selected text to clipboard
     if ((key.option && key.name === 'c') || key.sequence === 'ç') {
@@ -757,27 +750,19 @@ export default function ReviewsView(props: ReviewsViewProps) {
       return;
     }
 
-    // Interactive mode: forward all keys to tmux except ESC (double-ESC exits)
+    // Interactive mode: Ctrl+\ exits, all other keys forwarded to tmux
     if (interactive()) {
-      if (key.name === 'escape') {
-        const now = Date.now();
-        if (now - lastEscTime < 300) {
-          if (escTimer) clearTimeout(escTimer);
-          escTimer = null;
-          lastEscTime = 0;
-          setInteractive(false);
-          return;
-        }
+      if (key.sequence === '\x1c') {
+        setInteractive(false);
+        return;
+      }
 
-        lastEscTime = now;
-        escTimer = setTimeout(() => {
-          const ts = getTerminalService();
-          const sel = selectedItem();
-          if (ts && sel.kind === 'agent') {
-            ts.sendInput(sel.agent.id, 'escape').catch(() => {});
-          }
-          escTimer = null;
-        }, 300);
+      if (key.name === 'escape') {
+        const ts = getTerminalService();
+        const sel = selectedItem();
+        if (ts && sel.kind === 'agent') {
+          ts.sendInput(sel.agent.id, 'escape').catch(() => {});
+        }
         return;
       }
 
