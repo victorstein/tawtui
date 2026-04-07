@@ -29,7 +29,7 @@ function getReviewsHint(ctx: ReviewsHintContext): string {
 
   switch (ctx.mode) {
     case 'interactive':
-      return 'ESC ESC exit | Alt+C copy | Alt+V paste | keys forwarded to agent';
+      return 'Ctrl+\\ exit | Alt+C copy | Alt+V paste | keys forwarded to agent';
     case 'repo-left':
       return `${base} | h/l panes | j/k navigate | enter PRs | a add repo | x remove | n new agent | r refresh | q quit`;
     case 'agent-left':
