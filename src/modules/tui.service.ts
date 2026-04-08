@@ -9,6 +9,7 @@ import { DependencyService } from './dependency.service';
 import { CalendarService } from './calendar.service';
 import type { PullRequestDetail, PrDiff } from './github.types';
 import type { ProjectAgentConfig } from './config.types';
+import type { DueDateValidation } from './taskwarrior.types';
 
 interface TawtuiGlobal {
   __tawtui?: {
@@ -39,6 +40,7 @@ interface TawtuiGlobal {
       sessionId: string,
       cleanupWorktree: boolean,
     ) => Promise<void>;
+    validateDueDate: (value: string) => DueDateValidation;
   };
   __tuiExit?: () => void;
 }
@@ -101,6 +103,8 @@ export class TuiService {
           sessionId,
           cleanupWorktree,
         ),
+      validateDueDate: (value: string) =>
+        this.taskwarriorService.validateDueDate(value),
     };
 
     // Set up the exit promise before rendering so the App component
