@@ -10,6 +10,7 @@ import type {
   PrReviewComment,
 } from '../github.types';
 import type { ProjectAgentConfig } from '../config.types';
+import type { DueDateValidation } from '../taskwarrior.types';
 
 export interface TawtuiBridge {
   taskwarriorService: TaskwarriorService;
@@ -41,6 +42,7 @@ export interface TawtuiBridge {
     sessionId: string,
     cleanupWorktree: boolean,
   ) => Promise<void>;
+  validateDueDate: (value: string) => DueDateValidation;
 }
 
 function getBridge(): TawtuiBridge | undefined {
@@ -83,6 +85,10 @@ export function getDestroySessionWithWorktree():
   | TawtuiBridge['destroySessionWithWorktree']
   | null {
   return getBridge()?.destroySessionWithWorktree ?? null;
+}
+
+export function getValidateDueDate(): TawtuiBridge['validateDueDate'] | null {
+  return getBridge()?.validateDueDate ?? null;
 }
 
 export function getTuiExit(): (() => void) | null {

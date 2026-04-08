@@ -237,8 +237,9 @@ export function TasksView(props: TasksViewProps) {
     try {
       await Promise.resolve(action.call(tw, task.uuid));
       await loadTasks();
-    } catch {
-      // Silently ignore errors for now; the refresh will show current state
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Task action failed';
+      setError(msg);
       await loadTasks();
     }
   }
@@ -399,8 +400,10 @@ export function TasksView(props: TasksViewProps) {
           try {
             await tw.undoComplete(task.uuid);
             await tw.startTask(task.uuid);
-          } catch {
-            // Silently ignore; refresh will show current state
+          } catch (err) {
+            const msg =
+              err instanceof Error ? err.message : 'Failed to move task';
+            setError(msg);
           }
           await loadTasks();
           setActiveColumn(1);
@@ -428,8 +431,12 @@ export function TasksView(props: TasksViewProps) {
               if (tw) {
                 try {
                   await tw.archiveTask(task.uuid);
-                } catch {
-                  // Silently ignore
+                } catch (err) {
+                  const msg =
+                    err instanceof Error
+                      ? err.message
+                      : 'Failed to archive task';
+                  setError(msg);
                 }
                 await loadTasks();
               }
@@ -455,8 +462,12 @@ export function TasksView(props: TasksViewProps) {
               if (tw) {
                 try {
                   await tw.createTask(dto);
-                } catch {
-                  // Ignore creation errors; refresh will show current state
+                } catch (err) {
+                  const msg =
+                    err instanceof Error
+                      ? err.message
+                      : 'Failed to create task';
+                  setError(msg);
                 }
                 await loadTasks();
               }
@@ -503,8 +514,12 @@ export function TasksView(props: TasksViewProps) {
                       if (tw) {
                         try {
                           await tw.updateTask(task.uuid, dto);
-                        } catch {
-                          // Ignore update errors; refresh will show current state
+                        } catch (err) {
+                          const msg =
+                            err instanceof Error
+                              ? err.message
+                              : 'Failed to update task';
+                          setError(msg);
                         }
                         await loadTasks();
                       }
@@ -516,8 +531,12 @@ export function TasksView(props: TasksViewProps) {
                       if (tw) {
                         try {
                           await tw.updateTask(parentUuid, { until: 'now' });
-                        } catch {
-                          // Ignore errors; refresh will show current state
+                        } catch (err) {
+                          const msg =
+                            err instanceof Error
+                              ? err.message
+                              : 'Failed to stop recurrence';
+                          setError(msg);
                         }
                       }
                     }}

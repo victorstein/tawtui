@@ -10,13 +10,14 @@ import {
   FG_MUTED,
   ACCENT_PRIMARY,
   COLOR_ERROR,
+  COLOR_SUCCESS,
   PRIORITY_H,
   PRIORITY_M,
   PRIORITY_L,
   PROJECT_COLOR,
 } from '../theme';
 import { darkenHex, lerpHex, ALLOWED_TAGS, getTagGradient } from '../utils';
-import { getTaskwarriorService } from '../bridge';
+import { getTaskwarriorService, getValidateDueDate } from '../bridge';
 
 const FORM_BUTTONS = [
   {
@@ -86,6 +87,36 @@ export function TaskForm(props: TaskFormProps) {
     props.initialValues?.priority ?? '',
   );
   const [due, setDue] = createSignal(props.initialValues?.due ?? '');
+
+  // Due date hybrid state
+  const DUE_NAMED_DATES = [
+    'today',
+    'tomorrow',
+    'eow',
+    'eonw',
+    'eom',
+    'eonm',
+    'eoq',
+    'eoy',
+    'someday',
+  ] as const;
+  const [dueMode, setDueMode] = createSignal<'select' | 'custom'>(
+    props.initialValues?.due &&
+      !DUE_NAMED_DATES.includes(
+        props.initialValues.due as (typeof DUE_NAMED_DATES)[number],
+      )
+      ? 'custom'
+      : 'select',
+  );
+  const [dueIndex, setDueIndex] = createSignal<number>(
+    props.initialValues?.due
+      ? DUE_NAMED_DATES.indexOf(
+          props.initialValues.due as (typeof DUE_NAMED_DATES)[number],
+        )
+      : -1,
+  );
+  const [dueError, setDueError] = createSignal('');
+  const [duePreview, setDuePreview] = createSignal<string | null>(null);
 
   // Project cycling state
   const [availableProjects, setAvailableProjects] = createSignal<string[]>([]);
@@ -167,6 +198,11 @@ export function TaskForm(props: TaskFormProps) {
         const idx = availableRecurrences().indexOf(recur);
         if (idx >= 0) setRecurrenceCursor(idx);
       }
+      // Populate due date preview for initial value
+      const initialDue = props.initialValues?.due ?? '';
+      if (initialDue) {
+        validateDue(initialDue);
+      }
     } catch {
       // Silently fail — will show empty lists
     }
@@ -201,16 +237,42 @@ export function TaskForm(props: TaskFormProps) {
     setNewInputValue('');
   };
 
+  const validateDue = (value: string): boolean => {
+    if (!value.trim()) {
+      setDueError('');
+      setDuePreview(null);
+      return true;
+    }
+    const validate = getValidateDueDate();
+    if (!validate) return true;
+    const result = validate(value.trim());
+    if (!result.valid) {
+      setDueError('Invalid due date');
+      setDuePreview(null);
+      return false;
+    }
+    setDueError('');
+    if (result.resolved) {
+      const dateOnly = result.resolved.includes('T')
+        ? result.resolved.split('T')[0]
+        : result.resolved;
+      setDuePreview(`\u2192 ${dateOnly}`);
+    }
+    return true;
+  };
+
   const handleSubmit = () => {
     const desc = description().trim();
     if (!desc) return;
+
+    const dueVal = due().trim();
+    if (dueVal && !validateDue(dueVal)) return;
 
     const dto: CreateTaskDto = { description: desc };
     const ann = annotation().trim();
     const proj = allProjects()[projectIndex()] ?? '';
     const pri = priority();
     const tagArr = [...selectedTags()];
-    const dueVal = due().trim();
 
     if (props.mode === 'edit') {
       dto.annotation = ann;
@@ -255,6 +317,22 @@ export function TaskForm(props: TaskFormProps) {
         return;
       }
       return; // Let input handle all other keys
+    }
+
+    // Due custom mode: Escape returns to select mode
+    if (
+      key.name === 'escape' &&
+      currentField() === 'due' &&
+      dueMode() === 'custom'
+    ) {
+      key.preventDefault();
+      key.stopPropagation();
+      setDueMode('select');
+      setDue('');
+      setDueIndex(-1);
+      setDueError('');
+      setDuePreview(null);
+      return;
     }
 
     // Escape always cancels
@@ -381,6 +459,48 @@ export function TaskForm(props: TaskFormProps) {
         key.preventDefault();
         setNewInputMode('project');
         setNewInputValue('');
+        return;
+      }
+    }
+
+    // Due date hybrid field
+    if (currentField() === 'due' && dueMode() === 'select') {
+      const totalOptions = DUE_NAMED_DATES.length; // -1 to totalOptions-1
+      if (key.name === 'left') {
+        key.preventDefault();
+        setDueIndex((i) => {
+          const next = i - 1;
+          return next < -1 ? totalOptions - 1 : next;
+        });
+        const idx = dueIndex();
+        const newVal = idx === -1 ? '' : DUE_NAMED_DATES[idx];
+        setDue(newVal);
+        setDueError('');
+        setDuePreview(null);
+        if (newVal) validateDue(newVal);
+        return;
+      }
+      if (key.name === 'right') {
+        key.preventDefault();
+        setDueIndex((i) => {
+          const next = i + 1;
+          return next >= totalOptions ? -1 : next;
+        });
+        const idx = dueIndex();
+        const newVal = idx === -1 ? '' : DUE_NAMED_DATES[idx];
+        setDue(newVal);
+        setDueError('');
+        setDuePreview(null);
+        if (newVal) validateDue(newVal);
+        return;
+      }
+      if (key.name === 'c') {
+        key.preventDefault();
+        setDueMode('custom');
+        setDue('');
+        setDueIndex(-1);
+        setDueError('');
+        setDuePreview(null);
         return;
       }
     }
@@ -671,23 +791,91 @@ export function TaskForm(props: TaskFormProps) {
       <box height={1} />
 
       {/* Due */}
-      <box height={1} flexDirection="row">
-        <box width={14}>
+      <box flexDirection="row">
+        <box width={14} height={1}>
           <text fg={labelColor(5)} attributes={isFieldFocused(5) ? 1 : 0}>
             {isFieldFocused(5) ? '> ' : '  '}
             {FIELD_LABELS.due}
           </text>
         </box>
-        <input
-          width={60}
-          value={due()}
-          placeholder="e.g. tomorrow, eow, 2026-03-01"
-          focused={isFieldFocused(5)}
-          backgroundColor={isFieldFocused(5) ? BG_INPUT_FOCUS : BG_INPUT}
-          textColor={FG_NORMAL}
-          onInput={(val: string) => setDue(val)}
-        />
+        <Show
+          when={isFieldFocused(5)}
+          fallback={
+            <box height={1} flexDirection="row">
+              <text fg={due() ? FG_NORMAL : FG_DIM}>{due() || 'None'}</text>
+              <Show when={duePreview() && due()}>
+                <text fg={COLOR_SUCCESS}> {duePreview()}</text>
+              </Show>
+            </box>
+          }
+        >
+          <Show
+            when={dueMode() === 'custom'}
+            fallback={
+              <box flexDirection="column" width={60}>
+                <box
+                  height={1}
+                  backgroundColor={BG_INPUT_FOCUS}
+                  paddingX={1}
+                  flexDirection="row"
+                >
+                  <text
+                    fg={dueIndex() >= 0 ? ACCENT_PRIMARY : FG_DIM}
+                    attributes={1}
+                  >
+                    {dueIndex() >= 0 ? DUE_NAMED_DATES[dueIndex()] : 'None'}
+                  </text>
+                  <Show when={duePreview() && dueIndex() >= 0}>
+                    <text fg={COLOR_SUCCESS}> {duePreview()}</text>
+                  </Show>
+                </box>
+                <box height={1} paddingX={1}>
+                  <text fg={FG_DIM}>{'[←/→] cycle  [c] custom'}</text>
+                </box>
+              </box>
+            }
+          >
+            <box flexDirection="column" width={60}>
+              <input
+                width={60}
+                value={due()}
+                placeholder="e.g. 2026-03-01, 5days, eow"
+                focused={true}
+                backgroundColor={BG_INPUT_FOCUS}
+                textColor={FG_NORMAL}
+                onInput={(val: string) => {
+                  setDue(val);
+                  setDueError('');
+                  setDuePreview(null);
+                }}
+                onBlur={() => {
+                  if (due().trim()) validateDue(due());
+                }}
+              />
+              <box height={1} paddingX={1} flexDirection="row">
+                <text fg={FG_DIM}>
+                  {
+                    'ISO (2026-03-01), duration (5days), named (eow)  [Esc] back'
+                  }
+                </text>
+              </box>
+              <Show when={duePreview() && !dueError()}>
+                <box height={1} paddingX={1}>
+                  <text fg={COLOR_SUCCESS}>{duePreview()}</text>
+                </box>
+              </Show>
+            </box>
+          </Show>
+        </Show>
       </box>
+      <Show when={dueError()}>
+        <box height={1}>
+          <text fg={COLOR_ERROR}>
+            {'  * '}
+            {dueError()}
+          </text>
+        </box>
+      </Show>
       <box height={1} />
 
       {/* Recurrence */}

@@ -1,5 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { Task, CreateTaskDto, UpdateTaskDto } from './taskwarrior.types';
+import type {
+  Task,
+  CreateTaskDto,
+  UpdateTaskDto,
+  DueDateValidation,
+} from './taskwarrior.types';
 import type { ExecResult } from '../shared/types';
 
 @Injectable()
@@ -394,6 +399,21 @@ export class TaskwarriorService {
       .trim()
       .split('\n')
       .filter((line) => line.length > 0);
+  }
+
+  validateDueDate(value: string): DueDateValidation {
+    const { stdout, exitCode } = this.execTask(['calc', value]);
+
+    if (exitCode !== 0) {
+      return { valid: false, resolved: null };
+    }
+
+    const resolved = stdout.trim();
+    if (!resolved) {
+      return { valid: false, resolved: null };
+    }
+
+    return { valid: true, resolved };
   }
 
   getLinkedCalendarEventMap(): Map<string, string> {

@@ -39,3 +39,8 @@ export interface CreateTaskDto {
 }
 
 export type UpdateTaskDto = Partial<CreateTaskDto> & { until?: string };
+
+export interface DueDateValidation {
+  valid: boolean;
+  resolved: string | null;
+}
