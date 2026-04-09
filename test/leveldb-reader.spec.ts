@@ -5,6 +5,15 @@ import {
 } from '../src/modules/slack/leveldb-reader';
 
 describe('LevelDB Reader', () => {
+  function buildLogRecord(type: number, data: Buffer): Buffer {
+    // Record format: CRC32(4) + Length(2) + Type(1) + Data
+    const header = Buffer.alloc(7);
+    header.writeUInt32LE(0, 0); // CRC32 placeholder (we skip validation)
+    header.writeUInt16LE(data.length, 4);
+    header[6] = type;
+    return Buffer.concat([header, data]);
+  }
+
   describe('readVarint', () => {
     it('reads single-byte varint', () => {
       const buf = Buffer.from([0x05]);
@@ -30,15 +39,6 @@ describe('LevelDB Reader', () => {
   });
 
   describe('parseLogRecords', () => {
-    function buildLogRecord(type: number, data: Buffer): Buffer {
-      // Record format: CRC32(4) + Length(2) + Type(1) + Data
-      const header = Buffer.alloc(7);
-      header.writeUInt32LE(0, 0); // CRC32 placeholder (we skip validation)
-      header.writeUInt16LE(data.length, 4);
-      header[6] = type;
-      return Buffer.concat([header, data]);
-    }
-
     it('extracts full records (type 1)', () => {
       const data = Buffer.from('hello world');
       const record = buildLogRecord(1, data);
@@ -84,14 +84,6 @@ describe('LevelDB Reader', () => {
       const keyLen = encodeVarint(key.length);
       const valLen = encodeVarint(value.length);
       return Buffer.concat([seq, count, putType, keyLen, key, valLen, value]);
-    }
-
-    function buildLogRecord(type: number, data: Buffer): Buffer {
-      const header = Buffer.alloc(7);
-      header.writeUInt32LE(0, 0);
-      header.writeUInt16LE(data.length, 4);
-      header[6] = type;
-      return Buffer.concat([header, data]);
     }
 
     it('extracts teams from localConfig_v2 value', () => {

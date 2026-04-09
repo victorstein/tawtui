@@ -1,6 +1,10 @@
 /**
  * Read a LevelDB-style varint (unsigned, little-endian, 7 bits per byte).
  * Returns [value, nextOffset].
+ *
+ * Note: Uses JavaScript bitwise OR, which operates on 32-bit signed integers.
+ * Values above 2^31-1 (2,147,483,647) will be incorrect. This is acceptable
+ * for the current use case where varints encode key/value lengths.
  */
 export function readVarint(buf: Buffer, offset: number): [number, number] {
   let result = 0;
@@ -154,7 +158,7 @@ function parseWriteBatchPuts(
  */
 function parseConfigValue(raw: Buffer): SlackLocalConfig | null {
   // Strip Chromium encoding prefix (0x00, 0x01, or 0x02)
-  const data = raw[0] <= 0x02 ? raw.subarray(1) : raw;
+  const data = raw.length > 0 && raw[0] <= 0x02 ? raw.subarray(1) : raw;
 
   // Try UTF-8 first
   try {
