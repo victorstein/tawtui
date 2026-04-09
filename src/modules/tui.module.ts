@@ -5,6 +5,7 @@ import { GithubModule } from './github.module';
 import { TerminalModule } from './terminal.module';
 import { DependencyModule } from './dependency.module';
 import { CalendarModule } from './calendar.module';
+import { SlackModule } from './slack/slack.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { CalendarModule } from './calendar.module';
     TerminalModule,
     DependencyModule,
     CalendarModule,
+    SlackModule,
   ],
   providers: [TuiService],
   exports: [TuiService],

@@ -7,6 +7,7 @@ import { ConfigService } from './config.service';
 import { TerminalService } from './terminal.service';
 import { DependencyService } from './dependency.service';
 import { CalendarService } from './calendar.service';
+import { SlackIngestionService } from './slack/slack-ingestion.service';
 import type {
   PullRequestDetail,
   PrDiff,
@@ -51,6 +52,8 @@ interface TawtuiGlobal {
       cleanupWorktree: boolean,
     ) => Promise<void>;
     validateDueDate: (value: string) => DueDateValidation;
+    slackIngestionService: SlackIngestionService;
+    createOracleSession: () => Promise<{ sessionId: string }>;
   };
   __tuiExit?: () => void;
 }
@@ -64,6 +67,7 @@ export class TuiService {
     private readonly terminalService: TerminalService,
     private readonly dependencyService: DependencyService,
     private readonly calendarService: CalendarService,
+    private readonly slackIngestionService: SlackIngestionService,
   ) {}
 
   async launch(): Promise<void> {
@@ -119,7 +123,16 @@ export class TuiService {
         ),
       validateDueDate: (value: string) =>
         this.taskwarriorService.validateDueDate(value),
+      slackIngestionService: this.slackIngestionService,
+      createOracleSession: () => this.terminalService.createOracleSession(),
     };
+
+    // Start Oracle ingestion if configured
+    const oracleConfig = this.configService.getOracleConfig();
+    if (oracleConfig.slack?.xoxcToken && oracleConfig.slack?.xoxdCookie) {
+      const intervalMs = oracleConfig.pollIntervalSeconds * 1000;
+      this.slackIngestionService.startPolling(intervalMs);
+    }
 
     // Set up the exit promise before rendering so the App component
     // can resolve it at any time (even during the initial render pass).
@@ -140,5 +153,7 @@ export class TuiService {
     // Keep the process alive until the user presses 'q'.
     // The App component calls g.__tuiExit() on quit.
     await exitPromise;
+
+    this.slackIngestionService.stopPolling();
   }
 }
