@@ -1,0 +1,613 @@
+import {
+  createSignal,
+  createEffect,
+  on,
+  onMount,
+  onCleanup,
+  Show,
+  For,
+} from 'solid-js';
+import { useKeyboard, useTerminalDimensions, usePaste, useRenderer } from '@opentui/solid';
+import type { ScrollBoxRenderable } from '@opentui/core';
+import { OracleSetupScreen, ORACLE_GRAD } from '../components/oracle-setup-screen';
+import { TerminalOutput } from '../components/terminal-output';
+import {
+  getDependencyService,
+  getTerminalService,
+  getConfigService,
+  getSlackIngestionService,
+  getCreateOracleSession,
+} from '../bridge';
+import type { DependencyStatus, SlackDepStatus } from '../../dependency.types';
+import type { CaptureResult } from '../../terminal.types';
+import {
+  FG_PRIMARY,
+  FG_DIM,
+  FG_MUTED,
+  FG_NORMAL,
+  COLOR_SUCCESS,
+  COLOR_ERROR,
+  ACCENT_PRIMARY,
+} from '../theme';
+import { lerpHex, LEFT_CAP, RIGHT_CAP } from '../utils';
+
+interface OracleViewProps {
+  refreshTrigger?: () => number;
+  onInputCapturedChange?: (captured: boolean) => void;
+}
+
+export function OracleView(props: OracleViewProps) {
+  const dimensions = useTerminalDimensions();
+  const renderer = useRenderer();
+
+  // Dependency status
+  const [depStatus, setDepStatus] = createSignal<DependencyStatus | null>(null);
+  const [oracleReady, setOracleReady] = createSignal(false);
+
+  // Session state
+  const [oracleSessionId, setOracleSessionId] = createSignal<string | null>(
+    null,
+  );
+  const [capture, setCapture] = createSignal<CaptureResult | null>(null);
+
+  // Interactive mode
+  const [interactive, setInteractive] = createSignal(false);
+
+  // Terminal scroll ref
+  const [terminalScrollRef, setTerminalScrollRef] =
+    createSignal<ScrollBoxRenderable | undefined>();
+
+  // Error display
+  const [error, setError] = createSignal<string | null>(null);
+  let errorTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function showError(message: string): void {
+    setError(message);
+    if (errorTimer) clearTimeout(errorTimer);
+    errorTimer = setTimeout(() => setError(null), 5000);
+  }
+
+  // Propagate interactive state to parent
+  createEffect(() => {
+    props.onInputCapturedChange?.(interactive());
+  });
+
+  // ------------------------------------------------------------------
+  // Dependency checking
+  // ------------------------------------------------------------------
+
+  async function checkDependencies(): Promise<void> {
+    const depService = getDependencyService();
+    if (!depService) return;
+    const status = await depService.checkAll();
+    setDepStatus(status);
+    setOracleReady(status.oracleReady);
+  }
+
+  // ------------------------------------------------------------------
+  // Session detection
+  // ------------------------------------------------------------------
+
+  function detectExistingSession(): void {
+    const ts = getTerminalService();
+    if (!ts) return;
+    const sessions = ts.listSessions();
+    const existing = sessions.find(
+      (s) => s.isOracleSession && s.status === 'running',
+    );
+    if (existing) {
+      setOracleSessionId(existing.id);
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Terminal capture
+  // ------------------------------------------------------------------
+
+  async function refreshCapture(): Promise<void> {
+    const ts = getTerminalService();
+    const sessionId = oracleSessionId();
+    if (!ts || !sessionId) {
+      setCapture(null);
+      return;
+    }
+    try {
+      const result = await ts.captureOutput(sessionId);
+      if (result.changed || capture() === null) {
+        setCapture(result);
+      }
+    } catch {
+      // Session may have been destroyed
+      setOracleSessionId(null);
+      setCapture(null);
+    }
+  }
+
+  async function resizeTmuxPane(): Promise<void> {
+    const ts = getTerminalService();
+    const sessionId = oracleSessionId();
+    if (!ts || !sessionId) return;
+
+    const termWidth = dimensions().width;
+    const termHeight = dimensions().height;
+    // Full width minus border padding
+    const cols = Math.max(termWidth - 4, 10);
+    const rows = Math.max(termHeight - 8, 5);
+
+    try {
+      await ts.resize(sessionId, cols, rows);
+    } catch {
+      // Ignore resize errors
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Adaptive polling
+  // ------------------------------------------------------------------
+
+  let pollVersion = 0;
+  let pollTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function getPollInterval(): number {
+    if (!oracleSessionId()) return 2000;
+    if (interactive()) return 80;
+    return 300;
+  }
+
+  function schedulePoll(version: number): void {
+    pollTimer = setTimeout(() => {
+      if (version !== pollVersion) return;
+      void (async () => {
+        if (version !== pollVersion) return;
+        await refreshCapture();
+        if (version === pollVersion) schedulePoll(version);
+      })();
+    }, getPollInterval());
+  }
+
+  function restartPolling(): void {
+    pollVersion++;
+    if (pollTimer !== null) {
+      clearTimeout(pollTimer);
+      pollTimer = null;
+    }
+    schedulePoll(pollVersion);
+  }
+
+  // ------------------------------------------------------------------
+  // Ingestion auto-start
+  // ------------------------------------------------------------------
+
+  function startIngestionIfNeeded(): void {
+    const ingestion = getSlackIngestionService();
+    if (!ingestion) return;
+    if (!ingestion.isPolling()) {
+      ingestion.startPolling(5 * 60 * 1000); // 5 minutes
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Effects and lifecycle
+  // ------------------------------------------------------------------
+
+  // Resize effect with debounce when session changes or terminal resizes
+  let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+
+  createEffect(() => {
+    dimensions(); // re-run on terminal resize
+    const sessionId = oracleSessionId();
+
+    if (sessionId) {
+      setCapture(null);
+      void refreshCapture();
+      if (resizeTimer !== null) {
+        clearTimeout(resizeTimer);
+      }
+      resizeTimer = setTimeout(() => {
+        void resizeTmuxPane();
+      }, 50);
+    } else {
+      setCapture(null);
+    }
+  });
+
+  // Restart polling when relevant state changes
+  createEffect(() => {
+    interactive();
+    void oracleSessionId();
+    restartPolling();
+  });
+
+  // Auto-start ingestion when oracleReady transitions to true
+  createEffect(
+    on(oracleReady, (ready) => {
+      if (ready) {
+        startIngestionIfNeeded();
+      }
+    }),
+  );
+
+  onMount(() => {
+    void checkDependencies();
+    detectExistingSession();
+  });
+
+  onCleanup(() => {
+    pollVersion++;
+    if (pollTimer !== null) {
+      clearTimeout(pollTimer);
+      pollTimer = null;
+    }
+    if (resizeTimer !== null) {
+      clearTimeout(resizeTimer);
+      resizeTimer = null;
+    }
+    if (errorTimer !== null) {
+      clearTimeout(errorTimer);
+      errorTimer = null;
+    }
+  });
+
+  // Reload when parent bumps refreshTrigger
+  createEffect(
+    on(
+      () => props.refreshTrigger?.(),
+      () => {
+        void checkDependencies();
+        detectExistingSession();
+      },
+      { defer: true },
+    ),
+  );
+
+  // ------------------------------------------------------------------
+  // Session actions
+  // ------------------------------------------------------------------
+
+  async function startOracleSession(): Promise<void> {
+    const createSession = getCreateOracleSession();
+    if (!createSession) {
+      showError('Oracle session creator not available');
+      return;
+    }
+
+    try {
+      const result = await createSession();
+      setOracleSessionId(result.sessionId);
+    } catch {
+      showError('Failed to start Oracle session');
+    }
+  }
+
+  async function killOracleSession(): Promise<void> {
+    const ts = getTerminalService();
+    const sessionId = oracleSessionId();
+    if (!ts || !sessionId) return;
+
+    try {
+      await ts.destroySession(sessionId);
+    } catch {
+      showError('Failed to destroy Oracle session');
+    }
+    setOracleSessionId(null);
+    setCapture(null);
+    setInteractive(false);
+  }
+
+  // ------------------------------------------------------------------
+  // Setup screen callbacks
+  // ------------------------------------------------------------------
+
+  async function handleRecheck(): Promise<void> {
+    await checkDependencies();
+  }
+
+  async function handleTokensSubmit(
+    xoxc: string,
+    xoxd: string,
+    teamId: string,
+    teamName: string,
+  ): Promise<void> {
+    const config = getConfigService();
+    if (!config) return;
+
+    config.updateOracleConfig({
+      slack: {
+        xoxcToken: xoxc,
+        xoxdCookie: xoxd,
+        teamId,
+        teamName,
+      },
+    });
+    await checkDependencies();
+  }
+
+  // ------------------------------------------------------------------
+  // Keyboard handling
+  // ------------------------------------------------------------------
+
+  useKeyboard((key) => {
+    // Alt+C: Copy selected text to clipboard
+    if ((key.option && key.name === 'c') || key.sequence === 'ç') {
+      const selection = renderer.getSelection();
+      if (selection && selection.isActive) {
+        const text = selection.getSelectedText();
+        if (text) {
+          renderer.copyToClipboardOSC52(text);
+          renderer.clearSelection();
+        }
+      }
+      return;
+    }
+
+    // Alt+V: Paste system clipboard to tmux
+    if ((key.option && key.name === 'v') || key.sequence === '√') {
+      const sessionId = oracleSessionId();
+      if (!sessionId) return;
+      const ts = getTerminalService();
+      if (!ts) return;
+      void (async () => {
+        try {
+          const proc = Bun.spawn(['pbpaste'], {
+            stdout: 'pipe',
+            stderr: 'pipe',
+          });
+          const text = await new Response(proc.stdout).text();
+          await proc.exited;
+          if (text) await ts.pasteText(sessionId, text);
+        } catch {
+          showError('Clipboard read failed');
+        }
+      })();
+      return;
+    }
+
+    // Interactive mode: Ctrl+\ exits, all other keys forwarded to tmux
+    if (interactive()) {
+      if (key.sequence === '\x1c') {
+        setInteractive(false);
+        return;
+      }
+
+      if (key.name === 'escape') {
+        const ts = getTerminalService();
+        const sessionId = oracleSessionId();
+        if (ts && sessionId) {
+          ts.sendInput(sessionId, 'escape').catch(() => {});
+        }
+        return;
+      }
+
+      const ts = getTerminalService();
+      const sessionId = oracleSessionId();
+      if (!ts || !sessionId) return;
+
+      if (key.ctrl && key.name) {
+        const ctrlKey = `C-${key.name}`;
+        ts.sendInput(sessionId, ctrlKey).catch(() => {
+          setInteractive(false);
+          setOracleSessionId(null);
+        });
+        return;
+      }
+
+      const input =
+        key.sequence && key.sequence.length === 1 && !key.ctrl && !key.meta
+          ? key.sequence
+          : (key.name ?? key.sequence ?? '');
+      ts.sendInput(sessionId, input).catch(() => {
+        setInteractive(false);
+        setOracleSessionId(null);
+      });
+      return;
+    }
+
+    // Non-interactive: only handle when oracle is ready
+    if (!oracleReady()) {
+      // [r] recheck dependencies even in setup mode
+      if (key.name === 'r') {
+        void checkDependencies();
+        return;
+      }
+      return;
+    }
+
+    // Terminal scroll: Ctrl+D / Ctrl+U (half-page)
+    if (key.ctrl && key.name === 'd') {
+      terminalScrollRef()?.scrollBy(0.5, 'viewport');
+      return;
+    }
+    if (key.ctrl && key.name === 'u') {
+      terminalScrollRef()?.scrollBy(-0.5, 'viewport');
+      return;
+    }
+
+    // [N] Start new Oracle session
+    if (key.name === 'N' || (key.shift && key.name === 'n')) {
+      if (!oracleSessionId()) {
+        void startOracleSession();
+      }
+      return;
+    }
+
+    // [K] Kill Oracle session
+    if (key.name === 'K' || (key.shift && key.name === 'k')) {
+      if (oracleSessionId()) {
+        void killOracleSession();
+      }
+      return;
+    }
+
+    // [i] Enter interactive mode
+    if (key.name === 'i') {
+      if (oracleSessionId()) {
+        setInteractive(true);
+      }
+      return;
+    }
+
+    // [r] Recheck dependencies
+    if (key.name === 'r') {
+      void checkDependencies();
+      detectExistingSession();
+      return;
+    }
+  });
+
+  usePaste((event) => {
+    if (!interactive()) return;
+    const ts = getTerminalService();
+    const sessionId = oracleSessionId();
+    if (!ts || !sessionId) return;
+    ts.pasteText(sessionId, event.text).catch(() => showError('Paste failed'));
+  });
+
+  // ------------------------------------------------------------------
+  // Render helpers
+  // ------------------------------------------------------------------
+
+  const gradColor = () => lerpHex(ORACLE_GRAD[0], ORACLE_GRAD[1], 0.5);
+
+  /** Render a gradient-bordered ORACLE title pill. */
+  const renderTitlePill = () => {
+    const title = ' ORACLE ';
+    const chars = title.split('');
+    return (
+      <box flexDirection="row">
+        <text fg={ORACLE_GRAD[0]}>{LEFT_CAP}</text>
+        <For each={chars}>
+          {(char, i) => {
+            const t = chars.length > 1 ? i() / (chars.length - 1) : 0;
+            return (
+              <text
+                fg="#ffffff"
+                bg={lerpHex(ORACLE_GRAD[0], ORACLE_GRAD[1], t)}
+                attributes={1}
+              >
+                {char}
+              </text>
+            );
+          }}
+        </For>
+        <text fg={ORACLE_GRAD[1]}>{RIGHT_CAP}</text>
+      </box>
+    );
+  };
+
+  // ------------------------------------------------------------------
+  // Render
+  // ------------------------------------------------------------------
+
+  return (
+    <box flexDirection="column" flexGrow={1} width="100%">
+      <Show when={error()}>
+        <box height={1}>
+          <text fg={COLOR_ERROR}> {error()}</text>
+        </box>
+      </Show>
+
+      {/* Loading state */}
+      <Show when={depStatus() === null}>
+        <box flexDirection="column" flexGrow={1} paddingX={2} paddingY={1}>
+          <text fg={FG_DIM}>Checking Oracle configuration...</text>
+        </box>
+      </Show>
+
+      {/* Setup screen when not ready */}
+      <Show when={depStatus() !== null && !oracleReady()}>
+        <OracleSetupScreen
+          slackStatus={depStatus()!.slack}
+          onRecheck={handleRecheck}
+          onTokensSubmit={handleTokensSubmit}
+        />
+      </Show>
+
+      {/* Oracle session view when ready */}
+      <Show when={oracleReady()}>
+        <box
+          flexDirection="column"
+          flexGrow={1}
+          borderStyle={interactive() ? 'double' : 'single'}
+          borderColor={interactive() ? COLOR_SUCCESS : gradColor()}
+        >
+          {/* Header */}
+          <box height={1} width="100%" paddingX={1} flexDirection="row">
+            {renderTitlePill()}
+            <text>{'  '}</text>
+            <Show
+              when={oracleSessionId()}
+              fallback={<text fg={FG_MUTED}>No session</text>}
+            >
+              <text fg={COLOR_SUCCESS}>Session active</text>
+              <Show when={interactive()}>
+                <text>{'  '}</text>
+                <text fg={COLOR_SUCCESS} attributes={1}>
+                  INTERACTIVE
+                </text>
+                <text fg={FG_DIM}>{' — Ctrl+\\ to exit'}</text>
+              </Show>
+            </Show>
+          </box>
+
+          {/* No session: prompt to start */}
+          <Show when={!oracleSessionId()}>
+            <box
+              flexDirection="column"
+              flexGrow={1}
+              paddingX={2}
+              paddingY={1}
+            >
+              <text fg={FG_NORMAL}>
+                No Oracle session is running.
+              </text>
+              <box height={1} />
+              <box flexDirection="row">
+                <text fg={ACCENT_PRIMARY} attributes={1}>
+                  {'[N]'}
+                </text>
+                <text fg={FG_DIM}>{' Start Oracle session'}</text>
+              </box>
+              <box flexDirection="row">
+                <text fg={ACCENT_PRIMARY} attributes={1}>
+                  {'[r]'}
+                </text>
+                <text fg={FG_DIM}>{' Re-check dependencies'}</text>
+              </box>
+            </box>
+          </Show>
+
+          {/* Active session: terminal output */}
+          <Show when={oracleSessionId()}>
+            <TerminalOutput
+              capture={capture()}
+              isActivePane={true}
+              isInteractive={interactive()}
+              agentName="Oracle"
+              onScrollRef={setTerminalScrollRef}
+            />
+
+            {/* Footer key hints (only when not interactive) */}
+            <Show when={!interactive()}>
+              <box height={1} width="100%" paddingX={1} flexDirection="row">
+                <text fg={ACCENT_PRIMARY} attributes={1}>
+                  {'[i]'}
+                </text>
+                <text fg={FG_DIM}>{' Interactive'}</text>
+                <text>{'  '}</text>
+                <text fg={ACCENT_PRIMARY} attributes={1}>
+                  {'[K]'}
+                </text>
+                <text fg={FG_DIM}>{' Kill'}</text>
+                <text>{'  '}</text>
+                <text fg={ACCENT_PRIMARY} attributes={1}>
+                  {'[r]'}
+                </text>
+                <text fg={FG_DIM}>{' Refresh'}</text>
+              </box>
+            </Show>
+          </Show>
+        </box>
+      </Show>
+    </box>
+  );
+}
