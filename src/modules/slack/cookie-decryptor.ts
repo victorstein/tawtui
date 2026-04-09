@@ -42,13 +42,17 @@ export function decryptValue(
 export function readEncryptedCookie(
   cookieDbPath: string,
 ): { encryptedValue: Buffer; schemaVersion: number } | null {
+  // Using require() instead of import to allow Jest's moduleNameMapper to intercept bun:sqlite
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { Database } = require('bun:sqlite') as typeof import('bun:sqlite');
   const db = new Database(cookieDbPath, { readonly: true });
 
   try {
     const meta = db
-      .query<{ value: string }, []>('SELECT value FROM meta WHERE key = ?')
+      .query<
+        { value: string },
+        [string]
+      >('SELECT value FROM meta WHERE key = ?')
       .get('version');
     const schemaVersion = meta ? parseInt(meta.value, 10) : 0;
 

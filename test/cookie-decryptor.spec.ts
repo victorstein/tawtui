@@ -2,10 +2,10 @@ import {
   deriveKey,
   decryptValue,
   readEncryptedCookie,
+  readKeychainPassword,
 } from '../src/modules/slack/cookie-decryptor';
 import { createCipheriv } from 'crypto';
 import { mkdtempSync, rmSync } from 'fs';
-import { execSync } from 'child_process';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
@@ -77,7 +77,11 @@ describe('Cookie Decryptor', () => {
     let tmpDir: string;
 
     function createTestDb(dbPath: string, sql: string): void {
-      execSync(`sqlite3 "${dbPath}" "${sql}"`);
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { Database } = require('bun:sqlite') as typeof import('bun:sqlite');
+      const db = new Database(dbPath);
+      db.exec(sql);
+      db.close();
     }
 
     beforeEach(() => {
@@ -143,6 +147,40 @@ describe('Cookie Decryptor', () => {
       );
 
       const result = readEncryptedCookie(dbPath);
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('readKeychainPassword', () => {
+    const mockSpawnSync = jest.fn();
+
+    beforeEach(() => {
+      (globalThis as Record<string, unknown>).Bun = {
+        spawnSync: mockSpawnSync,
+      };
+    });
+
+    afterEach(() => {
+      (globalThis as Record<string, unknown>).Bun = {
+        spawnSync: jest.fn(),
+      };
+    });
+
+    it('returns trimmed password on success', () => {
+      mockSpawnSync.mockReturnValue({
+        exitCode: 0,
+        stdout: Buffer.from('  my-password  \n'),
+      });
+      const result = readKeychainPassword('Slack Safe Storage');
+      expect(result).toBe('my-password');
+    });
+
+    it('returns null when keychain lookup fails', () => {
+      mockSpawnSync.mockReturnValue({
+        exitCode: 44,
+        stdout: Buffer.from(''),
+      });
+      const result = readKeychainPassword('Slack Safe Storage');
       expect(result).toBeNull();
     });
   });
