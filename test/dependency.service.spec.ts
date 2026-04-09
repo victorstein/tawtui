@@ -73,11 +73,32 @@ describe('DependencyService - Oracle checks', () => {
   it('slack status includes install instructions', async () => {
     const status = await service.checkAll();
     expect(status.slack.mempalaceInstallInstructions).toBe(
-      'pip install mempalace',
+      'pipx install mempalace',
     );
     expect(status.slack.slacktokensInstallInstructions).toBe(
-      'pip install slacktokens',
+      'pipx install slacktokens',
     );
+  });
+
+  it('slack status includes pipx install instructions (not pip)', async () => {
+    const status = await service.checkAll();
+    expect(status.slack.mempalaceInstallInstructions).toBe(
+      'pipx install mempalace',
+    );
+    expect(status.slack.slacktokensInstallInstructions).toBe(
+      'pipx install slacktokens',
+    );
+  });
+
+  it('slack status includes pipxInstalled field', async () => {
+    const status = await service.checkAll();
+    expect(status.slack).toHaveProperty('pipxInstalled');
+    expect(typeof status.slack.pipxInstalled).toBe('boolean');
+  });
+
+  it('slack status includes pipxInstallInstructions', async () => {
+    const status = await service.checkAll();
+    expect(status.slack.pipxInstallInstructions).toBeTruthy();
   });
 
   it('existing dependency checks still work alongside oracle checks', async () => {

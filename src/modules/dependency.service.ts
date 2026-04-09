@@ -65,6 +65,7 @@ export class DependencyService {
   }
 
   private checkSlack(): SlackDepStatus {
+    const platform = process.platform;
     const oracleConfig = this.configService.getOracleConfig();
     const hasTokens =
       !!oracleConfig.slack?.xoxcToken && !!oracleConfig.slack?.xoxdCookie;
@@ -74,13 +75,16 @@ export class DependencyService {
       'status',
     );
     const slacktokensInstalled = this.isPythonPackageAvailable('slacktokens');
+    const pipxInstalled = this.isCommandAvailable('pipx');
 
     return {
       hasTokens,
       mempalaceInstalled,
       slacktokensInstalled,
-      mempalaceInstallInstructions: 'pip install mempalace',
-      slacktokensInstallInstructions: 'pip install slacktokens',
+      pipxInstalled,
+      mempalaceInstallInstructions: 'pipx install mempalace',
+      slacktokensInstallInstructions: 'pipx install slacktokens',
+      pipxInstallInstructions: this.getPipxInstallInstructions(platform),
     };
   }
 
@@ -125,6 +129,29 @@ export class DependencyService {
         return 'go install github.com/steipete/gogcli@latest';
       default:
         return 'See https://github.com/steipete/gogcli for installation instructions';
+    }
+  }
+
+  private isCommandAvailable(cmd: string): boolean {
+    try {
+      const result = Bun.spawnSync([cmd, '--version'], {
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      return result.exitCode === 0;
+    } catch {
+      return false;
+    }
+  }
+
+  private getPipxInstallInstructions(platform: NodeJS.Platform): string {
+    switch (platform) {
+      case 'darwin':
+        return 'brew install pipx';
+      case 'linux':
+        return 'sudo apt install pipx';
+      default:
+        return 'See https://pipx.pypa.io for installation instructions';
     }
   }
 }

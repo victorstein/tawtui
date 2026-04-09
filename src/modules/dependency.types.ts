@@ -22,10 +22,14 @@ export interface SlackDepStatus {
   mempalaceInstalled: boolean;
   /** slacktokens Python package is available for auto-extraction */
   slacktokensInstalled: boolean;
+  /** pipx CLI is available for auto-install */
+  pipxInstalled: boolean;
   /** Install instruction for mempalace */
   mempalaceInstallInstructions: string;
   /** Install instruction for slacktokens */
   slacktokensInstallInstructions: string;
+  /** Install instruction for pipx itself (platform-aware) */
+  pipxInstallInstructions: string;
 }
 
 export interface DependencyStatus {
