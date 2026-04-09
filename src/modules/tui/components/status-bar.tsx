@@ -16,16 +16,17 @@ interface StatusBarProps {
 }
 
 const TAB_HINTS = [
-  '1-3 switch tab | j/k navigate | n new | enter detail | m/M move | x archive | / filter | q quit',
-  '1-3 switch tab | h/l panes | j/k navigate | a add repo | x remove | n new agent | i interactive | K kill | r refresh | q quit',
-  '1-3 switch tab | h/l day | j/k events | [ / ] week | t today | enter convert | r refresh | q quit',
+  '1-4 switch tab | j/k navigate | n new | enter detail | m/M move | x archive | / filter | q quit',
+  '1-4 switch tab | h/l panes | j/k navigate | a add repo | x remove | n new agent | i interactive | K kill | r refresh | q quit',
+  '1-4 switch tab | h/l day | j/k events | [ / ] week | t today | enter convert | r refresh | q quit',
+  '1-4 switch tab | n start session | i interactive | K kill | r recheck | T tokens | q quit',
 ];
 
 const ARCHIVE_HINT =
-  '1-3 switch tab | j/k navigate | u undo | D delete | A back to board | q quit';
+  '1-4 switch tab | j/k navigate | u undo | D delete | A back to board | q quit';
 
 function getReviewsHint(ctx: ReviewsHintContext): string {
-  const base = '1-3 switch tab';
+  const base = '1-4 switch tab';
 
   switch (ctx.mode) {
     case 'interactive':
