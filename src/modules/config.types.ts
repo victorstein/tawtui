@@ -17,6 +17,30 @@ export const DEFAULT_CALENDAR_CONFIG: CalendarConfig = {
   defaultCalendarId: 'primary',
 };
 
+export interface SlackCredentials {
+  /** xoxc- session token extracted from Slack browser/desktop */
+  xoxcToken: string;
+  /** xoxd- cookie value extracted from Slack browser/desktop */
+  xoxdCookie: string;
+  /** Slack workspace/team ID (e.g. "T012AB3CD") */
+  teamId: string;
+  /** Slack workspace name for display */
+  teamName: string;
+}
+
+export interface OracleConfig {
+  /** Slack session credentials — set via setup wizard */
+  slack?: SlackCredentials;
+  /** How often the daemon polls Slack in seconds (default: 300 = 5 min) */
+  pollIntervalSeconds: number;
+  /** Taskwarrior project to assign Oracle-created tasks */
+  defaultProject?: string;
+}
+
+export const DEFAULT_ORACLE_CONFIG: OracleConfig = {
+  pollIntervalSeconds: 300,
+};
+
 export interface UserPreferences {
   theme: string;
   archiveTime: string; // "midnight" or custom time
@@ -42,4 +66,5 @@ export interface AppConfig {
   agents?: { types: AgentDefinition[] };
   projectAgentConfigs?: ProjectAgentConfig[];
   calendar?: CalendarConfig;
+  oracle?: OracleConfig;
 }
