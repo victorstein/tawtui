@@ -13,6 +13,7 @@ export interface TerminalSession {
   worktreeId?: string; // linked worktree ID
   worktreePath?: string; // denormalized path for UI display
   branchName?: string; // PR head branch name for UI display
+  isOracleSession?: boolean;
 }
 
 export interface CursorPosition {

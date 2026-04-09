@@ -806,6 +806,67 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
   }
 
   /**
+   * Create a tmux session running the Oracle agent (Claude Code with a
+   * Slack-monitoring prompt). Returns the new session ID.
+   */
+  async createOracleSession(): Promise<{ sessionId: string }> {
+    const agentTypes = this.configService.getAgentTypes();
+    const claudeAgent =
+      agentTypes.find((a) => a.id === 'claude-code') ?? agentTypes[0];
+
+    if (!claudeAgent?.command) {
+      throw new Error(
+        'Claude Code agent not configured. Add it under agents.types in ~/.config/tawtui/config.json',
+      );
+    }
+
+    const oraclePrompt = [
+      'You are Oracle, a personal assistant integrated into tawtui.',
+      '',
+      'Your job is to monitor my Slack conversations (stored in mempalace) and surface',
+      'action items as Taskwarrior tasks.',
+      '',
+      'On each run:',
+      '1. Use the mempalace MCP server to query recent messages in the "slack" wing.',
+      '2. Identify action items, commitments, follow-ups, and deadlines.',
+      '3. Before creating any task, run: task list +oracle and check for similar',
+      '   existing tasks to avoid duplicates.',
+      '4. Create tasks with: task add "<description>" +oracle +slack',
+      '   Optionally add due dates: task add "<description>" +oracle +slack due:2026-04-10',
+      '5. After processing, briefly summarise: N tasks created, key highlights.',
+      '',
+      'Focus on:',
+      '- Direct commitments ("I will send you X", "I\'ll review that by Y")',
+      '- Requests directed at you that need a response or action',
+      '- Deadlines or time-sensitive items mentioned',
+      '',
+      'Use /loop 5m to repeat this check every 5 minutes.',
+    ].join('\\n');
+
+    const escaped = oraclePrompt.replace(/'/g, "'\\''");
+    let command = claudeAgent.command;
+    if (claudeAgent.autoApproveFlag) {
+      command += ` ${claudeAgent.autoApproveFlag}`;
+    }
+    command += ` '${escaped}'`;
+
+    const session = await this.createSession({
+      name: 'Oracle',
+      cwd: process.env.HOME ?? process.cwd(),
+      command,
+    });
+
+    // Tag for easy identification
+    const sessionData = this.sessions.get(session.id);
+    if (sessionData) {
+      sessionData.isOracleSession = true;
+      this.persistSessions();
+    }
+
+    return { sessionId: session.id };
+  }
+
+  /**
    * Destroy a session and optionally clean up its linked worktree.
    */
   async destroySessionWithWorktree(
