@@ -11,6 +11,7 @@ import type {
 } from '../github.types';
 import type { ProjectAgentConfig } from '../config.types';
 import type { DueDateValidation } from '../taskwarrior.types';
+import type { SlackIngestionService } from '../slack/slack-ingestion.service';
 
 export interface TawtuiBridge {
   taskwarriorService: TaskwarriorService;
@@ -43,6 +44,8 @@ export interface TawtuiBridge {
     cleanupWorktree: boolean,
   ) => Promise<void>;
   validateDueDate: (value: string) => DueDateValidation;
+  slackIngestionService: SlackIngestionService;
+  createOracleSession: () => Promise<{ sessionId: string }>;
 }
 
 function getBridge(): TawtuiBridge | undefined {
@@ -89,6 +92,16 @@ export function getDestroySessionWithWorktree():
 
 export function getValidateDueDate(): TawtuiBridge['validateDueDate'] | null {
   return getBridge()?.validateDueDate ?? null;
+}
+
+export function getSlackIngestionService(): SlackIngestionService | null {
+  return getBridge()?.slackIngestionService ?? null;
+}
+
+export function getCreateOracleSession():
+  | TawtuiBridge['createOracleSession']
+  | null {
+  return getBridge()?.createOracleSession ?? null;
 }
 
 export function getTuiExit(): (() => void) | null {
