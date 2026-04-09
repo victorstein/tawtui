@@ -6,13 +6,19 @@ import type { ReviewsHintContext } from './components/status-bar';
 import { TasksView } from './views/tasks-view';
 import ReviewsView from './views/reviews-view';
 import { CalendarView } from './views/calendar-view';
+import { OracleView } from './views/oracle-view';
 import { DialogProvider, useDialog } from './context/dialog';
 import { DialogConfirm } from './components/dialog-confirm';
 import { DialogSetupWizard } from './components/dialog-setup-wizard';
 import { getDependencyService, getTuiExit } from './bridge';
 import type { DependencyStatus } from '../dependency.types';
 
-const TABS = [{ name: 'Tasks' }, { name: 'Reviews' }, { name: 'Calendar' }];
+const TABS = [
+  { name: 'Tasks' },
+  { name: 'Reviews' },
+  { name: 'Calendar' },
+  { name: 'Oracle' },
+];
 
 export function App() {
   return (
@@ -83,6 +89,10 @@ function AppContent() {
       setActiveTab(2);
       return;
     }
+    if (key.name === '4') {
+      setActiveTab(3);
+      return;
+    }
 
     // Tab cycling
     if (key.name === 'tab' && !key.shift) {
@@ -146,6 +156,12 @@ function AppContent() {
             <CalendarView
               refreshTrigger={refreshTrigger}
               onNavigateToTask={handleNavigateToTask}
+            />
+          </Match>
+          <Match when={activeTab() === 3}>
+            <OracleView
+              refreshTrigger={refreshTrigger}
+              onInputCapturedChange={(captured) => setInputCaptured(captured)}
             />
           </Match>
         </Switch>
