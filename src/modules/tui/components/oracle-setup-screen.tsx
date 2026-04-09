@@ -1,6 +1,10 @@
 import { createSignal, Show, For } from 'solid-js';
 import { useKeyboard } from '@opentui/solid';
 import type { SlackDepStatus } from '../../dependency.types';
+import type {
+  ExtractedWorkspace,
+  ExtractionResult,
+} from '../../slack/token-extractor.service';
 import {
   P,
   FG_PRIMARY,
@@ -30,6 +34,7 @@ interface OracleSetupScreenProps {
     teamName: string,
   ) => Promise<void>;
   onInstallDeps: () => Promise<{ success: boolean; error?: string }>;
+  onAutoDetect: () => Promise<ExtractionResult>;
 }
 
 const TOKEN_FIELDS = ['xoxc', 'xoxd', 'teamId', 'teamName'] as const;
@@ -58,6 +63,10 @@ export function OracleSetupScreen(props: OracleSetupScreenProps) {
   const [checking, setChecking] = createSignal(false);
   const [installing, setInstalling] = createSignal(false);
   const [installError, setInstallError] = createSignal<string | null>(null);
+  const [detecting, setDetecting] = createSignal(false);
+  const [detectedWorkspaces, setDetectedWorkspaces] = createSignal<
+    ExtractedWorkspace[]
+  >([]);
 
   const hasInstallablePackages = () =>
     props.slackStatus.pipxInstalled && !props.slackStatus.mempalaceInstalled;
@@ -114,6 +123,58 @@ export function OracleSetupScreen(props: OracleSetupScreenProps) {
     }
 
     // Normal mode
+
+    // Auto-detect tokens from Slack app
+    if (
+      key.name === 'a' &&
+      !props.slackStatus.hasTokens &&
+      props.slackStatus.slackAppDetected &&
+      !detecting()
+    ) {
+      key.preventDefault();
+      setDetecting(true);
+      setInstallError(null);
+      void props.onAutoDetect().then((result) => {
+        setDetecting(false);
+        if (!result.success) {
+          setInstallError(result.error ?? 'Auto-detect failed');
+        } else if (result.workspaces.length === 1) {
+          const ws = result.workspaces[0];
+          void props.onTokensSubmit(
+            ws.xoxcToken,
+            ws.xoxdCookie,
+            ws.teamId,
+            ws.teamName,
+          );
+        } else {
+          setDetectedWorkspaces(result.workspaces);
+        }
+      });
+      return;
+    }
+
+    // Workspace selection (1-9) when multiple workspaces detected
+    if (detectedWorkspaces().length > 0) {
+      const idx = parseInt(key.sequence ?? '', 10);
+      if (idx >= 1 && idx <= detectedWorkspaces().length) {
+        key.preventDefault();
+        const ws = detectedWorkspaces()[idx - 1];
+        void props.onTokensSubmit(
+          ws.xoxcToken,
+          ws.xoxdCookie,
+          ws.teamId,
+          ws.teamName,
+        );
+        setDetectedWorkspaces([]);
+        return;
+      }
+      if (key.name === 'escape') {
+        key.preventDefault();
+        setDetectedWorkspaces([]);
+        return;
+      }
+    }
+
     if (key.name === 'r') {
       key.preventDefault();
       handleRecheck();
@@ -205,22 +266,59 @@ export function OracleSetupScreen(props: OracleSetupScreenProps) {
 
       <Show when={!props.slackStatus.hasTokens}>
         <box height={1} />
-        <text fg={FG_DIM}>{'    Option A (automatic):'}</text>
-        <Show
-          when={props.slackStatus.slackAppDetected}
-          fallback={
-            <text fg={FG_DIM}>
-              {'      Slack desktop app not detected — use manual entry below'}
-            </text>
-          }
-        >
-          <text fg={FG_DIM}>
-            {'      Slack desktop app detected — auto-extract available'}
-          </text>
+
+        {/* Auto-detect from Slack app */}
+        <Show when={props.slackStatus.slackAppDetected}>
+          <text fg={FG_DIM}>{'    Option A (automatic):'}</text>
+          <Show
+            when={!detecting()}
+            fallback={
+              <text fg={ORACLE_GRAD[0]} attributes={1}>
+                {'      Detecting Slack tokens...'}
+              </text>
+            }
+          >
+            <box flexDirection="row">
+              <text>{'      '}</text>
+              <text fg={ACCENT_PRIMARY} attributes={1}>
+                {'[a]'}
+              </text>
+              <text fg={FG_DIM}>{' Auto-detect from Slack desktop app'}</text>
+            </box>
+          </Show>
+          <box height={1} />
         </Show>
 
-        <box height={1} />
-        <text fg={FG_DIM}>{'    Option B (manual):'}</text>
+        {/* Workspace selection */}
+        <Show when={detectedWorkspaces().length > 0}>
+          <text fg={FG_NORMAL} attributes={1}>
+            {'    Select a workspace:'}
+          </text>
+          <For each={detectedWorkspaces()}>
+            {(ws, i) => (
+              <box flexDirection="row">
+                <text>{'      '}</text>
+                <text fg={ACCENT_PRIMARY} attributes={1}>
+                  {`[${i() + 1}]`}
+                </text>
+                <text fg={FG_NORMAL}>{` ${ws.teamName}`}</text>
+                <text fg={FG_DIM}>{` (${ws.teamId})`}</text>
+              </box>
+            )}
+          </For>
+          <box flexDirection="row">
+            <text>{'      '}</text>
+            <text fg={FG_MUTED}>{'[Esc] cancel'}</text>
+          </box>
+          <box height={1} />
+        </Show>
+
+        {/* Manual entry — always available */}
+        <text fg={FG_DIM}>
+          {props.slackStatus.slackAppDetected
+            ? '    Option B (manual):'
+            : '    Enter tokens manually:'}
+        </text>
         <text fg={FG_DIM}>
           {'      1. Open Slack in your browser (not the desktop app)'}
         </text>
@@ -378,6 +476,20 @@ export function OracleSetupScreen(props: OracleSetupScreenProps) {
             {'[i]'}
           </text>
           <text fg={FG_DIM}>{' Install missing deps'}</text>
+        </Show>
+        <Show
+          when={
+            !props.slackStatus.hasTokens &&
+            props.slackStatus.slackAppDetected &&
+            !detecting() &&
+            detectedWorkspaces().length === 0
+          }
+        >
+          <text>{'    '}</text>
+          <text fg={ACCENT_PRIMARY} attributes={1}>
+            {'[a]'}
+          </text>
+          <text fg={FG_DIM}>{' Auto-detect'}</text>
         </Show>
         <Show when={!props.slackStatus.hasTokens && !tokenMode()}>
           <text>{'    '}</text>
