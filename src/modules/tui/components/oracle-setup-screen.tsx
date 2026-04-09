@@ -29,6 +29,7 @@ interface OracleSetupScreenProps {
     teamId: string,
     teamName: string,
   ) => Promise<void>;
+  onInstallDeps: () => Promise<{ success: boolean; error?: string }>;
 }
 
 const TOKEN_FIELDS = ['xoxc', 'xoxd', 'teamId', 'teamName'] as const;
@@ -55,6 +56,12 @@ export function OracleSetupScreen(props: OracleSetupScreenProps) {
     { xoxc: '', xoxd: '', teamId: '', teamName: '' },
   );
   const [checking, setChecking] = createSignal(false);
+  const [installing, setInstalling] = createSignal(false);
+  const [installError, setInstallError] = createSignal<string | null>(null);
+
+  const hasInstallablePackages = () =>
+    props.slackStatus.pipxInstalled &&
+    (!props.slackStatus.mempalaceInstalled || !props.slackStatus.slacktokensInstalled);
 
   const currentTokenField = (): TokenField => TOKEN_FIELDS[tokenFieldIdx()];
 
@@ -117,6 +124,21 @@ export function OracleSetupScreen(props: OracleSetupScreenProps) {
       key.preventDefault();
       setTokenMode(true);
       setTokenFieldIdx(0);
+      return;
+    }
+
+    if (key.name === 'i' && hasInstallablePackages() && !installing()) {
+      key.preventDefault();
+      setInstalling(true);
+      setInstallError(null);
+      void props.onInstallDeps().then((result) => {
+        setInstalling(false);
+        if (!result.success) {
+          setInstallError(result.error ?? 'Installation failed');
+        } else {
+          handleRecheck();
+        }
+      });
       return;
     }
   });
@@ -187,18 +209,32 @@ export function OracleSetupScreen(props: OracleSetupScreenProps) {
         <Show
           when={props.slackStatus.slacktokensInstalled}
           fallback={
-            <>
+            <Show
+              when={props.slackStatus.pipxInstalled}
+              fallback={
+                <>
+                  <box flexDirection="row">
+                    <text fg={FG_DIM}>{'      Install pipx first: '}</text>
+                    <text fg={COLOR_WARNING}>
+                      {props.slackStatus.pipxInstallInstructions}
+                    </text>
+                  </box>
+                  <box flexDirection="row">
+                    <text fg={FG_DIM}>{'      Then: '}</text>
+                    <text fg={COLOR_WARNING}>
+                      {props.slackStatus.slacktokensInstallInstructions}
+                    </text>
+                  </box>
+                </>
+              }
+            >
               <box flexDirection="row">
-                <text fg={FG_DIM}>{'      Install: '}</text>
+                <text fg={FG_DIM}>{'      Or manually: '}</text>
                 <text fg={COLOR_WARNING}>
                   {props.slackStatus.slacktokensInstallInstructions}
                 </text>
               </box>
-              <box flexDirection="row">
-                <text fg={FG_DIM}>{'      Then run: '}</text>
-                <text fg={COLOR_WARNING}>slacktokens</text>
-              </box>
-            </>
+            </Show>
           }
         >
           <box flexDirection="row">
@@ -298,12 +334,32 @@ export function OracleSetupScreen(props: OracleSetupScreenProps) {
       </box>
 
       <Show when={!props.slackStatus.mempalaceInstalled}>
-        <box flexDirection="row">
-          <text fg={FG_DIM}>{'    Install: '}</text>
-          <text fg={COLOR_WARNING}>
-            {props.slackStatus.mempalaceInstallInstructions}
-          </text>
-        </box>
+        <Show
+          when={props.slackStatus.pipxInstalled}
+          fallback={
+            <>
+              <box flexDirection="row">
+                <text fg={FG_DIM}>{'    Install pipx first: '}</text>
+                <text fg={COLOR_WARNING}>
+                  {props.slackStatus.pipxInstallInstructions}
+                </text>
+              </box>
+              <box flexDirection="row">
+                <text fg={FG_DIM}>{'    Then: '}</text>
+                <text fg={COLOR_WARNING}>
+                  {props.slackStatus.mempalaceInstallInstructions}
+                </text>
+              </box>
+            </>
+          }
+        >
+          <box flexDirection="row">
+            <text fg={FG_DIM}>{'    Or manually: '}</text>
+            <text fg={COLOR_WARNING}>
+              {props.slackStatus.mempalaceInstallInstructions}
+            </text>
+          </box>
+        </Show>
       </Show>
 
       <box height={1} />
@@ -316,6 +372,23 @@ export function OracleSetupScreen(props: OracleSetupScreenProps) {
         <box height={1} />
       </Show>
 
+      {/* Install progress */}
+      <Show when={installing()}>
+        <text fg={ORACLE_GRAD[0]} attributes={1}>
+          {'  Installing dependencies...'}
+        </text>
+        <box height={1} />
+      </Show>
+
+      {/* Install error */}
+      <Show when={installError()}>
+        <box flexDirection="row">
+          <text fg={COLOR_ERROR}>{'  ✗ '}</text>
+          <text fg={COLOR_ERROR}>{installError()}</text>
+        </box>
+        <box height={1} />
+      </Show>
+
       {/* Key hints */}
       <box flexDirection="row">
         <text>{'  '}</text>
@@ -323,6 +396,13 @@ export function OracleSetupScreen(props: OracleSetupScreenProps) {
           {'[r]'}
         </text>
         <text fg={FG_DIM}>{' Re-check dependencies'}</text>
+        <Show when={hasInstallablePackages() && !installing()}>
+          <text>{'    '}</text>
+          <text fg={ACCENT_PRIMARY} attributes={1}>
+            {'[i]'}
+          </text>
+          <text fg={FG_DIM}>{' Install missing deps'}</text>
+        </Show>
         <Show when={!props.slackStatus.hasTokens && !tokenMode()}>
           <text>{'    '}</text>
           <text fg={ACCENT_PRIMARY} attributes={1}>
