@@ -324,6 +324,35 @@ export function OracleView(props: OracleViewProps) {
     await checkDependencies();
   }
 
+  async function handleInstallDeps(): Promise<{
+    success: boolean;
+    error?: string;
+  }> {
+    const depService = getDependencyService();
+    if (!depService) {
+      return { success: false, error: 'Dependency service not available' };
+    }
+
+    const status = depStatus();
+    if (!status) {
+      return { success: false, error: 'No dependency status available' };
+    }
+
+    const packagesToInstall: string[] = [];
+    if (!status.slack.mempalaceInstalled) packagesToInstall.push('mempalace');
+    if (!status.slack.slacktokensInstalled)
+      packagesToInstall.push('slacktokens');
+
+    for (const pkg of packagesToInstall) {
+      const result = await depService.installPipxPackage(pkg);
+      if (!result.success) {
+        return { success: false, error: `Failed to install ${pkg}: ${result.error}` };
+      }
+    }
+
+    return { success: true };
+  }
+
   // ------------------------------------------------------------------
   // Keyboard handling
   // ------------------------------------------------------------------
@@ -521,6 +550,7 @@ export function OracleView(props: OracleViewProps) {
           slackStatus={depStatus()!.slack}
           onRecheck={handleRecheck}
           onTokensSubmit={handleTokensSubmit}
+          onInstallDeps={handleInstallDeps}
         />
       </Show>
 
