@@ -144,7 +144,7 @@ describe('DependencyService - Oracle checks', () => {
         stderr: errorStream,
       });
 
-      const result = await service.installPipxPackage('nonexistent-pkg');
+      const result = await service.installPipxPackage('mempalace');
       expect(result.success).toBe(false);
       expect(result.error).toContain('Package not found');
     });

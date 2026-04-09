@@ -64,9 +64,18 @@ export class DependencyService {
     };
   }
 
+  private static readonly ALLOWED_PACKAGES = new Set([
+    'mempalace',
+    'slacktokens',
+  ]);
+
   async installPipxPackage(
     pkg: string,
   ): Promise<{ success: boolean; error?: string }> {
+    if (!DependencyService.ALLOWED_PACKAGES.has(pkg)) {
+      return { success: false, error: `Package '${pkg}' is not allowed` };
+    }
+
     const proc = Bun.spawn(['pipx', 'install', pkg], {
       stdout: 'pipe',
       stderr: 'pipe',
