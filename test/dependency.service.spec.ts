@@ -70,14 +70,18 @@ describe('DependencyService - Oracle checks', () => {
     );
   });
 
-  it('slack status includes install instructions', async () => {
+  it('slack status includes install instructions for mempalace', async () => {
     const status = await service.checkAll();
     expect(status.slack.mempalaceInstallInstructions).toBe(
       'pipx install mempalace',
     );
-    expect(status.slack.slacktokensInstallInstructions).toBe(
-      'pipx install slacktokens',
-    );
+    expect(status.slack).not.toHaveProperty('slacktokensInstallInstructions');
+  });
+
+  it('slack status includes slackAppDetected field', async () => {
+    const status = await service.checkAll();
+    expect(status.slack).toHaveProperty('slackAppDetected');
+    expect(typeof status.slack.slackAppDetected).toBe('boolean');
   });
 
   it('slack status includes pipxInstalled field', async () => {

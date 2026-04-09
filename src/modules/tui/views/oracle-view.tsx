@@ -340,8 +340,6 @@ export function OracleView(props: OracleViewProps) {
 
     const packagesToInstall: string[] = [];
     if (!status.slack.mempalaceInstalled) packagesToInstall.push('mempalace');
-    if (!status.slack.slacktokensInstalled)
-      packagesToInstall.push('slacktokens');
 
     for (const pkg of packagesToInstall) {
       const result = await depService.installPipxPackage(pkg);

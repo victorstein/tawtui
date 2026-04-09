@@ -60,8 +60,7 @@ export function OracleSetupScreen(props: OracleSetupScreenProps) {
   const [installError, setInstallError] = createSignal<string | null>(null);
 
   const hasInstallablePackages = () =>
-    props.slackStatus.pipxInstalled &&
-    (!props.slackStatus.mempalaceInstalled || !props.slackStatus.slacktokensInstalled);
+    props.slackStatus.pipxInstalled && !props.slackStatus.mempalaceInstalled;
 
   const currentTokenField = (): TokenField => TOKEN_FIELDS[tokenFieldIdx()];
 
@@ -208,40 +207,16 @@ export function OracleSetupScreen(props: OracleSetupScreenProps) {
         <box height={1} />
         <text fg={FG_DIM}>{'    Option A (automatic):'}</text>
         <Show
-          when={props.slackStatus.slacktokensInstalled}
+          when={props.slackStatus.slackAppDetected}
           fallback={
-            <Show
-              when={props.slackStatus.pipxInstalled}
-              fallback={
-                <>
-                  <box flexDirection="row">
-                    <text fg={FG_DIM}>{'      Install pipx first: '}</text>
-                    <text fg={COLOR_WARNING}>
-                      {props.slackStatus.pipxInstallInstructions}
-                    </text>
-                  </box>
-                  <box flexDirection="row">
-                    <text fg={FG_DIM}>{'      Then: '}</text>
-                    <text fg={COLOR_WARNING}>
-                      {props.slackStatus.slacktokensInstallInstructions}
-                    </text>
-                  </box>
-                </>
-              }
-            >
-              <box flexDirection="row">
-                <text fg={FG_DIM}>{'      Or run manually: '}</text>
-                <text fg={COLOR_WARNING}>
-                  {props.slackStatus.slacktokensInstallInstructions}
-                </text>
-              </box>
-            </Show>
+            <text fg={FG_DIM}>
+              {'      Slack desktop app not detected — use manual entry below'}
+            </text>
           }
         >
-          <box flexDirection="row">
-            <text fg={FG_DIM}>{'      Run: '}</text>
-            <text fg={COLOR_WARNING}>slacktokens</text>
-          </box>
+          <text fg={FG_DIM}>
+            {'      Slack desktop app detected — auto-extract available'}
+          </text>
         </Show>
 
         <box height={1} />

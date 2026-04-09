@@ -64,10 +64,7 @@ export class DependencyService {
     };
   }
 
-  private static readonly ALLOWED_PACKAGES = new Set([
-    'mempalace',
-    'slacktokens',
-  ]);
+  private static readonly ALLOWED_PACKAGES = new Set(['mempalace']);
 
   async installPipxPackage(
     pkg: string,
@@ -106,18 +103,37 @@ export class DependencyService {
       'mempalace',
       'status',
     );
-    const slacktokensInstalled = this.isPythonPackageAvailable('slacktokens');
     const pipxInstalled = this.isCommandAvailable('pipx');
+    const slackAppDetected = this.detectSlackApp();
 
     return {
       hasTokens,
       mempalaceInstalled,
-      slacktokensInstalled,
+      slackAppDetected,
       pipxInstalled,
       mempalaceInstallInstructions: 'pipx install mempalace',
-      slacktokensInstallInstructions: 'pipx install slacktokens',
       pipxInstallInstructions: this.getPipxInstallInstructions(platform),
     };
+  }
+
+  private detectSlackApp(): boolean {
+    const home = process.env.HOME ?? '';
+    const paths = [
+      `${home}/Library/Containers/com.tinyspeck.slackmacgap/Data/Library/Application Support/Slack/Local Storage/leveldb`,
+      `${home}/Library/Application Support/Slack/Local Storage/leveldb`,
+    ];
+    return paths.some((p) => {
+      try {
+        return (
+          Bun.spawnSync(['test', '-d', p], {
+            stdout: 'pipe',
+            stderr: 'pipe',
+          }).exitCode === 0
+        );
+      } catch {
+        return false;
+      }
+    });
   }
 
   private isPythonPackageAvailable(

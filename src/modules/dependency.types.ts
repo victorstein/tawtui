@@ -20,14 +20,12 @@ export interface SlackDepStatus {
   hasTokens: boolean;
   /** mempalace CLI is available */
   mempalaceInstalled: boolean;
-  /** slacktokens Python package is available for auto-extraction */
-  slacktokensInstalled: boolean;
+  /** Slack desktop app is installed locally (tokens can be auto-detected) */
+  slackAppDetected: boolean;
   /** pipx CLI is available for auto-install */
   pipxInstalled: boolean;
   /** Install instruction for mempalace */
   mempalaceInstallInstructions: string;
-  /** Install instruction for slacktokens */
-  slacktokensInstallInstructions: string;
   /** Install instruction for pipx itself (platform-aware) */
   pipxInstallInstructions: string;
 }
