@@ -112,6 +112,10 @@ describe('DependencyService - Oracle checks', () => {
       };
     });
 
+    afterEach(() => {
+      (globalThis as Record<string, unknown>).Bun = mockBun;
+    });
+
     it('returns success when pipx install succeeds', async () => {
       mockBunSpawn.mockReturnValue({
         exited: Promise.resolve(0),
