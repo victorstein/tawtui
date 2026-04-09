@@ -8,6 +8,8 @@ import { TerminalService } from './terminal.service';
 import { DependencyService } from './dependency.service';
 import { CalendarService } from './calendar.service';
 import { SlackIngestionService } from './slack/slack-ingestion.service';
+import { TokenExtractorService } from './slack/token-extractor.service';
+import type { ExtractionResult } from './slack/token-extractor.service';
 import type {
   PullRequestDetail,
   PrDiff,
@@ -54,6 +56,7 @@ interface TawtuiGlobal {
     validateDueDate: (value: string) => DueDateValidation;
     slackIngestionService: SlackIngestionService;
     createOracleSession: () => Promise<{ sessionId: string }>;
+    extractSlackTokens: () => Promise<ExtractionResult>;
   };
   __tuiExit?: () => void;
 }
@@ -68,6 +71,7 @@ export class TuiService {
     private readonly dependencyService: DependencyService,
     private readonly calendarService: CalendarService,
     private readonly slackIngestionService: SlackIngestionService,
+    private readonly tokenExtractorService: TokenExtractorService,
   ) {}
 
   async launch(): Promise<void> {
@@ -125,6 +129,7 @@ export class TuiService {
         this.taskwarriorService.validateDueDate(value),
       slackIngestionService: this.slackIngestionService,
       createOracleSession: () => this.terminalService.createOracleSession(),
+      extractSlackTokens: () => this.tokenExtractorService.extractTokens(),
     };
 
     // Start Oracle ingestion if configured and dependencies are met

@@ -12,6 +12,7 @@ import type {
 import type { ProjectAgentConfig } from '../config.types';
 import type { DueDateValidation } from '../taskwarrior.types';
 import type { SlackIngestionService } from '../slack/slack-ingestion.service';
+import type { ExtractionResult } from '../slack/token-extractor.service';
 
 export interface TawtuiBridge {
   taskwarriorService: TaskwarriorService;
@@ -46,6 +47,7 @@ export interface TawtuiBridge {
   validateDueDate: (value: string) => DueDateValidation;
   slackIngestionService: SlackIngestionService;
   createOracleSession: () => Promise<{ sessionId: string }>;
+  extractSlackTokens: () => Promise<ExtractionResult>;
 }
 
 function getBridge(): TawtuiBridge | undefined {
@@ -102,6 +104,12 @@ export function getCreateOracleSession():
   | TawtuiBridge['createOracleSession']
   | null {
   return getBridge()?.createOracleSession ?? null;
+}
+
+export function getExtractSlackTokens():
+  | TawtuiBridge['extractSlackTokens']
+  | null {
+  return getBridge()?.extractSlackTokens ?? null;
 }
 
 export function getTuiExit(): (() => void) | null {
