@@ -17,7 +17,9 @@ import {
   getConfigService,
   getSlackIngestionService,
   getCreateOracleSession,
+  getExtractSlackTokens,
 } from '../bridge';
+import type { ExtractionResult } from '../../slack/token-extractor.service';
 import type { DependencyStatus, SlackDepStatus } from '../../dependency.types';
 import type { CaptureResult } from '../../terminal.types';
 import {
@@ -351,6 +353,19 @@ export function OracleView(props: OracleViewProps) {
     return { success: true };
   }
 
+  async function handleAutoDetect(): Promise<ExtractionResult> {
+    const extractTokens = getExtractSlackTokens();
+    if (!extractTokens) {
+      return {
+        success: false,
+        workspaces: [],
+        error: 'Token extractor not available',
+      };
+    }
+
+    return extractTokens();
+  }
+
   // ------------------------------------------------------------------
   // Keyboard handling
   // ------------------------------------------------------------------
@@ -549,6 +564,7 @@ export function OracleView(props: OracleViewProps) {
           onRecheck={handleRecheck}
           onTokensSubmit={handleTokensSubmit}
           onInstallDeps={handleInstallDeps}
+          onAutoDetect={handleAutoDetect}
         />
       </Show>
 
