@@ -101,4 +101,48 @@ describe('DependencyService - Oracle checks', () => {
     expect(status.slack).toBeDefined();
     expect(status.oracleReady).toBeDefined();
   });
+
+  describe('installPipxPackage', () => {
+    const mockBunSpawn = jest.fn();
+
+    beforeEach(() => {
+      (globalThis as Record<string, unknown>).Bun = {
+        ...mockBun,
+        spawn: mockBunSpawn,
+      };
+    });
+
+    it('returns success when pipx install succeeds', async () => {
+      mockBunSpawn.mockReturnValue({
+        exited: Promise.resolve(0),
+        stdout: new ReadableStream(),
+        stderr: new ReadableStream(),
+      });
+
+      const result = await service.installPipxPackage('mempalace');
+      expect(result.success).toBe(true);
+      expect(mockBunSpawn).toHaveBeenCalledWith(
+        ['pipx', 'install', 'mempalace'],
+        expect.objectContaining({ stdout: 'pipe', stderr: 'pipe' }),
+      );
+    });
+
+    it('returns error when pipx install fails', async () => {
+      const errorStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('Package not found'));
+          controller.close();
+        },
+      });
+      mockBunSpawn.mockReturnValue({
+        exited: Promise.resolve(1),
+        stdout: new ReadableStream(),
+        stderr: errorStream,
+      });
+
+      const result = await service.installPipxPackage('nonexistent-pkg');
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Package not found');
+    });
+  });
 });

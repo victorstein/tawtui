@@ -64,6 +64,29 @@ export class DependencyService {
     };
   }
 
+  async installPipxPackage(
+    pkg: string,
+  ): Promise<{ success: boolean; error?: string }> {
+    const proc = Bun.spawn(['pipx', 'install', pkg], {
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+
+    const exitCode = await proc.exited;
+
+    if (exitCode !== 0) {
+      const stderr = await new Response(proc.stderr).text();
+      return {
+        success: false,
+        error:
+          stderr.trim() ||
+          `pipx install ${pkg} failed with exit code ${exitCode}`,
+      };
+    }
+
+    return { success: true };
+  }
+
   private checkSlack(): SlackDepStatus {
     const platform = process.platform;
     const oracleConfig = this.configService.getOracleConfig();
