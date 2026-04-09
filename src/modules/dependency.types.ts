@@ -15,6 +15,19 @@ export interface GogDepStatus extends DepStatus {
   credentialsPath: string;
 }
 
+export interface SlackDepStatus {
+  /** xoxc + xoxd tokens exist in config */
+  hasTokens: boolean;
+  /** mempalace CLI is available */
+  mempalaceInstalled: boolean;
+  /** slacktokens Python package is available for auto-extraction */
+  slacktokensInstalled: boolean;
+  /** Install instruction for mempalace */
+  mempalaceInstallInstructions: string;
+  /** Install instruction for slacktokens */
+  slacktokensInstallInstructions: string;
+}
+
 export interface DependencyStatus {
   gh: GhDepStatus;
   gog: GogDepStatus;
@@ -22,4 +35,6 @@ export interface DependencyStatus {
   platform: NodeJS.Platform;
   allGood: boolean;
   calendarReady: boolean;
+  slack: SlackDepStatus;
+  oracleReady: boolean; // hasTokens && mempalaceInstalled
 }
