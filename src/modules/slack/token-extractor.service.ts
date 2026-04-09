@@ -2,7 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { existsSync, readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
-import { extractLocalConfig } from './leveldb-reader';
+import {
+  extractLocalConfig,
+  extractLocalConfigFromSst,
+} from './leveldb-reader';
 import {
   readEncryptedCookie,
   readKeychainPassword,
@@ -131,18 +134,31 @@ export class TokenExtractorService {
     return null;
   }
 
-  /** Read and parse localConfig_v2 from LevelDB WAL files */
+  /** Read and parse localConfig_v2 from LevelDB WAL and SST files */
   private readLocalConfig(
     leveldbDir: string,
   ): ReturnType<typeof extractLocalConfig> {
-    const files = readdirSync(leveldbDir)
+    const files = readdirSync(leveldbDir);
+
+    // Try WAL .log files first (most recent data)
+    const logFiles = files
       .filter((f) => f.endsWith('.log'))
       .sort()
-      .reverse(); // Most recent first
-
-    for (const file of files) {
+      .reverse();
+    for (const file of logFiles) {
       const buf = readFileSync(join(leveldbDir, file));
       const config = extractLocalConfig(Buffer.from(buf));
+      if (config) return config;
+    }
+
+    // Fall back to SST .ldb files
+    const sstFiles = files
+      .filter((f) => f.endsWith('.ldb'))
+      .sort()
+      .reverse();
+    for (const file of sstFiles) {
+      const buf = readFileSync(join(leveldbDir, file));
+      const config = extractLocalConfigFromSst(Buffer.from(buf));
       if (config) return config;
     }
 
