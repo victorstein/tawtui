@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/unbound-method */
 import { SlackIngestionService } from '../src/modules/slack/slack-ingestion.service';
 import { SlackService } from '../src/modules/slack/slack.service';
 import { MempalaceService } from '../src/modules/slack/mempalace.service';
@@ -6,17 +7,17 @@ import { readdirSync, readFileSync, rmSync, mkdtempSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
-const mockSlackService: jest.Mocked<SlackService> = {
+const mockSlackService = {
   getConversations: jest.fn(),
   getMessagesSince: jest.fn(),
   buildMessage: jest.fn(),
   resolveUserName: jest.fn(),
-} as any;
+} as unknown as jest.Mocked<SlackService>;
 
-const mockMempalaceService: jest.Mocked<MempalaceService> = {
+const mockMempalaceService = {
   mine: jest.fn().mockResolvedValue(undefined),
   isInstalled: jest.fn().mockReturnValue(true),
-} as any;
+} as unknown as jest.Mocked<MempalaceService>;
 
 describe('SlackIngestionService', () => {
   let service: SlackIngestionService;
@@ -36,7 +37,10 @@ describe('SlackIngestionService', () => {
 
   it('ingest writes Slack JSON files and calls mempalace mine', async () => {
     const conversation: SlackConversation = {
-      id: 'C123', name: 'general', isDm: false, isPrivate: false,
+      id: 'C123',
+      name: 'general',
+      isDm: false,
+      isPrivate: false,
     };
     mockSlackService.getConversations.mockResolvedValue([conversation]);
     mockSlackService.getMessagesSince.mockResolvedValue([
@@ -52,7 +56,9 @@ describe('SlackIngestionService', () => {
     expect(files[0]).toContain('general');
     expect(files[0]).toMatch(/\.json$/);
 
-    const content = JSON.parse(readFileSync(join(stagingDir, files[0]), 'utf-8'));
+    const content = JSON.parse(
+      readFileSync(join(stagingDir, files[0]), 'utf-8'),
+    );
     expect(content).toBeInstanceOf(Array);
     expect(content[0]).toMatchObject({
       type: 'message',
@@ -65,7 +71,10 @@ describe('SlackIngestionService', () => {
 
   it('ingest skips channels with no new messages', async () => {
     const conversation: SlackConversation = {
-      id: 'C123', name: 'general', isDm: false, isPrivate: false,
+      id: 'C123',
+      name: 'general',
+      isDm: false,
+      isPrivate: false,
     };
     mockSlackService.getConversations.mockResolvedValue([conversation]);
     mockSlackService.getMessagesSince.mockResolvedValue([]);
@@ -77,7 +86,10 @@ describe('SlackIngestionService', () => {
 
   it('ingest updates state with channel cursors', async () => {
     const conversation: SlackConversation = {
-      id: 'C123', name: 'general', isDm: false, isPrivate: false,
+      id: 'C123',
+      name: 'general',
+      isDm: false,
+      isPrivate: false,
     };
     mockSlackService.getConversations.mockResolvedValue([conversation]);
     mockSlackService.getMessagesSince.mockResolvedValue([
@@ -96,7 +108,10 @@ describe('SlackIngestionService', () => {
 
   it('slugifies DM channel names with dm- prefix', async () => {
     const dmConversation: SlackConversation = {
-      id: 'D456', name: 'victor', isDm: true, isPrivate: true,
+      id: 'D456',
+      name: 'victor',
+      isDm: true,
+      isPrivate: true,
     };
     mockSlackService.getConversations.mockResolvedValue([dmConversation]);
     mockSlackService.getMessagesSince.mockResolvedValue([

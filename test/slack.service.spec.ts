@@ -1,8 +1,9 @@
+/* eslint-disable @typescript-eslint/require-await */
 import { SlackService } from '../src/modules/slack/slack.service';
 import { ConfigService } from '../src/modules/config.service';
 
 const mockFetch = jest.fn();
-global.fetch = mockFetch;
+global.fetch = mockFetch as unknown as typeof fetch;
 
 const mockConfigService = {
   getOracleConfig: jest.fn().mockReturnValue({
@@ -14,13 +15,13 @@ const mockConfigService = {
       teamName: 'Test',
     },
   }),
-} as any;
+} as unknown as ConfigService;
 
 describe('SlackService', () => {
   let service: SlackService;
 
   beforeEach(() => {
-    service = new SlackService(mockConfigService as ConfigService);
+    service = new SlackService(mockConfigService);
     mockFetch.mockReset();
   });
 
@@ -38,7 +39,11 @@ describe('SlackService', () => {
 
     const convos = await service.getConversations();
     expect(convos).toHaveLength(2);
-    expect(convos[0]).toMatchObject({ id: 'C123', name: 'general', isDm: false });
+    expect(convos[0]).toMatchObject({
+      id: 'C123',
+      name: 'general',
+      isDm: false,
+    });
     expect(convos[1]).toMatchObject({ id: 'D456', isDm: true });
   });
 
@@ -51,8 +56,12 @@ describe('SlackService', () => {
 
     const [url, options] = mockFetch.mock.calls[0] as [string, RequestInit];
     expect(url).toContain('conversations.list');
-    expect((options.headers as Record<string, string>)['Authorization']).toBe('Bearer xoxc-test');
-    expect((options.headers as Record<string, string>)['Cookie']).toBe('d=xoxd-test');
+    expect((options.headers as Record<string, string>)['Authorization']).toBe(
+      'Bearer xoxc-test',
+    );
+    expect((options.headers as Record<string, string>)['Cookie']).toBe(
+      'd=xoxd-test',
+    );
   });
 
   it('getMessagesSince returns only user messages (filters subtypes)', async () => {
@@ -61,13 +70,21 @@ describe('SlackService', () => {
         ok: true,
         messages: [
           { ts: '1700000200.000000', user: 'U123', text: 'hello' },
-          { ts: '1700000100.000000', user: 'U456', text: 'world', subtype: 'channel_join' },
+          {
+            ts: '1700000100.000000',
+            user: 'U456',
+            text: 'world',
+            subtype: 'channel_join',
+          },
         ],
         has_more: false,
       }),
     });
 
-    const messages = await service.getMessagesSince('C123', '1700000000.000000');
+    const messages = await service.getMessagesSince(
+      'C123',
+      '1700000000.000000',
+    );
     expect(messages).toHaveLength(1);
     expect(messages[0].text).toBe('hello');
   });

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { ConfigService } from '../src/modules/config.service';
 import { DEFAULT_ORACLE_CONFIG } from '../src/modules/config.types';
 import { mkdtempSync, writeFileSync, rmSync } from 'fs';
@@ -16,7 +17,14 @@ describe('ConfigService - Oracle', () => {
     (service as any).tmpPath = join(tmpDir, 'config.json.tmp');
     writeFileSync(
       join(tmpDir, 'config.json'),
-      JSON.stringify({ repos: [], preferences: { theme: 'default', archiveTime: 'midnight', defaultFilter: 'status:pending' } }),
+      JSON.stringify({
+        repos: [],
+        preferences: {
+          theme: 'default',
+          archiveTime: 'midnight',
+          defaultFilter: 'status:pending',
+        },
+      }),
     );
   });
 
@@ -33,7 +41,15 @@ describe('ConfigService - Oracle', () => {
     const stored = { pollIntervalSeconds: 120, defaultProject: 'Work' };
     writeFileSync(
       join(tmpDir, 'config.json'),
-      JSON.stringify({ repos: [], preferences: { theme: 'default', archiveTime: 'midnight', defaultFilter: 'status:pending' }, oracle: stored }),
+      JSON.stringify({
+        repos: [],
+        preferences: {
+          theme: 'default',
+          archiveTime: 'midnight',
+          defaultFilter: 'status:pending',
+        },
+        oracle: stored,
+      }),
     );
     const config = service.getOracleConfig();
     expect(config.pollIntervalSeconds).toBe(120);
