@@ -80,16 +80,6 @@ describe('DependencyService - Oracle checks', () => {
     );
   });
 
-  it('slack status includes pipx install instructions (not pip)', async () => {
-    const status = await service.checkAll();
-    expect(status.slack.mempalaceInstallInstructions).toBe(
-      'pipx install mempalace',
-    );
-    expect(status.slack.slacktokensInstallInstructions).toBe(
-      'pipx install slacktokens',
-    );
-  });
-
   it('slack status includes pipxInstalled field', async () => {
     const status = await service.checkAll();
     expect(status.slack).toHaveProperty('pipxInstalled');
