@@ -5,7 +5,9 @@ const mockSpawnSync = jest.fn();
 (globalThis as Record<string, unknown>).Bun = { spawnSync: mockSpawnSync };
 
 // Mock fs
+// eslint-disable-next-line @typescript-eslint/no-unsafe-return
 jest.mock('fs', () => ({
+  ...jest.requireActual('fs'),
   existsSync: jest.fn(),
   readFileSync: jest.fn(),
   readdirSync: jest.fn(),

@@ -35,25 +35,26 @@ const KEYCHAIN_SERVICE = 'Slack Safe Storage';
 export class TokenExtractorService {
   private readonly logger = new Logger(TokenExtractorService.name);
 
-  extractTokens(): Promise<ExtractionResult> {
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async extractTokens(): Promise<ExtractionResult> {
     const paths = this.detectSlackPaths();
     if (!paths) {
-      return Promise.resolve({
+      return {
         success: false,
         workspaces: [],
         error: 'Slack desktop app not found. Make sure Slack is installed.',
-      });
+      };
     }
 
     // Step 1: Read xoxc tokens from LevelDB
     const localConfig = this.readLocalConfig(paths.leveldb);
     if (!localConfig) {
-      return Promise.resolve({
+      return {
         success: false,
         workspaces: [],
         error:
           'Could not find Slack tokens in local storage. Try opening Slack first.',
-      });
+      };
     }
 
     // Step 2: Read and decrypt xoxd cookie
@@ -62,11 +63,11 @@ export class TokenExtractorService {
       paths.keychainService,
     );
     if (!xoxdCookie) {
-      return Promise.resolve({
+      return {
         success: false,
         workspaces: [],
         error: 'Could not decrypt Slack cookie. Check keychain access.',
-      });
+      };
     }
 
     // Step 3: Combine into workspace credentials
@@ -83,15 +84,15 @@ export class TokenExtractorService {
     }
 
     if (workspaces.length === 0) {
-      return Promise.resolve({
+      return {
         success: false,
         workspaces: [],
         error: 'No Slack workspaces with tokens found.',
-      });
+      };
     }
 
     this.logger.log(`Extracted tokens for ${workspaces.length} workspace(s)`);
-    return Promise.resolve({ success: true, workspaces });
+    return { success: true, workspaces };
   }
 
   /** Detect which Slack installation path exists */
