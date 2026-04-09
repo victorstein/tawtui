@@ -27,6 +27,7 @@ describe('SlackService', () => {
 
   it('getConversations returns mapped conversations', async () => {
     mockFetch.mockResolvedValueOnce({
+      ok: true,
       json: async () => ({
         ok: true,
         channels: [
@@ -49,6 +50,7 @@ describe('SlackService', () => {
 
   it('getConversations sends correct auth headers', async () => {
     mockFetch.mockResolvedValueOnce({
+      ok: true,
       json: async () => ({ ok: true, channels: [], response_metadata: {} }),
     });
 
@@ -66,6 +68,7 @@ describe('SlackService', () => {
 
   it('getMessagesSince returns only user messages (filters subtypes)', async () => {
     mockFetch.mockResolvedValueOnce({
+      ok: true,
       json: async () => ({
         ok: true,
         messages: [
@@ -91,6 +94,7 @@ describe('SlackService', () => {
 
   it('resolveUserName returns display name from user profile', async () => {
     mockFetch.mockResolvedValueOnce({
+      ok: true,
       json: async () => ({
         ok: true,
         user: { id: 'U123', profile: { display_name: 'Alfonso' } },
@@ -103,6 +107,7 @@ describe('SlackService', () => {
 
   it('resolveUserName returns fallback when profile has no display_name', async () => {
     mockFetch.mockResolvedValueOnce({
+      ok: true,
       json: async () => ({
         ok: true,
         user: { id: 'U123', name: 'alfonso.v', profile: { display_name: '' } },

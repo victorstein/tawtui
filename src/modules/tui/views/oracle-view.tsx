@@ -182,7 +182,9 @@ export function OracleView(props: OracleViewProps) {
     const ingestion = getSlackIngestionService();
     if (!ingestion) return;
     if (!ingestion.isPolling()) {
-      ingestion.startPolling(5 * 60 * 1000); // 5 minutes
+      const config = getConfigService();
+      const intervalMs = (config?.getOracleConfig().pollIntervalSeconds ?? 300) * 1000;
+      ingestion.startPolling(intervalMs);
     }
   }
 

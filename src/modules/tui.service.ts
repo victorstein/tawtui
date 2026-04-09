@@ -127,11 +127,14 @@ export class TuiService {
       createOracleSession: () => this.terminalService.createOracleSession(),
     };
 
-    // Start Oracle ingestion if configured
+    // Start Oracle ingestion if configured and dependencies are met
     const oracleConfig = this.configService.getOracleConfig();
     if (oracleConfig.slack?.xoxcToken && oracleConfig.slack?.xoxdCookie) {
-      const intervalMs = oracleConfig.pollIntervalSeconds * 1000;
-      this.slackIngestionService.startPolling(intervalMs);
+      const depStatus = await this.dependencyService.checkAll();
+      if (depStatus.oracleReady) {
+        const intervalMs = oracleConfig.pollIntervalSeconds * 1000;
+        this.slackIngestionService.startPolling(intervalMs);
+      }
     }
 
     // Set up the exit promise before rendering so the App component

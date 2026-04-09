@@ -2,7 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { GithubService } from './github.service';
 import { TaskwarriorService } from './taskwarrior.service';
 import { CalendarService } from './calendar.service';
-import type { DependencyStatus } from './dependency.types';
+import { ConfigService } from './config.service';
+import type { DependencyStatus, SlackDepStatus } from './dependency.types';
 
 @Injectable()
 export class DependencyService {
@@ -10,12 +11,15 @@ export class DependencyService {
     private readonly githubService: GithubService,
     private readonly taskwarriorService: TaskwarriorService,
     private readonly calendarService: CalendarService,
+    private readonly configService: ConfigService,
   ) {}
 
   async checkAll(): Promise<DependencyStatus> {
     const platform = process.platform;
 
     const taskInstalled = this.taskwarriorService.isInstalled();
+
+    const slackStatus = this.checkSlack();
 
     const [
       ghInstalled,
@@ -55,7 +59,40 @@ export class DependencyService {
       platform,
       allGood: ghInstalled && ghAuthenticated && taskInstalled,
       calendarReady: gogInstalled && gogAuthenticated && gogHasCredentials,
+      slack: slackStatus,
+      oracleReady: slackStatus.hasTokens && slackStatus.mempalaceInstalled,
     };
+  }
+
+  private checkSlack(): SlackDepStatus {
+    const oracleConfig = this.configService.getOracleConfig();
+    const hasTokens =
+      !!oracleConfig.slack?.xoxcToken && !!oracleConfig.slack?.xoxdCookie;
+
+    const mempalaceInstalled = this.isPythonPackageAvailable(
+      'mempalace',
+      'status',
+    );
+    const slacktokensInstalled = this.isPythonPackageAvailable('slacktokens');
+
+    return {
+      hasTokens,
+      mempalaceInstalled,
+      slacktokensInstalled,
+      mempalaceInstallInstructions: 'pip install mempalace',
+      slacktokensInstallInstructions: 'pip install slacktokens',
+    };
+  }
+
+  private isPythonPackageAvailable(
+    pkg: string,
+    subcommand = '--version',
+  ): boolean {
+    const result = Bun.spawnSync(['python3', '-m', pkg, subcommand], {
+      stderr: 'pipe',
+      stdout: 'pipe',
+    });
+    return result.exitCode === 0;
   }
 
   private getGhInstallInstructions(platform: NodeJS.Platform): string {

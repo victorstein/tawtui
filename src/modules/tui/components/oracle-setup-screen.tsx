@@ -229,7 +229,7 @@ export function OracleSetupScreen(props: OracleSetupScreenProps) {
         <box flexDirection="row">
           <text>{'    '}</text>
           <text fg={ACCENT_PRIMARY} attributes={1}>
-            {'[T]'}
+            {'[t]'}
           </text>
           <text fg={FG_DIM}>{' Enter tokens manually'}</text>
         </box>
@@ -320,13 +320,13 @@ export function OracleSetupScreen(props: OracleSetupScreenProps) {
       <box flexDirection="row">
         <text>{'  '}</text>
         <text fg={ACCENT_PRIMARY} attributes={1}>
-          {'[R]'}
+          {'[r]'}
         </text>
         <text fg={FG_DIM}>{' Re-check dependencies'}</text>
         <Show when={!props.slackStatus.hasTokens && !tokenMode()}>
           <text>{'    '}</text>
           <text fg={ACCENT_PRIMARY} attributes={1}>
-            {'[T]'}
+            {'[t]'}
           </text>
           <text fg={FG_DIM}>{' Enter tokens'}</text>
         </Show>

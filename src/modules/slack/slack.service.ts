@@ -36,6 +36,11 @@ export class SlackService {
       url.searchParams.set(key, value);
     }
     const res = await fetch(url.toString(), { headers: this.getAuthHeaders() });
+    if (!res.ok) {
+      throw new Error(
+        `Slack API ${method} failed: ${res.status} ${res.statusText}`,
+      );
+    }
     return res.json() as Promise<T>;
   }
 
@@ -111,9 +116,7 @@ export class SlackService {
         results.push({ ts: msg.ts, userId: msg.user, text: msg.text });
       }
 
-      cursor = data.has_more
-        ? (data.response_metadata?.next_cursor ?? '')
-        : '';
+      cursor = data.has_more ? (data.response_metadata?.next_cursor ?? '') : '';
     } while (cursor);
 
     return results.reverse();

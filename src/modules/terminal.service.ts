@@ -841,7 +841,7 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
       '- Deadlines or time-sensitive items mentioned',
       '',
       'Use /loop 5m to repeat this check every 5 minutes.',
-    ].join('\\n');
+    ].join('\n');
 
     const escaped = oraclePrompt.replace(/'/g, "'\\''");
     let command = claudeAgent.command;

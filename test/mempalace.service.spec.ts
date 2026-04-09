@@ -47,7 +47,9 @@ describe('MempalaceService', () => {
     };
     mockSpawn.mockReturnValueOnce(mockProc);
 
-    await expect(service.mine('/some/dir', 'test-wing')).resolves.toBeUndefined();
+    await expect(
+      service.mine('/some/dir', 'test-wing'),
+    ).resolves.toBeUndefined();
   });
 
   it('mine calls Bun.spawn with correct args', async () => {
@@ -60,7 +62,17 @@ describe('MempalaceService', () => {
     await service.mine('/some/dir', 'test-wing');
 
     expect(mockSpawn).toHaveBeenCalledWith(
-      ['python3', '-m', 'mempalace', 'mine', '/some/dir', '--mode', 'convos', '--wing', 'test-wing'],
+      [
+        'python3',
+        '-m',
+        'mempalace',
+        'mine',
+        '/some/dir',
+        '--mode',
+        'convos',
+        '--wing',
+        'test-wing',
+      ],
       { stdout: 'pipe', stderr: 'pipe' },
     );
   });
@@ -73,9 +85,9 @@ describe('MempalaceService', () => {
     };
     mockSpawn.mockReturnValueOnce(mockProc);
 
-    await expect(service.mine('/nonexistent/path/xyzzy', 'test')).rejects.toThrow(
-      /mempalace mine failed/,
-    );
+    await expect(
+      service.mine('/nonexistent/path/xyzzy', 'test'),
+    ).rejects.toThrow(/mempalace mine failed/);
   });
 
   it('mine is a function', () => {

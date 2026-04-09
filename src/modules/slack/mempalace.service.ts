@@ -24,7 +24,17 @@ export class MempalaceService {
    */
   async mine(dir: string, wing: string): Promise<void> {
     const proc = Bun.spawn(
-      ['python3', '-m', 'mempalace', 'mine', dir, '--mode', 'convos', '--wing', wing],
+      [
+        'python3',
+        '-m',
+        'mempalace',
+        'mine',
+        dir,
+        '--mode',
+        'convos',
+        '--wing',
+        wing,
+      ],
       { stdout: 'pipe', stderr: 'pipe' },
     );
 

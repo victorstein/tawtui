@@ -10,10 +10,17 @@ import type { OracleState } from './slack.types';
 export class SlackIngestionService {
   private readonly logger = new Logger(SlackIngestionService.name);
   private readonly stagingDir = join(
-    homedir(), '.local', 'share', 'tawtui', 'slack-inbox',
+    homedir(),
+    '.local',
+    'share',
+    'tawtui',
+    'slack-inbox',
   );
   private readonly statePath = join(
-    homedir(), '.config', 'tawtui', 'oracle-state.json',
+    homedir(),
+    '.config',
+    'tawtui',
+    'oracle-state.json',
   );
 
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -38,7 +45,8 @@ export class SlackIngestionService {
       let rawMessages: Array<{ ts: string; userId: string; text: string }>;
       try {
         rawMessages = await this.slackService.getMessagesSince(
-          conversation.id, cursor,
+          conversation.id,
+          cursor,
         );
       } catch (err) {
         this.logger.warn(
@@ -124,7 +132,10 @@ export class SlackIngestionService {
   }
 
   private slugify(name: string, isDm: boolean): string {
-    const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    const slug = name
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-]/g, '');
     return isDm ? `dm-${slug}` : slug;
   }
 
