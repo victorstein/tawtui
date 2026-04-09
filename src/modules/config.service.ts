@@ -13,10 +13,11 @@ import type {
   AppConfig,
   ProjectAgentConfig,
   CalendarConfig,
+  OracleConfig,
   RepoConfig,
   UserPreferences,
 } from './config.types';
-import { DEFAULT_CALENDAR_CONFIG } from './config.types';
+import { DEFAULT_CALENDAR_CONFIG, DEFAULT_ORACLE_CONFIG } from './config.types';
 
 const DEFAULT_CONFIG: AppConfig = {
   repos: [],
@@ -176,6 +177,17 @@ export class ConfigService {
     const config = this.load();
     const current = config.calendar ?? { ...DEFAULT_CALENDAR_CONFIG };
     config.calendar = { ...current, ...update };
+    this.save(config);
+  }
+
+  getOracleConfig(): OracleConfig {
+    const config = this.load();
+    return { ...DEFAULT_ORACLE_CONFIG, ...config.oracle };
+  }
+
+  updateOracleConfig(update: Partial<OracleConfig>): void {
+    const config = this.load();
+    config.oracle = { ...DEFAULT_ORACLE_CONFIG, ...config.oracle, ...update };
     this.save(config);
   }
 }
