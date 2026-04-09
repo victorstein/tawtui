@@ -84,6 +84,7 @@ export function OracleSetupScreen(props: OracleSetupScreenProps) {
 
   const handleRecheck = () => {
     setChecking(true);
+    setInstallError(null);
     void props.onRecheck().then(() => setChecking(false));
   };
 
@@ -229,7 +230,7 @@ export function OracleSetupScreen(props: OracleSetupScreenProps) {
               }
             >
               <box flexDirection="row">
-                <text fg={FG_DIM}>{'      Or manually: '}</text>
+                <text fg={FG_DIM}>{'      Or run manually: '}</text>
                 <text fg={COLOR_WARNING}>
                   {props.slackStatus.slacktokensInstallInstructions}
                 </text>
@@ -354,7 +355,7 @@ export function OracleSetupScreen(props: OracleSetupScreenProps) {
           }
         >
           <box flexDirection="row">
-            <text fg={FG_DIM}>{'    Or manually: '}</text>
+            <text fg={FG_DIM}>{'    Or run manually: '}</text>
             <text fg={COLOR_WARNING}>
               {props.slackStatus.mempalaceInstallInstructions}
             </text>
