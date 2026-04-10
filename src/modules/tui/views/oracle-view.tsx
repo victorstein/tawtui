@@ -52,6 +52,10 @@ export function OracleView(props: OracleViewProps) {
   const [depStatus, setDepStatus] = createSignal<DependencyStatus | null>(null);
   const [oracleReady, setOracleReady] = createSignal(false);
 
+  // Guard: when true, checkDependencies() won't set oracleReady to true.
+  // Prevents premature transition while initializeOracle is in-flight.
+  let initInProgress = false;
+
   // Session state
   const [oracleSessionId, setOracleSessionId] = createSignal<string | null>(
     null,
@@ -94,6 +98,9 @@ export function OracleView(props: OracleViewProps) {
     if (!depService) return;
     const status = await depService.checkAll();
     setDepStatus(status);
+    // Don't flip oracleReady to true while init is running — the setup
+    // screen's onRecheck will call us again once init actually completes.
+    if (initInProgress && status.oracleReady) return;
     setOracleReady(status.oracleReady);
   }
 
@@ -432,7 +439,12 @@ export function OracleView(props: OracleViewProps) {
     if (!initOracle) {
       throw new Error('Oracle initializer not available');
     }
-    await initOracle(onProgress);
+    initInProgress = true;
+    try {
+      await initOracle(onProgress);
+    } finally {
+      initInProgress = false;
+    }
   }
 
   // ------------------------------------------------------------------
