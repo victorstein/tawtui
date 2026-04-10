@@ -6,6 +6,8 @@ import { SlackService } from './slack.service';
 import { MempalaceService } from './mempalace.service';
 import type { OracleState, SlackConversation } from './slack.types';
 
+const CHANNEL_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
 @Injectable()
 export class SlackIngestionService {
   private readonly logger = new Logger(SlackIngestionService.name);
@@ -59,7 +61,11 @@ export class SlackIngestionService {
     this.onStatusChange?.(true);
 
     const prevOnWait = this.slackService.onWait;
+    const prevShouldAbort = this.slackService.shouldAbort;
     try {
+      // Set abort check so rate-limit waits are cut short on cancel
+      this.slackService.shouldAbort = () => this._generation !== gen;
+
       // Hook up rate-limit feedback to progress, with current channel context
       let waitCtx: {
         channel?: string;
@@ -85,15 +91,26 @@ export class SlackIngestionService {
         this.slackService.hydrateUserCache(state.userNames);
       }
 
+      const cacheAge = state.channelsCachedAt
+        ? Date.now() - new Date(state.channelsCachedAt).getTime()
+        : Infinity;
+      const cacheValid =
+        !!state.conversations?.length && cacheAge < CHANNEL_CACHE_TTL_MS;
+
       let conversations: SlackConversation[];
       if (options?.skipExisting && state.conversations?.length) {
+        // Retry/resume: always use cache regardless of age
         conversations = state.conversations;
         onProgress?.({
           phase: 'listing',
           channelsSoFar: conversations.length,
           page: 0,
         });
+      } else if (cacheValid) {
+        // Sync/poll: use cache if fresh enough
+        conversations = state.conversations!;
       } else {
+        // Cache missing or stale: fetch fresh
         onProgress?.({ phase: 'listing' });
         conversations = await this.slackService.getConversations(
           (info) => {
@@ -108,19 +125,25 @@ export class SlackIngestionService {
         );
         if (this._generation !== gen) return { messagesStored: 0 };
         state.conversations = conversations;
+        state.channelsCachedAt = new Date().toISOString();
         this.saveState(state);
       }
       if (this._generation !== gen) return { messagesStored: 0 };
 
-      // Detect active channels (skip if cached during retry)
+      // Detect active channels (use cache when valid)
       let activeChannelIds: Set<string>;
       if (options?.skipExisting && state.activeChannelIds?.length) {
+        // Retry/resume: always use cache
         activeChannelIds = new Set(state.activeChannelIds);
         onProgress?.({
           phase: 'detecting',
           channelsSoFar: activeChannelIds.size,
         });
+      } else if (cacheValid && state.activeChannelIds?.length) {
+        // Sync/poll: use cache if fresh enough
+        activeChannelIds = new Set(state.activeChannelIds);
       } else {
+        // Cache missing or stale: detect fresh
         const afterDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
           .toISOString()
           .split('T')[0];
@@ -137,6 +160,9 @@ export class SlackIngestionService {
         );
         if (this._generation !== gen) return { messagesStored: 0 };
         state.activeChannelIds = [...activeChannelIds];
+        if (!state.channelsCachedAt) {
+          state.channelsCachedAt = new Date().toISOString();
+        }
         this.saveState(state);
       }
       if (this._generation !== gen) return { messagesStored: 0 };
@@ -250,6 +276,7 @@ export class SlackIngestionService {
       return { messagesStored };
     } finally {
       this.slackService.onWait = prevOnWait;
+      this.slackService.shouldAbort = prevShouldAbort;
       if (this._generation === gen) {
         this._ingesting = false;
         this.onStatusChange?.(false);
@@ -295,6 +322,7 @@ export class SlackIngestionService {
         channelCursors: {},
         conversations: prev.conversations,
         activeChannelIds: prev.activeChannelIds,
+        channelsCachedAt: prev.channelsCachedAt,
       });
     }
 

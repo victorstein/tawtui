@@ -82,4 +82,6 @@ export interface OracleState {
   conversations?: SlackConversation[];
   /** Channel IDs detected as active via search (cached for retry) */
   activeChannelIds?: string[];
+  /** ISO timestamp of when conversations/activeChannelIds were last fetched */
+  channelsCachedAt?: string;
 }

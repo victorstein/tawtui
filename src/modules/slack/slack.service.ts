@@ -41,6 +41,9 @@ export class SlackService {
       }) => void)
     | null = null;
 
+  /** Optional abort check — if it returns true, waits are cut short */
+  shouldAbort: (() => boolean) | null = null;
+
   constructor(private readonly configService: ConfigService) {}
 
   /** Load persisted user name cache (call on startup or before ingestion) */
@@ -65,6 +68,17 @@ export class SlackService {
     };
   }
 
+  /** Sleep that checks shouldAbort every 500ms and throws if aborted */
+  private async abortableSleep(ms: number): Promise<void> {
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      if (this.shouldAbort?.()) throw new Error('Slack API call aborted');
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.min(500, end - Date.now())),
+      );
+    }
+  }
+
   /** Wait until the per-method rate limit gap has elapsed */
   private async throttle(method: string): Promise<void> {
     const minGap = RATE_LIMITS[method];
@@ -76,7 +90,7 @@ export class SlackService {
       if (elapsed < minGap) {
         const waitMs = minGap - elapsed;
         this.onWait?.({ method, waitMs, reason: 'throttle' });
-        await new Promise((resolve) => setTimeout(resolve, waitMs));
+        await this.abortableSleep(waitMs);
       }
     }
   }
@@ -110,7 +124,7 @@ export class SlackService {
           waitMs: retryAfter * 1000,
           reason: 'rate-limited',
         });
-        await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
+        await this.abortableSleep(retryAfter * 1000);
         continue;
       }
 

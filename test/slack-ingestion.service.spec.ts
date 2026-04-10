@@ -156,6 +156,7 @@ describe('SlackIngestionService', () => {
       { id: 'C1', name: 'general', isDm: false, isPrivate: false },
     ];
     const activeChannelIds = ['C1'];
+    const channelsCachedAt = '2026-01-01T00:00:00.000Z';
     writeFileSync(
       statePath,
       JSON.stringify({
@@ -163,6 +164,7 @@ describe('SlackIngestionService', () => {
         channelCursors: { C1: '1700000300.000000' },
         conversations,
         activeChannelIds,
+        channelsCachedAt,
       }),
       'utf-8',
     );
@@ -182,6 +184,7 @@ describe('SlackIngestionService', () => {
     expect(state.channelCursors).toEqual({});
     expect(state.conversations).toEqual(conversations);
     expect(state.activeChannelIds).toEqual(activeChannelIds);
+    expect(state.channelsCachedAt).toBe(channelsCachedAt);
   });
 
   it('resetState removes state file entirely when no channel caches exist', () => {
