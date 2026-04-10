@@ -177,8 +177,7 @@ describe('MempalaceService', () => {
     let readdirSyncMock: jest.SpyInstance;
 
     beforeEach(() => {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const fs = require('fs');
+      const fs = jest.requireActual<typeof import('fs')>('fs');
       existsSyncMock = jest.spyOn(fs, 'existsSync');
       readdirSyncMock = jest.spyOn(fs, 'readdirSync');
     });
@@ -215,8 +214,99 @@ describe('MempalaceService', () => {
 
       expect(result).toEqual({ mined: true });
       expect(mockSpawn).toHaveBeenCalledWith(
-        ['mempalace', 'mine', '/tmp/staging', '--mode', 'convos', '--wing', 'slack'],
+        [
+          'mempalace',
+          'mine',
+          '/tmp/staging',
+          '--mode',
+          'convos',
+          '--wing',
+          'slack',
+        ],
         { stdout: 'pipe', stderr: 'pipe' },
+      );
+    });
+  });
+
+  describe('installPlugin', () => {
+    let mkdirSyncMock: jest.SpyInstance;
+
+    beforeEach(() => {
+      const fs = jest.requireActual<typeof import('fs')>('fs');
+      mkdirSyncMock = jest.spyOn(fs, 'mkdirSync').mockReturnValue(undefined);
+    });
+
+    afterEach(() => {
+      mkdirSyncMock.mockRestore();
+    });
+
+    it('creates the workspace directory', async () => {
+      mockSpawn.mockReturnValueOnce({
+        exited: Promise.resolve(0),
+        stdout: new ReadableStream(),
+        stderr: new ReadableStream(),
+      });
+      mockSpawn.mockReturnValueOnce({
+        exited: Promise.resolve(0),
+        stdout: new ReadableStream(),
+        stderr: new ReadableStream(),
+      });
+
+      await service.installPlugin('/tmp/workspace');
+
+      expect(mkdirSyncMock).toHaveBeenCalledWith('/tmp/workspace', {
+        recursive: true,
+      });
+    });
+
+    it('runs claude plugin marketplace add then install with project scope', async () => {
+      mockSpawn.mockReturnValueOnce({
+        exited: Promise.resolve(0),
+        stdout: new ReadableStream(),
+        stderr: new ReadableStream(),
+      });
+      mockSpawn.mockReturnValueOnce({
+        exited: Promise.resolve(0),
+        stdout: new ReadableStream(),
+        stderr: new ReadableStream(),
+      });
+
+      await service.installPlugin('/tmp/workspace');
+
+      expect(mockSpawn).toHaveBeenCalledWith(
+        ['claude', 'plugin', 'marketplace', 'add', 'milla-jovovich/mempalace'],
+        expect.objectContaining({ stdout: 'pipe', stderr: 'pipe' }),
+      );
+      expect(mockSpawn).toHaveBeenCalledWith(
+        ['claude', 'plugin', 'install', '--scope', 'project', 'mempalace'],
+        expect.objectContaining({
+          stdout: 'pipe',
+          stderr: 'pipe',
+          cwd: '/tmp/workspace',
+        }),
+      );
+    });
+
+    it('throws when plugin install fails', async () => {
+      mockSpawn.mockReturnValueOnce({
+        exited: Promise.resolve(0),
+        stdout: new ReadableStream(),
+        stderr: new ReadableStream(),
+      });
+      const errorStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('install error'));
+          controller.close();
+        },
+      });
+      mockSpawn.mockReturnValueOnce({
+        exited: Promise.resolve(1),
+        stdout: new ReadableStream(),
+        stderr: errorStream,
+      });
+
+      await expect(service.installPlugin('/tmp/workspace')).rejects.toThrow(
+        /plugin install failed/,
       );
     });
   });

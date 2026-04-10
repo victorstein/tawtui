@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { join } from 'path';
 import { homedir } from 'os';
-import { existsSync, readdirSync } from 'fs';
+import { existsSync, readdirSync, mkdirSync } from 'fs';
 
 /** Base directory for all tawtui data files. */
 export const TAWTUI_DATA_DIR = join(homedir(), '.local', 'share', 'tawtui');
@@ -67,6 +67,39 @@ export class MempalaceService {
 
     await this.mine(stagingDir, wing);
     return { mined: true };
+  }
+
+  /**
+   * Install the mempalace Claude Code plugin at project scope in the given
+   * workspace directory. Creates the directory if it doesn't exist.
+   */
+  async installPlugin(workspaceDir: string): Promise<void> {
+    mkdirSync(workspaceDir, { recursive: true });
+
+    // Step 1: Add plugin from marketplace (idempotent if already added)
+    const addProc = Bun.spawn(
+      ['claude', 'plugin', 'marketplace', 'add', 'milla-jovovich/mempalace'],
+      { stdout: 'pipe', stderr: 'pipe' },
+    );
+    await addProc.exited;
+    // Ignore exit code — marketplace add may warn if already added
+
+    // Step 2: Install at project scope in workspace directory
+    const installProc = Bun.spawn(
+      ['claude', 'plugin', 'install', '--scope', 'project', 'mempalace'],
+      { stdout: 'pipe', stderr: 'pipe', cwd: workspaceDir },
+    );
+
+    const exitCode = await installProc.exited;
+
+    if (exitCode !== 0) {
+      const stderr = await new Response(installProc.stderr).text();
+      throw new Error(
+        `plugin install failed (exit ${exitCode}): ${stderr}`,
+      );
+    }
+
+    this.logger.log(`Installed mempalace plugin in ${workspaceDir}`);
   }
 
   /**
