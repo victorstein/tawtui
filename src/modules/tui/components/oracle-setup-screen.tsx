@@ -1,4 +1,4 @@
-import { createSignal, Show, For } from 'solid-js';
+import { createSignal, createEffect, Show, For } from 'solid-js';
 import { useKeyboard } from '@opentui/solid';
 import type { SlackDepStatus } from '../../dependency.types';
 import type {
@@ -26,6 +26,7 @@ export const ORACLE_GRAD: [string, string] = [P.purple, P.secondary];
 
 interface OracleSetupScreenProps {
   slackStatus: SlackDepStatus;
+  oracleInitialized: boolean;
   onRecheck: () => Promise<void>;
   onTokensSubmit: (
     xoxc: string,
@@ -35,6 +36,12 @@ interface OracleSetupScreenProps {
   ) => Promise<void>;
   onInstallDeps: () => Promise<{ success: boolean; error?: string }>;
   onAutoDetect: () => Promise<ExtractionResult>;
+  onInitializeOracle: (
+    onProgress: (progress: {
+      message: string;
+      status: 'running' | 'done' | 'skip';
+    }) => void,
+  ) => Promise<void>;
 }
 
 const TOKEN_FIELDS = ['xoxc', 'xoxd', 'teamId', 'teamName'] as const;
@@ -67,9 +74,51 @@ export function OracleSetupScreen(props: OracleSetupScreenProps) {
   const [detectedWorkspaces, setDetectedWorkspaces] = createSignal<
     ExtractedWorkspace[]
   >([]);
+  const [initializing, setInitializing] = createSignal(false);
+  const [initMessages, setInitMessages] = createSignal<
+    Array<{ message: string; status: 'running' | 'done' | 'skip' }>
+  >([]);
+  const [initError, setInitError] = createSignal<string | null>(null);
 
   const hasInstallablePackages = () =>
     props.slackStatus.pipxInstalled && !props.slackStatus.mempalaceInstalled;
+
+  // Auto-trigger initialization when steps 1+2 are complete
+  let initTriggered = false;
+  createEffect(() => {
+    if (
+      props.slackStatus.hasTokens &&
+      props.slackStatus.mempalaceInstalled &&
+      !props.oracleInitialized &&
+      !initTriggered &&
+      !initializing() &&
+      !initError()
+    ) {
+      initTriggered = true;
+      setInitializing(true);
+      setInitMessages([]);
+      setInitError(null);
+      void props
+        .onInitializeOracle((progress) => {
+          setInitMessages((prev) => {
+            // Replace last 'running' entry if same phase, otherwise append
+            const updated = prev.filter((p) => p.status !== 'running');
+            return [...updated, progress];
+          });
+        })
+        .then(() => {
+          setInitializing(false);
+          void props.onRecheck();
+        })
+        .catch((err: unknown) => {
+          setInitializing(false);
+          setInitError(
+            err instanceof Error ? err.message : String(err),
+          );
+          initTriggered = false; // allow retry
+        });
+    }
+  });
 
   const currentTokenField = (): TokenField => TOKEN_FIELDS[tokenFieldIdx()];
 
@@ -434,6 +483,76 @@ export function OracleSetupScreen(props: OracleSetupScreenProps) {
             </text>
           </box>
         </Show>
+      </Show>
+
+      <box height={1} />
+
+      {/* Step 3: Initialize Oracle */}
+      <box flexDirection="row">
+        <text fg={FG_NORMAL} attributes={1}>
+          {'  Step 3: '}
+        </text>
+        <text fg={FG_NORMAL} attributes={1}>
+          Initialize Oracle
+        </text>
+        <text>{'  '}</text>
+        <text
+          fg={
+            props.oracleInitialized
+              ? COLOR_SUCCESS
+              : props.slackStatus.hasTokens &&
+                  props.slackStatus.mempalaceInstalled
+                ? COLOR_WARNING
+                : FG_MUTED
+          }
+        >
+          {props.oracleInitialized ? '✓' : '✗'}
+        </text>
+      </box>
+
+      {/* Initialization progress */}
+      <Show when={initializing() || initMessages().length > 0}>
+        <For each={initMessages()}>
+          {(msg) => (
+            <box flexDirection="row">
+              <text>{'    '}</text>
+              <text
+                fg={
+                  msg.status === 'done'
+                    ? COLOR_SUCCESS
+                    : msg.status === 'skip'
+                      ? FG_DIM
+                      : ORACLE_GRAD[0]
+                }
+              >
+                {msg.status === 'done'
+                  ? '✓ '
+                  : msg.status === 'skip'
+                    ? '– '
+                    : '⟳ '}
+              </text>
+              <text
+                fg={
+                  msg.status === 'done'
+                    ? FG_NORMAL
+                    : msg.status === 'skip'
+                      ? FG_DIM
+                      : FG_NORMAL
+                }
+              >
+                {msg.message}
+              </text>
+            </box>
+          )}
+        </For>
+      </Show>
+
+      {/* Init error */}
+      <Show when={initError()}>
+        <box flexDirection="row">
+          <text fg={COLOR_ERROR}>{'    ✗ '}</text>
+          <text fg={COLOR_ERROR}>{initError()}</text>
+        </box>
       </Show>
 
       <box height={1} />
