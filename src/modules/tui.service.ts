@@ -24,6 +24,7 @@ import type {
 } from './github.types';
 import type { ProjectAgentConfig } from './config.types';
 import type { DueDateValidation } from './taskwarrior.types';
+import { ORACLE_INIT_CANCELLED } from './tui/bridge';
 
 interface TawtuiGlobal {
   __tawtui?: {
@@ -71,6 +72,7 @@ interface TawtuiGlobal {
       }) => void,
     ) => Promise<void>;
     resetOracleData: () => Promise<void>;
+    cancelOracleInit: () => void;
   };
   __tuiExit?: () => void;
 }
@@ -96,6 +98,8 @@ export class TuiService {
     // Bridge NestJS services to SolidJS components via globalThis.
     // SolidJS components don't have access to the NestJS DI container,
     // so we expose required services on a well-known global.
+    let initCancelled = false;
+
     g.__tawtui = {
       taskwarriorService: this.taskwarriorService,
       githubService: this.githubService,
@@ -147,6 +151,8 @@ export class TuiService {
       createOracleSession: () => this.terminalService.createOracleSession(),
       extractSlackTokens: () => this.tokenExtractorService.extractTokens(),
       initializeOracle: async (onProgress) => {
+        initCancelled = false;
+
         // Step 1: Initialize palace (skip if already done)
         if (!this.mempalaceService.isInitialized()) {
           onProgress({ message: 'Initializing palace...', status: 'running' });
@@ -178,6 +184,8 @@ export class TuiService {
           });
         }
 
+        if (initCancelled) throw new Error(ORACLE_INIT_CANCELLED);
+
         // Step 2: Mine existing data
         onProgress({ message: 'Mining existing data...', status: 'running' });
         const mineResult = await this.mempalaceService.mineIfNeeded(
@@ -196,15 +204,25 @@ export class TuiService {
           await this.slackIngestionService.ingest(
             (info) => {
               if (info.phase === 'waiting') {
+                // Only surface rate-limit (429) waits — throttle is just normal pacing
+                if (info.waitReason !== 'rate-limited') return;
                 const secs = Math.ceil((info.waitMs ?? 0) / 1000);
                 const ctx = info.channel
                   ? ` (${info.channel} [${info.channelIndex}/${info.totalChannels}])`
-                  : ' (channel list)';
-                const reason =
-                  info.waitReason === 'rate-limited'
-                    ? `Rate limited${ctx}, retrying in ${secs}s...`
-                    : `Throttling${ctx}, ${secs}s...`;
-                onProgress({ message: reason, status: 'running' });
+                  : info.channelsSoFar
+                    ? ` (channel list, ${info.channelsSoFar} found)`
+                    : ' (channel list)';
+                onProgress({
+                  message: `Rate limited${ctx}, retrying in ${secs}s...`,
+                  status: 'running',
+                });
+              } else if (info.phase === 'detecting') {
+                onProgress({
+                  message: info.channelsSoFar
+                    ? `Detecting active channels... (${info.channelsSoFar} found)`
+                    : 'Detecting active channels...',
+                  status: 'running',
+                });
               } else if (info.phase === 'skipped') {
                 onProgress({
                   message: `Skipping ${info.channel} (cached) [${info.channelIndex}/${info.totalChannels}]`,
@@ -231,6 +249,7 @@ export class TuiService {
             },
             { skipExisting: true },
           );
+          if (initCancelled) throw new Error(ORACLE_INIT_CANCELLED);
           onProgress({ message: 'Conversations fetched', status: 'done' });
         }
 
@@ -251,6 +270,10 @@ export class TuiService {
             slack: { ...currentConfig.slack, userName: undefined },
           });
         }
+      },
+      cancelOracleInit: () => {
+        initCancelled = true;
+        this.slackIngestionService.abort();
       },
     };
 

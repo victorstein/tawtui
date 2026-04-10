@@ -330,8 +330,14 @@ export function OracleView(props: OracleViewProps) {
                 await resetFn();
                 setOracleReady(false);
                 setOracleSessionId(null);
-                // Re-check dependencies to refresh setup screen state
-                await checkDependencies();
+                // Update depStatus synchronously — don't call checkDependencies() which
+                // would race with the auto-trigger's initializeOracle.
+                // The setup screen's onRecheck will call checkDependencies() after init completes.
+                setDepStatus((prev) =>
+                  prev
+                    ? { ...prev, oracleInitialized: false, oracleReady: false }
+                    : null,
+                );
               } catch {
                 showError('Failed to reset Oracle data');
               }

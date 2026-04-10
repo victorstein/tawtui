@@ -20,6 +20,7 @@ import {
   SEPARATOR_COLOR,
 } from '../theme';
 import { lerpHex, LEFT_CAP, RIGHT_CAP } from '../utils';
+import { getCancelOracleInit, ORACLE_INIT_CANCELLED } from '../bridge';
 
 /** Oracle gradient: purple -> secondary. Re-exported for use by OracleView. */
 export const ORACLE_GRAD: [string, string] = [P.purple, P.secondary];
@@ -79,6 +80,7 @@ export function OracleSetupScreen(props: OracleSetupScreenProps) {
     Array<{ message: string; status: 'running' | 'done' | 'skip' }>
   >([]);
   const [initError, setInitError] = createSignal<string | null>(null);
+  const [cancelled, setCancelled] = createSignal(false);
 
   // Animated spinner for running items
   const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
@@ -92,6 +94,38 @@ export function OracleSetupScreen(props: OracleSetupScreenProps) {
   const hasInstallablePackages = () =>
     props.slackStatus.pipxInstalled && !props.slackStatus.mempalaceInstalled;
 
+  /** Run the oracle initialization pipeline. */
+  const runInit = () => {
+    setInitializing(true);
+    setInitMessages([]);
+    setInitError(null);
+    setCancelled(false);
+    initTriggered = true;
+    void props
+      .onInitializeOracle((progress) => {
+        setInitMessages((prev) => {
+          const updated = prev.filter((p) => p.status !== 'running');
+          return [...updated, progress];
+        });
+      })
+      .then(() => {
+        setInitializing(false);
+        void props.onRecheck();
+      })
+      .catch((err: unknown) => {
+        setInitializing(false);
+        const message = err instanceof Error ? err.message : String(err);
+        if (message === ORACLE_INIT_CANCELLED) {
+          setCancelled(true);
+          setInitError(null);
+        } else {
+          setCancelled(false);
+          setInitError(message);
+        }
+        initTriggered = false;
+      });
+  };
+
   // Auto-trigger initialization when steps 1+2 are complete
   let initTriggered = false;
   createEffect(() => {
@@ -102,29 +136,7 @@ export function OracleSetupScreen(props: OracleSetupScreenProps) {
       !initializing() &&
       !initError()
     ) {
-      initTriggered = true;
-      setInitializing(true);
-      setInitMessages([]);
-      setInitError(null);
-      void props
-        .onInitializeOracle((progress) => {
-          setInitMessages((prev) => {
-            // Replace last 'running' entry if same phase, otherwise append
-            const updated = prev.filter((p) => p.status !== 'running');
-            return [...updated, progress];
-          });
-        })
-        .then(() => {
-          setInitializing(false);
-          void props.onRecheck();
-        })
-        .catch((err: unknown) => {
-          setInitializing(false);
-          setInitError(
-            err instanceof Error ? err.message : String(err),
-          );
-          initTriggered = false; // allow retry
-        });
+      runInit();
     }
   });
 
@@ -180,6 +192,21 @@ export function OracleSetupScreen(props: OracleSetupScreenProps) {
     }
 
     // Normal mode
+
+    // Cancel initialization with Esc
+    if (key.name === 'escape' && initializing()) {
+      key.preventDefault();
+      const cancel = getCancelOracleInit();
+      if (cancel) cancel();
+      return;
+    }
+
+    // Retry initialization with Enter after cancellation
+    if (key.name === 'return' && cancelled() && !initializing()) {
+      key.preventDefault();
+      runInit();
+      return;
+    }
 
     // Auto-detect tokens from Slack app
     if (
@@ -553,6 +580,26 @@ export function OracleSetupScreen(props: OracleSetupScreenProps) {
             </box>
           )}
         </For>
+        <Show when={initializing()}>
+          <box height={1} />
+          <box flexDirection="row">
+            <text>{'    '}</text>
+            <text fg={FG_DIM}>{'Press '}</text>
+            <text fg={FG_DIM} attributes={1}>{'Esc'}</text>
+            <text fg={FG_DIM}>{' to cancel'}</text>
+          </box>
+        </Show>
+      </Show>
+
+      {/* Cancelled state */}
+      <Show when={cancelled() && !initializing()}>
+        <box flexDirection="row">
+          <text>{'    '}</text>
+          <text fg={COLOR_WARNING}>{'⏸ '}</text>
+          <text fg={FG_NORMAL}>{'Cancelled — press '}</text>
+          <text fg={ACCENT_PRIMARY} attributes={1}>{'Enter'}</text>
+          <text fg={FG_NORMAL}>{' to retry'}</text>
+        </box>
       </Show>
 
       {/* Init error */}

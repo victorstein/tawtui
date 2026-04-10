@@ -57,7 +57,11 @@ export interface TawtuiBridge {
     onProgress: (progress: OracleInitProgress) => void,
   ) => Promise<void>;
   resetOracleData: () => Promise<void>;
+  cancelOracleInit: () => void;
 }
+
+/** Sentinel error message for cancelled initialization — used to distinguish from real errors. */
+export const ORACLE_INIT_CANCELLED = 'Initialization cancelled';
 
 function getBridge(): TawtuiBridge | undefined {
   return (globalThis as Record<string, unknown>).__tawtui as
@@ -127,6 +131,10 @@ export function getInitializeOracle(): TawtuiBridge['initializeOracle'] | null {
 
 export function getResetOracleData(): TawtuiBridge['resetOracleData'] | null {
   return getBridge()?.resetOracleData ?? null;
+}
+
+export function getCancelOracleInit(): TawtuiBridge['cancelOracleInit'] | null {
+  return getBridge()?.cancelOracleInit ?? null;
 }
 
 export function getTuiExit(): (() => void) | null {

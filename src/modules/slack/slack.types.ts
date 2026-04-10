@@ -59,10 +59,27 @@ export interface SlackUserInfoResponse {
   error?: string;
 }
 
+/** Response from Slack search.messages */
+export interface SlackSearchResponse {
+  ok: boolean;
+  messages?: {
+    matches: Array<{
+      channel: { id: string; name?: string };
+      ts: string;
+    }>;
+    paging?: { pages: number; page: number; count: number };
+  };
+  error?: string;
+}
+
 /** State persisted to ~/.config/tawtui/oracle-state.json */
 export interface OracleState {
   lastChecked: string | null;
   channelCursors: Record<string, string>;
   /** Persisted userId → display name cache to avoid redundant users.info calls */
   userNames?: Record<string, string>;
+  /** Cached conversation list to avoid re-fetching on retry */
+  conversations?: SlackConversation[];
+  /** Channel IDs detected as active via search (cached for retry) */
+  activeChannelIds?: string[];
 }

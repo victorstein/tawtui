@@ -4,7 +4,7 @@ import { homedir } from 'os';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'fs';
 import { SlackService } from './slack.service';
 import { MempalaceService } from './mempalace.service';
-import type { OracleState } from './slack.types';
+import type { OracleState, SlackConversation } from './slack.types';
 
 @Injectable()
 export class SlackIngestionService {
@@ -40,7 +40,7 @@ export class SlackIngestionService {
   /** Run one full ingestion cycle: fetch → write files → mine → update state */
   async ingest(
     onProgress?: (info: {
-      phase: 'listing' | 'channel' | 'waiting' | 'skipped';
+      phase: 'listing' | 'channel' | 'waiting' | 'skipped' | 'detecting';
       channel?: string;
       messageCount?: number;
       channelIndex?: number;
@@ -58,13 +58,14 @@ export class SlackIngestionService {
     const gen = this._generation;
     this.onStatusChange?.(true);
 
+    const prevOnWait = this.slackService.onWait;
     try {
       // Hook up rate-limit feedback to progress, with current channel context
-      const prevOnWait = this.slackService.onWait;
       let waitCtx: {
         channel?: string;
         channelIndex?: number;
         totalChannels?: number;
+        channelsSoFar?: number;
       } = {};
       if (onProgress) {
         this.slackService.onWait = (info) => {
@@ -84,23 +85,68 @@ export class SlackIngestionService {
         this.slackService.hydrateUserCache(state.userNames);
       }
 
-      onProgress?.({ phase: 'listing' });
-      const conversations = await this.slackService.getConversations((info) => {
+      let conversations: SlackConversation[];
+      if (options?.skipExisting && state.conversations?.length) {
+        conversations = state.conversations;
         onProgress?.({
           phase: 'listing',
-          channelsSoFar: info.channelsSoFar,
-          page: info.page,
+          channelsSoFar: conversations.length,
+          page: 0,
         });
-      });
+      } else {
+        onProgress?.({ phase: 'listing' });
+        conversations = await this.slackService.getConversations((info) => {
+          waitCtx = { channelsSoFar: info.channelsSoFar };
+          onProgress?.({
+            phase: 'listing',
+            channelsSoFar: info.channelsSoFar,
+            page: info.page,
+          });
+        });
+        state.conversations = conversations;
+        this.saveState(state);
+      }
+
+      // Detect active channels (skip if cached during retry)
+      let activeChannelIds: Set<string>;
+      if (options?.skipExisting && state.activeChannelIds?.length) {
+        activeChannelIds = new Set(state.activeChannelIds);
+        onProgress?.({
+          phase: 'detecting',
+          channelsSoFar: activeChannelIds.size,
+        });
+      } else {
+        const afterDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .split('T')[0];
+        activeChannelIds = await this.slackService.getActiveChannelIds(
+          afterDate,
+          (info) => {
+            onProgress?.({
+              phase: 'detecting',
+              channelsSoFar: info.matchesSoFar,
+              page: info.page,
+            });
+          },
+        );
+        state.activeChannelIds = [...activeChannelIds];
+        this.saveState(state);
+      }
+
+      // Filter: all DMs/MPIMs + channels the user is active in
+      const filteredConversations = conversations.filter(
+        (c) => c.isDm || activeChannelIds.has(c.id),
+      );
+
       let messagesStored = 0;
       let filesWritten = 0;
-      const totalChannels = conversations.length;
+      const totalChannels = filteredConversations.length;
 
       mkdirSync(this.stagingDir, { recursive: true });
 
-      for (let i = 0; i < conversations.length; i++) {
+      for (let i = 0; i < filteredConversations.length; i++) {
         if (this._generation !== gen) return { messagesStored };
-        const conversation = conversations[i];
+        const conversation = filteredConversations[i];
         const channelIndex = i + 1;
         waitCtx = { channel: conversation.name, channelIndex, totalChannels };
         // Skip channels already processed when resuming
@@ -190,14 +236,12 @@ export class SlackIngestionService {
         await this.mempalaceService.mine(this.stagingDir, 'slack');
       }
 
-      // Restore previous onWait callback
-      this.slackService.onWait = prevOnWait;
-
       this.logger.log(
         `Ingestion complete: ${messagesStored} messages in ${filesWritten} files`,
       );
       return { messagesStored };
     } finally {
+      this.slackService.onWait = prevOnWait;
       if (this._generation === gen) {
         this._ingesting = false;
         this.onStatusChange?.(false);

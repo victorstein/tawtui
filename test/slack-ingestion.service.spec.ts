@@ -17,6 +17,7 @@ import { tmpdir } from 'os';
 
 const mockSlackService = {
   getConversations: jest.fn(),
+  getActiveChannelIds: jest.fn().mockResolvedValue(new Set<string>()),
   getMessagesSince: jest.fn(),
   buildMessage: jest.fn(),
   resolveUserName: jest.fn(),
@@ -40,6 +41,8 @@ describe('SlackIngestionService', () => {
     (service as any).stagingDir = join(tmpDir, 'inbox');
     (service as any).statePath = join(tmpDir, 'oracle-state.json');
     jest.clearAllMocks();
+    mockSlackService.getActiveChannelIds.mockResolvedValue(new Set<string>());
+    mockSlackService.exportUserCache.mockReturnValue({});
   });
 
   afterEach(() => {
@@ -54,6 +57,7 @@ describe('SlackIngestionService', () => {
       isPrivate: false,
     };
     mockSlackService.getConversations.mockResolvedValue([conversation]);
+    mockSlackService.getActiveChannelIds.mockResolvedValue(new Set(['C123']));
     mockSlackService.getMessagesSince.mockResolvedValue([
       { ts: '1700000200.000000', userId: 'U123', text: 'Ship it on Friday' },
     ]);
@@ -88,6 +92,7 @@ describe('SlackIngestionService', () => {
       isPrivate: false,
     };
     mockSlackService.getConversations.mockResolvedValue([conversation]);
+    mockSlackService.getActiveChannelIds.mockResolvedValue(new Set(['C123']));
     mockSlackService.getMessagesSince.mockResolvedValue([]);
 
     await service.ingest();
@@ -103,6 +108,7 @@ describe('SlackIngestionService', () => {
       isPrivate: false,
     };
     mockSlackService.getConversations.mockResolvedValue([conversation]);
+    mockSlackService.getActiveChannelIds.mockResolvedValue(new Set(['C123']));
     mockSlackService.getMessagesSince.mockResolvedValue([
       { ts: '1700000200.000000', userId: 'U123', text: 'hello' },
       { ts: '1700000300.000000', userId: 'U456', text: 'world' },

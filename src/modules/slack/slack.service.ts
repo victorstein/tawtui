@@ -5,6 +5,7 @@ import type {
   SlackConversationListResponse,
   SlackHistoryResponse,
   SlackMessage,
+  SlackSearchResponse,
   SlackUserInfoResponse,
 } from './slack.types';
 
@@ -18,6 +19,7 @@ const RATE_LIMITS: Record<string, number> = {
   'conversations.list': 500, // Tier 2: burst-friendly, retry on 429
   'conversations.history': 400, // Tier 3: ~50/min with headroom
   'users.info': 200, // Tier 4: 100+/min, mostly cached anyway
+  'search.messages': 1000, // Tier 2: be conservative
 };
 
 const MAX_RETRIES = 3;
@@ -243,6 +245,45 @@ export class SlackService {
     if (!auth.ok) throw new Error(`auth.test failed: ${auth.error}`);
     const userName = await this.resolveUserName(auth.user_id);
     return { userId: auth.user_id, userName };
+  }
+
+  /**
+   * Find channel IDs where the current user has posted recently.
+   * Uses search.messages with `from:me` to efficiently detect active channels
+   * without making per-channel API calls.
+   */
+  async getActiveChannelIds(
+    afterDate: string,
+    onPage?: (info: { page: number; matchesSoFar: number }) => void,
+  ): Promise<Set<string>> {
+    const channelIds = new Set<string>();
+    let page = 1;
+    let totalPages = 1;
+
+    do {
+      const data = await this.slackGet<SlackSearchResponse>(
+        'search.messages',
+        {
+          query: `from:me after:${afterDate}`,
+          count: '100',
+          page: String(page),
+        },
+      );
+
+      if (!data.ok) {
+        throw new Error(`Slack search.messages error: ${data.error}`);
+      }
+
+      for (const match of data.messages?.matches ?? []) {
+        channelIds.add(match.channel.id);
+      }
+
+      totalPages = data.messages?.paging?.pages ?? 1;
+      onPage?.({ page, matchesSoFar: channelIds.size });
+      page++;
+    } while (page <= totalPages);
+
+    return channelIds;
   }
 
   /** Build a full SlackMessage with resolved username and channel name */
