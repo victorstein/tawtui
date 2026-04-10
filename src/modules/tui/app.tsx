@@ -47,6 +47,7 @@ function AppContent() {
     null,
   );
   const [ingesting, setIngesting] = createSignal(false);
+  let activeSyncToastId: number | null = null;
 
   // Hook up Slack ingestion status + background sync toast
   onMount(() => {
@@ -153,15 +154,21 @@ function AppContent() {
       return;
     }
 
-    // Manual Slack sync
+    // Manual Slack sync (Shift+S toggles: start or cancel)
     if ((key.name === 'S' || (key.shift && key.name === 's')) && !key.ctrl && !key.meta) {
       const svc = getSlackIngestionService();
       if (!svc) return;
       if (svc.ingesting) {
-        toast.show('Already syncing', 'error');
+        svc.abort();
+        if (activeSyncToastId !== null) {
+          toast.dismiss(activeSyncToastId);
+          activeSyncToastId = null;
+        }
+        toast.show('Sync cancelled', 'error');
         return;
       }
       const id = toast.show('Syncing...');
+      activeSyncToastId = id;
       svc
         .triggerIngest((info) => {
           if (info.phase === 'listing') {
@@ -190,6 +197,7 @@ function AppContent() {
         })
         .then(
           (result) => {
+            activeSyncToastId = null;
             const count = result.messagesStored;
             toast.update(
               id,
@@ -198,7 +206,10 @@ function AppContent() {
             );
           },
           () => {
-            toast.update(id, 'Sync failed', 'error');
+            if (activeSyncToastId === id) {
+              toast.update(id, 'Sync failed', 'error');
+            }
+            activeSyncToastId = null;
           },
         );
       return;
