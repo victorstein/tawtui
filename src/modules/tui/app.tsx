@@ -150,13 +150,12 @@ function AppContent() {
 
     // Manual Slack sync
     if (key.name === 'S' && !key.ctrl && !key.meta) {
-      if (!oracleReady()) return;
-      if (ingesting()) {
+      const svc = getSlackIngestionService();
+      if (!svc) return;
+      if (svc.ingesting) {
         toast.show('Already syncing', 'error');
         return;
       }
-      const svc = getSlackIngestionService();
-      if (!svc) return;
       const id = toast.show('Syncing...');
       svc.triggerIngest().then(
         (result) => {

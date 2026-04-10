@@ -8,7 +8,7 @@ import {
   type JSX,
   type ParentProps,
 } from 'solid-js';
-import { P, COLOR_SUCCESS, COLOR_ERROR, FG_NORMAL } from '../theme';
+import { P, COLOR_SUCCESS, COLOR_ERROR, FG_NORMAL, BG_SURFACE, BORDER_DIALOG } from '../theme';
 
 interface Toast {
   id: number;
@@ -103,7 +103,14 @@ export function ToastProvider(props: ParentProps): JSX.Element {
             >
               <For each={toasts()}>
                 {(toast) => (
-                  <box flexDirection="row">
+                  <box
+                    flexDirection="row"
+                    backgroundColor={BG_SURFACE}
+                    borderStyle="rounded"
+                    borderColor={STATUS_COLOR[toast.status]}
+                    paddingLeft={1}
+                    paddingRight={1}
+                  >
                     <text fg={STATUS_COLOR[toast.status]}>
                       {`${STATUS_ICON[toast.status]} `}
                     </text>
