@@ -188,6 +188,31 @@ describe('SlackIngestionService', () => {
     expect(state.channelsCachedAt).toBe(channelsCachedAt);
   });
 
+  it('cursor advances to last top-level message, not thread reply', async () => {
+    const conversation: SlackConversation = {
+      id: 'C123',
+      name: 'general',
+      isDm: false,
+      isPrivate: false,
+    };
+    mockSlackService.getConversations.mockResolvedValue([conversation]);
+    mockSlackService.getActiveChannelIds.mockResolvedValue(new Set(['C123']));
+    mockSlackService.getMessagesSince.mockResolvedValue([
+      { ts: '1700000100.000000', userId: 'U111', text: 'top level' },
+      { ts: '1700000200.000000', userId: 'U222', text: 'parent' },
+      { ts: '1700000250.000000', userId: 'U333', text: 'reply', threadTs: '1700000200.000000' },
+      { ts: '1700000300.000000', userId: 'U444', text: 'last top level' },
+    ]);
+    mockSlackService.resolveUserName.mockResolvedValue('User');
+
+    await service.ingest();
+
+    const statePath = (service as any).statePath;
+    const state = JSON.parse(readFileSync(statePath, 'utf-8'));
+    // Cursor should be '1700000300.000000' (last top-level), not '1700000250.000000' (reply)
+    expect(state.channelCursors['C123']).toBe('1700000300.000000');
+  });
+
   it('resetState removes state file entirely when no channel caches exist', () => {
     const stagingDir: string = (service as any).stagingDir;
     const statePath: string = (service as any).statePath;

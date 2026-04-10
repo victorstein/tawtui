@@ -190,7 +190,7 @@ export class SlackIngestionService {
           totalChannels,
         });
 
-        let rawMessages: Array<{ ts: string; userId: string; text: string }>;
+        let rawMessages: Array<{ ts: string; userId: string; text: string; threadTs?: string }>;
         try {
           rawMessages = await this.slackService.getMessagesSince(
             conversation.id,
@@ -239,7 +239,8 @@ export class SlackIngestionService {
         messagesStored += rawMessages.length;
 
         // Advance cursor and persist immediately so progress survives app exit
-        const lastTs = rawMessages[rawMessages.length - 1].ts;
+        const lastTopLevel = rawMessages.filter((m) => !m.threadTs).pop();
+        const lastTs = lastTopLevel?.ts ?? rawMessages[rawMessages.length - 1].ts;
         state.channelCursors[conversation.id] = lastTs;
         state.userNames = this.slackService.exportUserCache();
         state.lastChecked = new Date().toISOString();
