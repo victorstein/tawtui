@@ -103,4 +103,9 @@ export interface OracleState {
   channelsCachedAt?: string;
   /** ISO timestamp of when active channel detection last ran */
   activeChannelsCachedAt?: string;
+  /** Parent messages with threads — checked for new replies on each sync */
+  trackedThreads?: Record<string, Array<{
+    threadTs: string;
+    lastReplyTs: string;
+  }>>;
 }

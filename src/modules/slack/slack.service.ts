@@ -201,7 +201,7 @@ export class SlackService {
     channelId: string,
     oldestTs: string,
   ): Promise<
-    Array<{ ts: string; userId: string; text: string; threadTs?: string }>
+    Array<{ ts: string; userId: string; text: string; threadTs?: string; replyCount?: number }>
   > {
     const topLevel: Array<{
       ts: string;
@@ -253,9 +253,15 @@ export class SlackService {
       userId: string;
       text: string;
       threadTs?: string;
+      replyCount?: number;
     }> = [];
     for (const msg of topLevel) {
-      results.push({ ts: msg.ts, userId: msg.userId, text: msg.text });
+      results.push({
+        ts: msg.ts,
+        userId: msg.userId,
+        text: msg.text,
+        ...(msg.replyCount > 0 ? { replyCount: msg.replyCount } : {}),
+      });
 
       if (msg.replyCount > 0) {
         if (this.shouldAbort?.()) throw new Error('Slack API call aborted');
