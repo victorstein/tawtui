@@ -8,6 +8,7 @@ import ReviewsView from './views/reviews-view';
 import { CalendarView } from './views/calendar-view';
 import { OracleView } from './views/oracle-view';
 import { DialogProvider, useDialog } from './context/dialog';
+import { ToastProvider, useToast } from './context/toast';
 import { DialogConfirm } from './components/dialog-confirm';
 import { DialogSetupWizard } from './components/dialog-setup-wizard';
 import { getDependencyService, getSlackIngestionService, getTuiExit } from './bridge';
@@ -23,7 +24,9 @@ const TABS = [
 export function App() {
   return (
     <DialogProvider>
-      <AppContent />
+      <ToastProvider>
+        <AppContent />
+      </ToastProvider>
     </DialogProvider>
   );
 }
@@ -31,6 +34,7 @@ export function App() {
 function AppContent() {
   const renderer = useRenderer();
   const dialog = useDialog();
+  const toast = useToast();
   const [activeTab, setActiveTab] = createSignal(0);
   const [archiveMode, setArchiveMode] = createSignal(false);
   const [inputCaptured, setInputCaptured] = createSignal(false);
@@ -146,9 +150,27 @@ function AppContent() {
 
     // Manual Slack sync
     if (key.name === 'S' && !key.ctrl && !key.meta) {
-      if (!oracleReady() || ingesting()) return;
+      if (!oracleReady()) return;
+      if (ingesting()) {
+        toast.show('Already syncing', 'error');
+        return;
+      }
       const svc = getSlackIngestionService();
-      if (svc) void svc.triggerIngest();
+      if (!svc) return;
+      const id = toast.show('Syncing...');
+      svc.triggerIngest().then(
+        (result) => {
+          const count = result.messagesStored;
+          toast.update(
+            id,
+            count > 0 ? `Synced ${count} messages` : 'No new messages',
+            'done',
+          );
+        },
+        () => {
+          toast.update(id, 'Sync failed', 'error');
+        },
+      );
       return;
     }
   });
