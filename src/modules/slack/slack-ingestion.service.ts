@@ -115,13 +115,17 @@ export class SlackIngestionService {
       }
       if (this._generation !== gen) return { messagesStored: 0 };
 
-      // Detect active channels (use cache when available)
+      // Detect active channels — refresh hourly so new channels are picked up
+      const ACTIVE_CHANNELS_TTL_MS = 60 * 60 * 1000; // 1 hour
+      const activeAge = state.activeChannelsCachedAt
+        ? Date.now() - new Date(state.activeChannelsCachedAt).getTime()
+        : Infinity;
+      const activeStale = activeAge >= ACTIVE_CHANNELS_TTL_MS;
+
       let activeChannelIds: Set<string>;
-      if (state.activeChannelIds?.length) {
-        // Use cached active channel set
+      if (state.activeChannelIds?.length && !activeStale) {
         activeChannelIds = new Set(state.activeChannelIds);
       } else {
-        // Cache missing or stale: detect fresh
         const afterDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
           .toISOString()
           .split('T')[0];
@@ -138,9 +142,7 @@ export class SlackIngestionService {
         );
         if (this._generation !== gen) return { messagesStored: 0 };
         state.activeChannelIds = [...activeChannelIds];
-        if (!state.channelsCachedAt) {
-          state.channelsCachedAt = new Date().toISOString();
-        }
+        state.activeChannelsCachedAt = new Date().toISOString();
         this.saveState(state);
       }
       if (this._generation !== gen) return { messagesStored: 0 };
@@ -303,6 +305,7 @@ export class SlackIngestionService {
         conversations: prev.conversations,
         activeChannelIds: prev.activeChannelIds,
         channelsCachedAt: prev.channelsCachedAt,
+        activeChannelsCachedAt: prev.activeChannelsCachedAt,
       });
     }
 
