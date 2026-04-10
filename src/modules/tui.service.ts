@@ -9,6 +9,12 @@ import { DependencyService } from './dependency.service';
 import { CalendarService } from './calendar.service';
 import { SlackIngestionService } from './slack/slack-ingestion.service';
 import { TokenExtractorService } from './slack/token-extractor.service';
+import {
+  MempalaceService,
+  PALACE_PATH,
+  STAGING_DIR,
+  ORACLE_WORKSPACE_DIR,
+} from './slack/mempalace.service';
 import type { ExtractionResult } from './slack/token-extractor.service';
 import type {
   PullRequestDetail,
@@ -57,6 +63,12 @@ interface TawtuiGlobal {
     slackIngestionService: SlackIngestionService;
     createOracleSession: () => Promise<{ sessionId: string }>;
     extractSlackTokens: () => Promise<ExtractionResult>;
+    initializeOracle: (
+      onProgress: (progress: {
+        message: string;
+        status: 'running' | 'done' | 'skip';
+      }) => void,
+    ) => Promise<void>;
   };
   __tuiExit?: () => void;
 }
@@ -72,6 +84,7 @@ export class TuiService {
     private readonly calendarService: CalendarService,
     private readonly slackIngestionService: SlackIngestionService,
     private readonly tokenExtractorService: TokenExtractorService,
+    private readonly mempalaceService: MempalaceService,
   ) {}
 
   async launch(): Promise<void> {
@@ -130,6 +143,33 @@ export class TuiService {
       slackIngestionService: this.slackIngestionService,
       createOracleSession: () => this.terminalService.createOracleSession(),
       extractSlackTokens: () => this.tokenExtractorService.extractTokens(),
+      initializeOracle: async (onProgress) => {
+        // Step 1: Initialize palace
+        onProgress({ message: 'Initializing palace...', status: 'running' });
+        await this.mempalaceService.init(PALACE_PATH);
+        onProgress({ message: 'Palace initialized', status: 'done' });
+
+        // Step 2: Mine existing data
+        onProgress({ message: 'Mining existing data...', status: 'running' });
+        const mineResult = await this.mempalaceService.mineIfNeeded(
+          STAGING_DIR,
+          'slack',
+        );
+        onProgress({
+          message: mineResult.mined
+            ? 'Mined existing data'
+            : 'No existing data to mine',
+          status: mineResult.mined ? 'done' : 'skip',
+        });
+
+        // Step 3: Install Claude Code plugin
+        onProgress({
+          message: 'Installing Claude Code plugin...',
+          status: 'running',
+        });
+        await this.mempalaceService.installPlugin(ORACLE_WORKSPACE_DIR);
+        onProgress({ message: 'Plugin installed', status: 'done' });
+      },
     };
 
     // Start Oracle ingestion if configured and dependencies are met

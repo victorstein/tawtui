@@ -14,6 +14,11 @@ import type { DueDateValidation } from '../taskwarrior.types';
 import type { SlackIngestionService } from '../slack/slack-ingestion.service';
 import type { ExtractionResult } from '../slack/token-extractor.service';
 
+export interface OracleInitProgress {
+  message: string;
+  status: 'running' | 'done' | 'skip';
+}
+
 export interface TawtuiBridge {
   taskwarriorService: TaskwarriorService;
   githubService: GithubService;
@@ -48,6 +53,9 @@ export interface TawtuiBridge {
   slackIngestionService: SlackIngestionService;
   createOracleSession: () => Promise<{ sessionId: string }>;
   extractSlackTokens: () => Promise<ExtractionResult>;
+  initializeOracle: (
+    onProgress: (progress: OracleInitProgress) => void,
+  ) => Promise<void>;
 }
 
 function getBridge(): TawtuiBridge | undefined {
@@ -110,6 +118,10 @@ export function getExtractSlackTokens():
   | TawtuiBridge['extractSlackTokens']
   | null {
   return getBridge()?.extractSlackTokens ?? null;
+}
+
+export function getInitializeOracle(): TawtuiBridge['initializeOracle'] | null {
+  return getBridge()?.initializeOracle ?? null;
 }
 
 export function getTuiExit(): (() => void) | null {
