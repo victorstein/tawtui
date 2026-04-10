@@ -33,6 +33,25 @@ export class MempalaceService {
     return existsSync(join(PALACE_PATH, 'palace.db'));
   }
 
+  /** Initialize a new mempalace palace at the given path. */
+  async init(palacePath: string): Promise<void> {
+    const proc = Bun.spawn(['mempalace', 'init', palacePath], {
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+
+    const exitCode = await proc.exited;
+
+    if (exitCode !== 0) {
+      const stderr = await new Response(proc.stderr).text();
+      throw new Error(
+        `mempalace init failed (exit ${exitCode}): ${stderr}`,
+      );
+    }
+
+    this.logger.log(`Initialized palace at ${palacePath}`);
+  }
+
   /**
    * Mine a directory of conversation files into mempalace.
    * Uses `mempalace mine <dir> --mode convos --wing <wing>`.

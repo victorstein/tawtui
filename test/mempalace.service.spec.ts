@@ -125,4 +125,50 @@ describe('MempalaceService', () => {
       );
     });
   });
+
+  describe('init', () => {
+    it('runs mempalace init with the palace path', async () => {
+      const mockProc = {
+        exited: Promise.resolve(0),
+        stdout: new ReadableStream(),
+        stderr: new ReadableStream(),
+      };
+      mockSpawn.mockReturnValueOnce(mockProc);
+
+      await service.init('/tmp/test-palace');
+
+      expect(mockSpawn).toHaveBeenCalledWith(
+        ['mempalace', 'init', '/tmp/test-palace'],
+        { stdout: 'pipe', stderr: 'pipe' },
+      );
+    });
+
+    it('throws when mempalace init fails', async () => {
+      const errorStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('init failed'));
+          controller.close();
+        },
+      });
+      mockSpawn.mockReturnValueOnce({
+        exited: Promise.resolve(1),
+        stdout: new ReadableStream(),
+        stderr: errorStream,
+      });
+
+      await expect(service.init('/tmp/test-palace')).rejects.toThrow(
+        /mempalace init failed/,
+      );
+    });
+
+    it('resolves when mempalace init succeeds', async () => {
+      mockSpawn.mockReturnValueOnce({
+        exited: Promise.resolve(0),
+        stdout: new ReadableStream(),
+        stderr: new ReadableStream(),
+      });
+
+      await expect(service.init('/tmp/test-palace')).resolves.toBeUndefined();
+    });
+  });
 });
