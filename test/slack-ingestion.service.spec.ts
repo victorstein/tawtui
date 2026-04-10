@@ -131,6 +131,7 @@ describe('SlackIngestionService', () => {
       isPrivate: true,
     };
     mockSlackService.getConversations.mockResolvedValue([dmConversation]);
+    mockSlackService.getActiveChannelIds.mockResolvedValue(new Set(['D456']));
     mockSlackService.getMessagesSince.mockResolvedValue([
       { ts: '1700000200.000000', userId: 'U456', text: 'Review my PR?' },
     ]);

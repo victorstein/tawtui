@@ -4,6 +4,7 @@ import {
   on,
   onMount,
   onCleanup,
+  batch,
   Show,
   For,
 } from 'solid-js';
@@ -100,11 +101,16 @@ export function OracleView(props: OracleViewProps) {
     const depService = getDependencyService();
     if (!depService) return;
     const status = await depService.checkAll();
-    setDepStatus(status);
-    // Don't flip oracleReady to true while init is running — the setup
-    // screen's onRecheck will call us again once init actually completes.
-    if (initInProgress && status.oracleReady) return;
-    setOracleReady(status.oracleReady);
+    // Batch both updates so the setup screen doesn't mount between
+    // setDepStatus (makes condition truthy) and setOracleReady (makes it falsy).
+    // Without batch, setDepStatus triggers reactive mount of OracleSetupScreen
+    // while oracleReady is still false, causing a spurious re-initialization.
+    batch(() => {
+      setDepStatus(status);
+      if (!(initInProgress && status.oracleReady)) {
+        setOracleReady(status.oracleReady);
+      }
+    });
   }
 
   // ------------------------------------------------------------------

@@ -167,9 +167,9 @@ export class SlackIngestionService {
       }
       if (this._generation !== gen) return { messagesStored: 0 };
 
-      // Filter: all DMs/MPIMs + channels the user is active in
-      const filteredConversations = conversations.filter(
-        (c) => c.isDm || activeChannelIds.has(c.id),
+      // Filter: only channels/DMs the user is active in
+      const filteredConversations = conversations.filter((c) =>
+        activeChannelIds.has(c.id),
       );
 
       let messagesStored = 0;
