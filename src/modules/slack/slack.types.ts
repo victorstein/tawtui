@@ -41,6 +41,23 @@ export interface SlackHistoryResponse {
     user?: string;
     text?: string;
     subtype?: string;
+    reply_count?: number;
+    thread_ts?: string;
+  }>;
+  has_more: boolean;
+  response_metadata?: { next_cursor?: string };
+  error?: string;
+}
+
+/** Paginated response from Slack conversations.replies */
+export interface SlackRepliesResponse {
+  ok: boolean;
+  messages: Array<{
+    ts: string;
+    user?: string;
+    text?: string;
+    subtype?: string;
+    thread_ts?: string;
   }>;
   has_more: boolean;
   response_metadata?: { next_cursor?: string };
