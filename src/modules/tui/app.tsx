@@ -157,19 +157,36 @@ function AppContent() {
         return;
       }
       const id = toast.show('Syncing...');
-      svc.triggerIngest().then(
-        (result) => {
-          const count = result.messagesStored;
-          toast.update(
-            id,
-            count > 0 ? `Synced ${count} messages` : 'No new messages',
-            'done',
-          );
-        },
-        () => {
-          toast.update(id, 'Sync failed', 'error');
-        },
-      );
+      svc
+        .triggerIngest((info) => {
+          if (info.phase === 'listing') {
+            const count = info.channelsSoFar ? ` (${info.channelsSoFar} channels)` : '';
+            toast.update(id, `Fetching channel list...${count}`);
+          } else if (info.phase === 'detecting') {
+            const count = info.channelsSoFar ? ` (${info.channelsSoFar} active)` : '';
+            toast.update(id, `Detecting active channels...${count}`);
+          } else if (info.phase === 'channel') {
+            const msg = info.messageCount
+              ? `${info.channel} (${info.messageCount} msgs) [${info.channelIndex}/${info.totalChannels}]`
+              : `${info.channel}... [${info.channelIndex}/${info.totalChannels}]`;
+            toast.update(id, msg);
+          } else if (info.phase === 'skipped') {
+            toast.update(id, `${info.channel} (cached) [${info.channelIndex}/${info.totalChannels}]`);
+          }
+        })
+        .then(
+          (result) => {
+            const count = result.messagesStored;
+            toast.update(
+              id,
+              count > 0 ? `Synced ${count} messages` : 'No new messages',
+              'done',
+            );
+          },
+          () => {
+            toast.update(id, 'Sync failed', 'error');
+          },
+        );
       return;
     }
   });

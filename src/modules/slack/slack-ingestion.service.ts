@@ -284,8 +284,10 @@ export class SlackIngestionService {
     }
   }
 
-  async triggerIngest(): Promise<{ messagesStored: number }> {
-    return this.ingest();
+  async triggerIngest(
+    onProgress?: Parameters<typeof this.ingest>[0],
+  ): Promise<{ messagesStored: number }> {
+    return this.ingest(onProgress);
   }
 
   /** Start periodic ingestion (called by TuiService on launch) */
