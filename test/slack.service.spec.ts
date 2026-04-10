@@ -118,6 +118,83 @@ describe('SlackService', () => {
     expect(name).toBe('alfonso.v');
   });
 
+  it('getMessagesSince fetches thread replies inline after parent', async () => {
+    // First call: conversations.history
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        messages: [
+          { ts: '1700000300.000000', user: 'U333', text: 'no thread' },
+          {
+            ts: '1700000200.000000',
+            user: 'U111',
+            text: 'has thread',
+            reply_count: 2,
+          },
+          { ts: '1700000100.000000', user: 'U444', text: 'oldest' },
+        ],
+        has_more: false,
+      }),
+    });
+    // Second call: conversations.replies for the threaded message
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        messages: [
+          {
+            ts: '1700000200.000000',
+            user: 'U111',
+            text: 'has thread',
+            thread_ts: '1700000200.000000',
+          },
+          {
+            ts: '1700000210.000000',
+            user: 'U222',
+            text: 'reply 1',
+            thread_ts: '1700000200.000000',
+          },
+          {
+            ts: '1700000220.000000',
+            user: 'U333',
+            text: 'reply 2',
+            thread_ts: '1700000200.000000',
+          },
+        ],
+        has_more: false,
+      }),
+    });
+
+    const messages = await service.getMessagesSince('C123', '1700000000.000000');
+
+    // Chronological: oldest, has thread, reply 1, reply 2, no thread
+    expect(messages).toHaveLength(5);
+    expect(messages[0]).toMatchObject({
+      ts: '1700000100.000000',
+      text: 'oldest',
+    });
+    expect(messages[1]).toMatchObject({
+      ts: '1700000200.000000',
+      text: 'has thread',
+    });
+    expect(messages[1].threadTs).toBeUndefined();
+    expect(messages[2]).toMatchObject({
+      ts: '1700000210.000000',
+      text: 'reply 1',
+      threadTs: '1700000200.000000',
+    });
+    expect(messages[3]).toMatchObject({
+      ts: '1700000220.000000',
+      text: 'reply 2',
+      threadTs: '1700000200.000000',
+    });
+    expect(messages[4]).toMatchObject({
+      ts: '1700000300.000000',
+      text: 'no thread',
+    });
+  });
+
   it('getThreadReplies returns replies excluding parent message', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,

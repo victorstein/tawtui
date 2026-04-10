@@ -192,15 +192,23 @@ export class SlackService {
   }
 
   /**
-   * Fetch messages in a channel newer than `oldestTs`.
-   * Filters out system messages (channel_join, bot_message, etc.).
+   * Fetch messages in a channel newer than `oldestTs`, including thread replies.
+   * For each message with reply_count > 0, fetches the thread and inserts
+   * replies inline after the parent. Filters out system messages.
    * Returns messages in chronological order (oldest first).
    */
   async getMessagesSince(
     channelId: string,
     oldestTs: string,
-  ): Promise<Array<{ ts: string; userId: string; text: string }>> {
-    const results: Array<{ ts: string; userId: string; text: string }> = [];
+  ): Promise<
+    Array<{ ts: string; userId: string; text: string; threadTs?: string }>
+  > {
+    const topLevel: Array<{
+      ts: string;
+      userId: string;
+      text: string;
+      replyCount: number;
+    }> = [];
     let cursor = '';
 
     do {
@@ -223,13 +231,46 @@ export class SlackService {
 
       for (const msg of data.messages) {
         if (msg.subtype || !msg.user || !msg.text) continue;
-        results.push({ ts: msg.ts, userId: msg.user, text: msg.text });
+        topLevel.push({
+          ts: msg.ts,
+          userId: msg.user,
+          text: msg.text,
+          replyCount: msg.reply_count ?? 0,
+        });
       }
 
-      cursor = data.has_more ? (data.response_metadata?.next_cursor ?? '') : '';
+      cursor = data.has_more
+        ? (data.response_metadata?.next_cursor ?? '')
+        : '';
     } while (cursor);
 
-    return results.reverse();
+    // Chronological order (history returns newest first)
+    topLevel.reverse();
+
+    // Fetch thread replies and insert inline after parent
+    const results: Array<{
+      ts: string;
+      userId: string;
+      text: string;
+      threadTs?: string;
+    }> = [];
+    for (const msg of topLevel) {
+      results.push({ ts: msg.ts, userId: msg.userId, text: msg.text });
+
+      if (msg.replyCount > 0) {
+        if (this.shouldAbort?.()) throw new Error('Slack API call aborted');
+        try {
+          const replies = await this.getThreadReplies(channelId, msg.ts);
+          for (const reply of replies) {
+            results.push({ ...reply, threadTs: msg.ts });
+          }
+        } catch {
+          // Thread fetch failed — continue with top-level messages
+        }
+      }
+    }
+
+    return results;
   }
 
   /**
