@@ -18,6 +18,7 @@ import {
   getSlackIngestionService,
   getCreateOracleSession,
   getExtractSlackTokens,
+  getInitializeOracle,
 } from '../bridge';
 import type { ExtractionResult } from '../../slack/token-extractor.service';
 import type { DependencyStatus, SlackDepStatus } from '../../dependency.types';
@@ -366,6 +367,19 @@ export function OracleView(props: OracleViewProps) {
     return extractTokens();
   }
 
+  async function handleInitializeOracle(
+    onProgress: (progress: {
+      message: string;
+      status: 'running' | 'done' | 'skip';
+    }) => void,
+  ): Promise<void> {
+    const initOracle = getInitializeOracle();
+    if (!initOracle) {
+      throw new Error('Oracle initializer not available');
+    }
+    await initOracle(onProgress);
+  }
+
   // ------------------------------------------------------------------
   // Keyboard handling
   // ------------------------------------------------------------------
@@ -561,10 +575,12 @@ export function OracleView(props: OracleViewProps) {
       <Show when={depStatus() !== null && !oracleReady()}>
         <OracleSetupScreen
           slackStatus={depStatus()!.slack}
+          oracleInitialized={depStatus()!.oracleInitialized}
           onRecheck={handleRecheck}
           onTokensSubmit={handleTokensSubmit}
           onInstallDeps={handleInstallDeps}
           onAutoDetect={handleAutoDetect}
+          onInitializeOracle={handleInitializeOracle}
         />
       </Show>
 

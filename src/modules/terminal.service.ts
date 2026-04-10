@@ -16,6 +16,7 @@ import type {
   CursorPosition,
 } from './terminal.types';
 import type { ExecResult } from '../shared/types';
+import { ORACLE_WORKSPACE_DIR } from './slack/mempalace.service';
 import type {
   PrDiff,
   PrReviewComment,
@@ -852,7 +853,7 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
 
     const session = await this.createSession({
       name: 'Oracle',
-      cwd: process.env.HOME ?? process.cwd(),
+      cwd: ORACLE_WORKSPACE_DIR,
       command,
     });
 
