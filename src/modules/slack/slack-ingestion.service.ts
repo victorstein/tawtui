@@ -28,6 +28,7 @@ export class SlackIngestionService {
   private _generation = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
   onStatusChange: ((ingesting: boolean) => void) | null = null;
+  onIngestComplete: ((result: { messagesStored: number }) => void) | null = null;
 
   get ingesting(): boolean {
     return this._ingesting;
@@ -326,7 +327,10 @@ export class SlackIngestionService {
 
   private async safeIngest(): Promise<void> {
     try {
-      await this.ingest();
+      const result = await this.ingest();
+      if (result.messagesStored > 0) {
+        this.onIngestComplete?.(result);
+      }
     } catch (err) {
       this.logger.error(`Ingestion failed: ${(err as Error).message}`);
     }

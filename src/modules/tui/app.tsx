@@ -48,17 +48,22 @@ function AppContent() {
   );
   const [ingesting, setIngesting] = createSignal(false);
 
-  // Hook up Slack ingestion status
+  // Hook up Slack ingestion status + background sync toast
   onMount(() => {
     const svc = getSlackIngestionService();
     if (!svc) return;
     setIngesting(svc.ingesting);
     svc.onStatusChange = (status: boolean) => setIngesting(status);
+    svc.onIngestComplete = (result) => {
+      toast.show(`Synced ${result.messagesStored} messages`, 'done');
+    };
   });
 
   onCleanup(() => {
     const svc = getSlackIngestionService();
-    if (svc) svc.onStatusChange = null;
+    if (!svc) return;
+    svc.onStatusChange = null;
+    svc.onIngestComplete = null;
   });
 
   // Check dependencies on startup
@@ -179,7 +184,7 @@ function AppContent() {
             const count = result.messagesStored;
             toast.update(
               id,
-              count > 0 ? `Synced ${count} messages` : 'No new messages',
+              count > 0 ? `Synced ${count} messages` : 'Up to date',
               'done',
             );
           },
