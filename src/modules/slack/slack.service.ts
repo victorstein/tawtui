@@ -4,6 +4,7 @@ import type {
   SlackConversation,
   SlackConversationListResponse,
   SlackHistoryResponse,
+  SlackRepliesResponse,
   SlackMessage,
   SlackSearchResponse,
   SlackUserInfoResponse,
@@ -18,6 +19,7 @@ const SLACK_API = 'https://slack.com/api';
 const RATE_LIMITS: Record<string, number> = {
   'conversations.list': 500, // Tier 2: burst-friendly, retry on 429
   'conversations.history': 400, // Tier 3: ~50/min with headroom
+  'conversations.replies': 400, // Tier 3: same as history
   'users.info': 200, // Tier 4: 100+/min, mostly cached anyway
   'search.messages': 1000, // Tier 2: be conservative
 };
@@ -228,6 +230,47 @@ export class SlackService {
     } while (cursor);
 
     return results.reverse();
+  }
+
+  /**
+   * Fetch replies in a thread, excluding the parent message.
+   * Returns replies in chronological order (oldest first).
+   */
+  async getThreadReplies(
+    channelId: string,
+    threadTs: string,
+  ): Promise<Array<{ ts: string; userId: string; text: string }>> {
+    const results: Array<{ ts: string; userId: string; text: string }> = [];
+    let cursor = '';
+
+    do {
+      const params: Record<string, string> = {
+        channel: channelId,
+        ts: threadTs,
+        limit: '200',
+      };
+      if (cursor) params.cursor = cursor;
+
+      const data = await this.slackGet<SlackRepliesResponse>(
+        'conversations.replies',
+        params,
+      );
+
+      if (!data.ok) {
+        throw new Error(`Slack conversations.replies error: ${data.error}`);
+      }
+
+      for (const msg of data.messages) {
+        // Skip the parent message (same ts as thread_ts) and system messages
+        if (msg.ts === threadTs) continue;
+        if (msg.subtype || !msg.user || !msg.text) continue;
+        results.push({ ts: msg.ts, userId: msg.user, text: msg.text });
+      }
+
+      cursor = data.has_more ? (data.response_metadata?.next_cursor ?? '') : '';
+    } while (cursor);
+
+    return results;
   }
 
   /** Resolve a Slack user ID to a display name, with in-memory caching */
