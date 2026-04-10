@@ -13,6 +13,7 @@ import { OracleSetupScreen, ORACLE_GRAD } from '../components/oracle-setup-scree
 import { TerminalOutput } from '../components/terminal-output';
 import { DialogConfirm } from '../components/dialog-confirm';
 import { useDialog } from '../context/dialog';
+import { useToast } from '../context/toast';
 import {
   getDependencyService,
   getTerminalService,
@@ -48,6 +49,7 @@ export function OracleView(props: OracleViewProps) {
   const dimensions = useTerminalDimensions();
   const renderer = useRenderer();
   const dialog = useDialog();
+  const toast = useToast();
 
   // Dependency status
   const [depStatus, setDepStatus] = createSignal<DependencyStatus | null>(null);
@@ -532,7 +534,11 @@ export function OracleView(props: OracleViewProps) {
     if (!oracleReady()) {
       // [r] recheck dependencies even in setup mode
       if (key.name === 'r') {
-        void checkDependencies();
+        const id = toast.show('Checking dependencies...');
+        checkDependencies().then(
+          () => toast.update(id, 'Dependencies checked', 'done'),
+          () => toast.update(id, 'Check failed', 'error'),
+        );
         return;
       }
       return;
@@ -582,7 +588,22 @@ export function OracleView(props: OracleViewProps) {
 
     // [r] Recheck dependencies
     if (key.name === 'r' && !key.shift) {
-      void checkDependencies();
+      const id = toast.show('Checking dependencies...');
+      checkDependencies().then(
+        () => {
+          const status = depStatus();
+          if (status?.oracleReady) {
+            toast.update(id, 'All good', 'done');
+          } else if (status?.oracleInitialized === false) {
+            toast.update(id, 'Oracle not initialized', 'error');
+          } else {
+            toast.update(id, 'Dependencies checked', 'done');
+          }
+        },
+        () => {
+          toast.update(id, 'Check failed', 'error');
+        },
+      );
       detectExistingSession();
       return;
     }
