@@ -1,9 +1,12 @@
 import { Injectable } from '@nestjs/common';
+import { join } from 'path';
+import { existsSync } from 'fs';
 import { GithubService } from './github.service';
 import { TaskwarriorService } from './taskwarrior.service';
 import { CalendarService } from './calendar.service';
 import { ConfigService } from './config.service';
 import type { DependencyStatus, SlackDepStatus } from './dependency.types';
+import { PALACE_PATH } from './slack/mempalace.service';
 
 @Injectable()
 export class DependencyService {
@@ -37,6 +40,8 @@ export class DependencyService {
 
     const gogCredentialsPath = this.calendarService.getCredentialsPath();
 
+    const oracleInitialized = existsSync(join(PALACE_PATH, 'palace.db'));
+
     return {
       gh: {
         installed: ghInstalled,
@@ -60,7 +65,11 @@ export class DependencyService {
       allGood: ghInstalled && ghAuthenticated && taskInstalled,
       calendarReady: gogInstalled && gogAuthenticated && gogHasCredentials,
       slack: slackStatus,
-      oracleReady: slackStatus.hasTokens && slackStatus.mempalaceInstalled,
+      oracleInitialized,
+      oracleReady:
+        slackStatus.hasTokens &&
+        slackStatus.mempalaceInstalled &&
+        oracleInitialized,
     };
   }
 
@@ -99,10 +108,7 @@ export class DependencyService {
     const hasTokens =
       !!oracleConfig.slack?.xoxcToken && !!oracleConfig.slack?.xoxdCookie;
 
-    const mempalaceInstalled = this.isPythonPackageAvailable(
-      'mempalace',
-      'status',
-    );
+    const mempalaceInstalled = this.isCommandAvailable('mempalace');
     const pipxInstalled = this.isCommandAvailable('pipx');
     const slackAppDetected = this.detectSlackApp();
 
@@ -134,17 +140,6 @@ export class DependencyService {
         return false;
       }
     });
-  }
-
-  private isPythonPackageAvailable(
-    pkg: string,
-    subcommand = '--version',
-  ): boolean {
-    const result = Bun.spawnSync(['python3', '-m', pkg, subcommand], {
-      stderr: 'pipe',
-      stdout: 'pipe',
-    });
-    return result.exitCode === 0;
   }
 
   private getGhInstallInstructions(platform: NodeJS.Platform): string {
@@ -182,7 +177,7 @@ export class DependencyService {
 
   private isCommandAvailable(cmd: string): boolean {
     try {
-      const result = Bun.spawnSync([cmd, '--version'], {
+      const result = Bun.spawnSync(['which', cmd], {
         stdout: 'pipe',
         stderr: 'pipe',
       });

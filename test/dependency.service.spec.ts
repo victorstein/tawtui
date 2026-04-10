@@ -54,7 +54,10 @@ describe('DependencyService - Oracle checks', () => {
     expect(status.oracleReady).toBe(false);
   });
 
-  it('oracleReady depends on hasTokens and mempalaceInstalled', async () => {
+  it('oracleReady depends on hasTokens, mempalaceInstalled, and oracleInitialized', async () => {
+    const fs = jest.requireActual<typeof import('fs')>('fs');
+    const existsSyncSpy = jest.spyOn(fs, 'existsSync').mockReturnValue(true);
+
     (mockConfigService.getOracleConfig as jest.Mock).mockReturnValue({
       pollIntervalSeconds: 300,
       slack: {
@@ -64,10 +67,19 @@ describe('DependencyService - Oracle checks', () => {
         teamName: 'Test',
       },
     });
+    // mempalace CLI available
+    mockBun.spawnSync.mockImplementation((args: string[]) => {
+      if (args[0] === 'which' && args[1] === 'mempalace')
+        return { exitCode: 0 };
+      if (args[0] === 'which') return { exitCode: 1 };
+      if (args[0] === 'test') return { exitCode: 1 };
+      return { exitCode: 1 };
+    });
+
     const status = await service.checkAll();
-    expect(status.oracleReady).toBe(
-      status.slack.hasTokens && status.slack.mempalaceInstalled,
-    );
+    expect(status.oracleReady).toBe(true);
+
+    existsSyncSpy.mockRestore();
   });
 
   it('slack status includes install instructions for mempalace', async () => {
@@ -104,6 +116,39 @@ describe('DependencyService - Oracle checks', () => {
     expect(status.calendarReady).toBe(true);
     expect(status.slack).toBeDefined();
     expect(status.oracleReady).toBeDefined();
+  });
+
+  it('oracleReady requires oracleInitialized', async () => {
+    // Set up: tokens present, mempalace installed, but palace not initialized
+    (mockConfigService.getOracleConfig as jest.Mock).mockReturnValue({
+      pollIntervalSeconds: 300,
+      slack: {
+        xoxcToken: 'xoxc-xxx',
+        xoxdCookie: 'xoxd-xxx',
+        teamId: 'T123',
+        teamName: 'Test',
+      },
+    });
+    // mempalace CLI available
+    mockBun.spawnSync.mockImplementation((args: string[]) => {
+      if (args[0] === 'which' && args[1] === 'mempalace')
+        return { exitCode: 0 };
+      if (args[0] === 'which') return { exitCode: 1 };
+      if (args[0] === 'test') return { exitCode: 1 };
+      return { exitCode: 1 };
+    });
+
+    const status = await service.checkAll();
+
+    // oracleReady should be false because palace is not initialized
+    // (existsSync returns false by default in test environment)
+    expect(status.oracleReady).toBe(false);
+  });
+
+  it('status includes oracleInitialized field', async () => {
+    const status = await service.checkAll();
+    expect(status).toHaveProperty('oracleInitialized');
+    expect(typeof status.oracleInitialized).toBe('boolean');
   });
 
   describe('installPipxPackage', () => {

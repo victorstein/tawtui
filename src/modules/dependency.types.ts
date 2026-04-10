@@ -38,5 +38,6 @@ export interface DependencyStatus {
   allGood: boolean;
   calendarReady: boolean;
   slack: SlackDepStatus;
-  oracleReady: boolean; // hasTokens && mempalaceInstalled
+  oracleInitialized: boolean;
+  oracleReady: boolean; // hasTokens && mempalaceInstalled && oracleInitialized
 }
