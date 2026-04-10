@@ -13,16 +13,22 @@ import type {
 const SLACK_API = 'https://slack.com/api';
 
 /**
- * Minimum gap in ms between calls per Slack API method.
- * Conservative but not excessive — 429 retry handles actual limits.
+ * Minimum gap in ms between consecutive calls to the same Slack API method.
+ * Aligned with Slack's documented tier limits:
+ *   Tier 2: ~20 req/min → 3000ms
+ *   Tier 3: ~50 req/min → 1200ms
+ *   Tier 4: ~100 req/min → 600ms
  */
 const RATE_LIMITS: Record<string, number> = {
-  'conversations.list': 500, // Tier 2: burst-friendly, retry on 429
-  'conversations.history': 400, // Tier 3: ~50/min with headroom
-  'conversations.replies': 400, // Tier 3: same as history
-  'users.info': 200, // Tier 4: 100+/min, mostly cached anyway
-  'search.messages': 1000, // Tier 2: be conservative
+  'conversations.list': 3000, // Tier 2
+  'conversations.history': 1200, // Tier 3
+  'conversations.replies': 1200, // Tier 3
+  'users.info': 600, // Tier 4
+  'search.messages': 3000, // Tier 2
 };
+
+/** Minimum gap in ms between ANY Slack API call (prevents burst across methods) */
+const GLOBAL_MIN_GAP_MS = 200;
 
 const MAX_RETRIES = 3;
 
@@ -33,6 +39,9 @@ export class SlackService {
 
   /** Tracks the last call timestamp (ms) per Slack API method for throttling */
   private readonly lastCallTime = new Map<string, number>();
+
+  /** Tracks the last call timestamp (ms) across ALL methods for global throttling */
+  private lastGlobalCallTime = 0;
 
   /** Optional callback fired when waiting (throttle or 429 retry) */
   onWait:
@@ -81,18 +90,25 @@ export class SlackService {
     }
   }
 
-  /** Wait until the per-method rate limit gap has elapsed */
+  /** Wait until both per-method and global rate limit gaps have elapsed */
   private async throttle(method: string): Promise<void> {
-    const minGap = RATE_LIMITS[method];
-    if (!minGap) return;
+    // Global throttle: minimum gap between any API call
+    const globalElapsed = Date.now() - this.lastGlobalCallTime;
+    if (globalElapsed < GLOBAL_MIN_GAP_MS) {
+      await this.abortableSleep(GLOBAL_MIN_GAP_MS - globalElapsed);
+    }
 
-    const lastTime = this.lastCallTime.get(method);
-    if (lastTime !== undefined) {
-      const elapsed = Date.now() - lastTime;
-      if (elapsed < minGap) {
-        const waitMs = minGap - elapsed;
-        this.onWait?.({ method, waitMs, reason: 'throttle' });
-        await this.abortableSleep(waitMs);
+    // Per-method throttle: respect Slack tier limits
+    const minGap = RATE_LIMITS[method];
+    if (minGap) {
+      const lastTime = this.lastCallTime.get(method);
+      if (lastTime !== undefined) {
+        const elapsed = Date.now() - lastTime;
+        if (elapsed < minGap) {
+          const waitMs = minGap - elapsed;
+          this.onWait?.({ method, waitMs, reason: 'throttle' });
+          await this.abortableSleep(waitMs);
+        }
       }
     }
   }
@@ -109,6 +125,7 @@ export class SlackService {
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       await this.throttle(method);
       this.lastCallTime.set(method, Date.now());
+      this.lastGlobalCallTime = Date.now();
 
       const res = await fetch(url.toString(), {
         headers: this.getAuthHeaders(),
