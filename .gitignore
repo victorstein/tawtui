@@ -4,6 +4,7 @@ dist/
 coverage/
 .todos/
 .sidecar/
+.superpowers/
 
 # Sidecar worktree state files
 .sidecar-agent
