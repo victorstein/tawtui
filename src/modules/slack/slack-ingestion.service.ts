@@ -42,7 +42,7 @@ export class SlackIngestionService {
   /** Run one full ingestion cycle: fetch → write files → mine → update state */
   async ingest(
     onProgress?: (info: {
-      phase: 'listing' | 'channel' | 'waiting' | 'skipped' | 'detecting';
+      phase: 'listing' | 'channel' | 'waiting' | 'skipped' | 'detecting' | 'threads';
       channel?: string;
       messageCount?: number;
       channelIndex?: number;
@@ -284,6 +284,11 @@ export class SlackIngestionService {
           (!state.trackedThreads[conversation.id] ||
             state.trackedThreads[conversation.id].length === 0)
         ) {
+          onProgress?.({
+            phase: 'threads',
+            channel: conversation.name,
+            messageCount: 0,
+          });
           const backfillCursor = String(
             parseFloat(channelCursor) - 7 * 24 * 60 * 60,
           );
@@ -300,6 +305,11 @@ export class SlackIngestionService {
               state.trackedThreads[conversation.id] = threadParents.map(
                 (m) => ({ threadTs: m.ts, lastReplyTs: m.ts }),
               );
+              onProgress?.({
+                phase: 'threads',
+                channel: conversation.name,
+                messageCount: threadParents.length,
+              });
               this.saveState(state);
             }
           } catch {
@@ -310,12 +320,19 @@ export class SlackIngestionService {
         const threads = state.trackedThreads[conversation.id];
         if (!threads || threads.length === 0) continue;
 
-          // Prune threads older than 7 days
-          state.trackedThreads[conversation.id] = threads.filter(
-            (t) => t.threadTs > sevenDaysAgo,
-          );
+        // Prune threads older than 7 days
+        state.trackedThreads[conversation.id] = threads.filter(
+          (t) => t.threadTs > sevenDaysAgo,
+        );
 
-          for (const tracked of state.trackedThreads[conversation.id]) {
+        const activeThreads = state.trackedThreads[conversation.id];
+        onProgress?.({
+          phase: 'threads',
+          channel: conversation.name,
+          messageCount: activeThreads.length,
+        });
+
+        for (const tracked of activeThreads) {
             if (this._generation !== gen) return { messagesStored };
 
             let replies: Array<{ ts: string; userId: string; text: string }>;

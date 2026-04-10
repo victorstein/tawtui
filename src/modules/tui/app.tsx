@@ -177,6 +177,11 @@ function AppContent() {
             toast.update(id, msg);
           } else if (info.phase === 'skipped') {
             toast.update(id, `${info.channel} (cached) [${info.channelIndex}/${info.totalChannels}]`);
+          } else if (info.phase === 'threads') {
+            const count = info.messageCount
+              ? `${info.channel} (${info.messageCount} threads)`
+              : `${info.channel} scanning threads...`;
+            toast.update(id, count);
           }
         })
         .then(
