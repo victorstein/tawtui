@@ -177,6 +177,10 @@ function AppContent() {
             toast.update(id, msg);
           } else if (info.phase === 'skipped') {
             toast.update(id, `${info.channel} (cached) [${info.channelIndex}/${info.totalChannels}]`);
+          } else if (info.phase === 'waiting' && info.waitReason === 'rate-limited') {
+            const secs = Math.ceil((info.waitMs ?? 0) / 1000);
+            const ctx = info.channel ?? 'API';
+            toast.update(id, `Rate limited (${ctx}), retrying in ${secs}s...`, 'error');
           } else if (info.phase === 'threads') {
             const count = info.messageCount
               ? `${info.channel} (${info.messageCount} threads)`
