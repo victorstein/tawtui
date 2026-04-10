@@ -190,7 +190,7 @@ export class SlackIngestionService {
           totalChannels,
         });
 
-        let rawMessages: Array<{ ts: string; userId: string; text: string; threadTs?: string }>;
+        let rawMessages: Array<{ ts: string; userId: string; text: string; threadTs?: string; replyCount?: number }>;
         try {
           rawMessages = await this.slackService.getMessagesSince(
             conversation.id,
@@ -242,9 +242,93 @@ export class SlackIngestionService {
         const lastTopLevel = rawMessages.filter((m) => !m.threadTs).pop();
         const lastTs = lastTopLevel?.ts ?? rawMessages[rawMessages.length - 1].ts;
         state.channelCursors[conversation.id] = lastTs;
+
+        // Track thread parents for retroactive reply checking
+        if (!state.trackedThreads) state.trackedThreads = {};
+        if (!state.trackedThreads[conversation.id]) state.trackedThreads[conversation.id] = [];
+        const channelThreads = state.trackedThreads[conversation.id];
+        for (const msg of rawMessages) {
+          if (msg.replyCount && msg.replyCount > 0) {
+            const replies = rawMessages.filter((m) => m.threadTs === msg.ts);
+            const lastReply = replies.length > 0 ? replies[replies.length - 1] : undefined;
+            const existing = channelThreads.find((t) => t.threadTs === msg.ts);
+            if (existing) {
+              if (lastReply && lastReply.ts > existing.lastReplyTs) {
+                existing.lastReplyTs = lastReply.ts;
+              }
+            } else {
+              channelThreads.push({
+                threadTs: msg.ts,
+                lastReplyTs: lastReply?.ts ?? msg.ts,
+              });
+            }
+          }
+        }
+
         state.userNames = this.slackService.exportUserCache();
         state.lastChecked = new Date().toISOString();
         this.saveState(state);
+      }
+
+      // Phase 2: Re-check tracked threads for new replies
+      if (state.trackedThreads) {
+        const sevenDaysAgo = String((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000);
+
+        for (const conversation of filteredConversations) {
+          if (this._generation !== gen) return { messagesStored };
+          const threads = state.trackedThreads[conversation.id];
+          if (!threads || threads.length === 0) continue;
+
+          // Prune threads older than 7 days
+          state.trackedThreads[conversation.id] = threads.filter(
+            (t) => t.threadTs > sevenDaysAgo,
+          );
+
+          for (const tracked of state.trackedThreads[conversation.id]) {
+            if (this._generation !== gen) return { messagesStored };
+
+            let replies: Array<{ ts: string; userId: string; text: string }>;
+            try {
+              replies = await this.slackService.getThreadReplies(
+                conversation.id,
+                tracked.threadTs,
+              );
+            } catch {
+              continue;
+            }
+
+            // Filter to only new replies
+            const newReplies = replies.filter((r) => r.ts > tracked.lastReplyTs);
+            if (newReplies.length === 0) continue;
+
+            // Resolve usernames and write to staging
+            const slackExport: Array<Record<string, string>> = [];
+            for (const reply of newReplies) {
+              const userName = await this.slackService.resolveUserName(reply.userId);
+              slackExport.push({
+                type: 'message',
+                user: userName,
+                text: `${userName}: ${reply.text}`,
+                ts: reply.ts,
+              });
+            }
+
+            const channelSlug = this.slugify(conversation.name, conversation.isDm);
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const fileName = `${timestamp}_thread-${tracked.threadTs}_${channelSlug}.json`;
+            writeFileSync(
+              join(this.stagingDir, fileName),
+              JSON.stringify(slackExport, null, 2),
+              'utf-8',
+            );
+
+            filesWritten++;
+            messagesStored += newReplies.length;
+            tracked.lastReplyTs = newReplies[newReplies.length - 1].ts;
+          }
+
+          this.saveState(state);
+        }
       }
 
       // Mine all new files into mempalace (idempotent — skips already-mined)
