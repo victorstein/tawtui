@@ -6,7 +6,6 @@ import { SlackService } from './slack.service';
 import { MempalaceService } from './mempalace.service';
 import type { OracleState, SlackConversation } from './slack.types';
 
-const CHANNEL_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 @Injectable()
 export class SlackIngestionService {
@@ -91,26 +90,10 @@ export class SlackIngestionService {
         this.slackService.hydrateUserCache(state.userNames);
       }
 
-      const cacheAge = state.channelsCachedAt
-        ? Date.now() - new Date(state.channelsCachedAt).getTime()
-        : Infinity;
-      const cacheValid =
-        !!state.conversations?.length && cacheAge < CHANNEL_CACHE_TTL_MS;
-
       let conversations: SlackConversation[];
-      if (options?.skipExisting && state.conversations?.length) {
-        // Retry/resume: always use cache regardless of age
+      if (state.conversations?.length) {
+        // Use cached channel list (only missing after reset or first run)
         conversations = state.conversations;
-        onProgress?.({
-          phase: 'listing',
-          channelsSoFar: conversations.length,
-          page: 0,
-        });
-      } else if (cacheValid) {
-        // Sync/poll: use cache if fresh enough — refresh timestamp to keep TTL rolling
-        conversations = state.conversations!;
-        state.channelsCachedAt = new Date().toISOString();
-        this.saveState(state);
       } else {
         // Cache missing or stale: fetch fresh
         onProgress?.({ phase: 'listing' });
@@ -132,17 +115,10 @@ export class SlackIngestionService {
       }
       if (this._generation !== gen) return { messagesStored: 0 };
 
-      // Detect active channels (use cache when valid)
+      // Detect active channels (use cache when available)
       let activeChannelIds: Set<string>;
-      if (options?.skipExisting && state.activeChannelIds?.length) {
-        // Retry/resume: always use cache
-        activeChannelIds = new Set(state.activeChannelIds);
-        onProgress?.({
-          phase: 'detecting',
-          channelsSoFar: activeChannelIds.size,
-        });
-      } else if (cacheValid && state.activeChannelIds?.length) {
-        // Sync/poll: use cache if fresh enough
+      if (state.activeChannelIds?.length) {
+        // Use cached active channel set
         activeChannelIds = new Set(state.activeChannelIds);
       } else {
         // Cache missing or stale: detect fresh
