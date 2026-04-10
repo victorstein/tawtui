@@ -1,16 +1,36 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { join } from 'path';
+import { homedir } from 'os';
+import { existsSync } from 'fs';
+
+/** Base directory for all tawtui data files. */
+export const TAWTUI_DATA_DIR = join(homedir(), '.local', 'share', 'tawtui');
+
+/** Path to the mempalace palace database. */
+export const PALACE_PATH = join(TAWTUI_DATA_DIR, 'mempalace');
+
+/** Staging directory for raw Slack message JSON files. */
+export const STAGING_DIR = join(TAWTUI_DATA_DIR, 'slack-inbox');
+
+/** Working directory for Oracle Claude Code sessions (project-scoped plugin). */
+export const ORACLE_WORKSPACE_DIR = join(TAWTUI_DATA_DIR, 'oracle-workspace');
 
 @Injectable()
 export class MempalaceService {
   private readonly logger = new Logger(MempalaceService.name);
 
-  /** Check if mempalace is installed by running `mempalace status` */
+  /** Check if mempalace CLI is installed by running `mempalace status`. */
   isInstalled(): boolean {
-    const result = Bun.spawnSync(['python3', '-m', 'mempalace', 'status'], {
+    const result = Bun.spawnSync(['mempalace', 'status'], {
       stdout: 'pipe',
       stderr: 'pipe',
     });
     return result.exitCode === 0;
+  }
+
+  /** Check if the palace has been initialized (palace.db exists). */
+  isInitialized(): boolean {
+    return existsSync(join(PALACE_PATH, 'palace.db'));
   }
 
   /**
@@ -24,17 +44,7 @@ export class MempalaceService {
    */
   async mine(dir: string, wing: string): Promise<void> {
     const proc = Bun.spawn(
-      [
-        'python3',
-        '-m',
-        'mempalace',
-        'mine',
-        dir,
-        '--mode',
-        'convos',
-        '--wing',
-        wing,
-      ],
+      ['mempalace', 'mine', dir, '--mode', 'convos', '--wing', wing],
       { stdout: 'pipe', stderr: 'pipe' },
     );
 

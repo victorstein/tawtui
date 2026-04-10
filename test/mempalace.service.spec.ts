@@ -34,10 +34,10 @@ describe('MempalaceService', () => {
 
   it('isInstalled calls mempalace status with correct args', () => {
     service.isInstalled();
-    expect(mockSpawnSync).toHaveBeenCalledWith(
-      ['python3', '-m', 'mempalace', 'status'],
-      { stdout: 'pipe', stderr: 'pipe' },
-    );
+    expect(mockSpawnSync).toHaveBeenCalledWith(['mempalace', 'status'], {
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
   });
 
   it('mine resolves when exit code is 0', async () => {
@@ -63,8 +63,6 @@ describe('MempalaceService', () => {
 
     expect(mockSpawn).toHaveBeenCalledWith(
       [
-        'python3',
-        '-m',
         'mempalace',
         'mine',
         '/some/dir',
@@ -92,5 +90,39 @@ describe('MempalaceService', () => {
 
   it('mine is a function', () => {
     expect(typeof service.mine).toBe('function');
+  });
+
+  describe('isInitialized', () => {
+    let existsSyncMock: jest.SpyInstance;
+
+    beforeEach(() => {
+      existsSyncMock = jest.spyOn(
+        jest.requireActual<typeof import('fs')>('fs'),
+        'existsSync',
+      );
+    });
+
+    afterEach(() => {
+      existsSyncMock.mockRestore();
+    });
+
+    it('returns true when palace.db exists at palace path', () => {
+      existsSyncMock.mockReturnValue(true);
+      expect(service.isInitialized()).toBe(true);
+    });
+
+    it('returns false when palace.db does not exist', () => {
+      existsSyncMock.mockReturnValue(false);
+      expect(service.isInitialized()).toBe(false);
+    });
+
+    it('checks the correct path under ~/.local/share/tawtui/mempalace/', () => {
+      existsSyncMock.mockReturnValue(false);
+      service.isInitialized();
+      const [[calledPath]] = existsSyncMock.mock.calls as [[string]];
+      expect(calledPath).toMatch(
+        /\.local\/share\/tawtui\/mempalace\/palace\.db$/,
+      );
+    });
   });
 });
