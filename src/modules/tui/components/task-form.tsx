@@ -845,11 +845,7 @@ export function TaskForm(props: TaskFormProps) {
                 textColor={FG_NORMAL}
                 onInput={(val: string) => {
                   setDue(val);
-                  setDueError('');
-                  setDuePreview(null);
-                }}
-                onBlur={() => {
-                  if (due().trim()) validateDue(due());
+                  validateDue(val);
                 }}
               />
               <box height={1} paddingX={1} flexDirection="row">
