@@ -149,7 +149,7 @@ function AppContent() {
     }
 
     // Manual Slack sync
-    if (key.name === 'S' && !key.ctrl && !key.meta) {
+    if ((key.name === 'S' || (key.shift && key.name === 's')) && !key.ctrl && !key.meta) {
       const svc = getSlackIngestionService();
       if (!svc) return;
       if (svc.ingesting) {
