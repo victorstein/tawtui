@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { join } from 'path';
 import { homedir } from 'os';
-import { existsSync } from 'fs';
+import { existsSync, readdirSync } from 'fs';
 
 /** Base directory for all tawtui data files. */
 export const TAWTUI_DATA_DIR = join(homedir(), '.local', 'share', 'tawtui');
@@ -50,6 +50,23 @@ export class MempalaceService {
     }
 
     this.logger.log(`Initialized palace at ${palacePath}`);
+  }
+
+  /**
+   * Mine existing data from the staging directory if any .json files exist.
+   * Returns whether mining actually ran.
+   */
+  async mineIfNeeded(
+    stagingDir: string,
+    wing: string,
+  ): Promise<{ mined: boolean }> {
+    if (!existsSync(stagingDir)) return { mined: false };
+
+    const files = readdirSync(stagingDir).filter((f) => f.endsWith('.json'));
+    if (files.length === 0) return { mined: false };
+
+    await this.mine(stagingDir, wing);
+    return { mined: true };
   }
 
   /**

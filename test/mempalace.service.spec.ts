@@ -171,4 +171,53 @@ describe('MempalaceService', () => {
       await expect(service.init('/tmp/test-palace')).resolves.toBeUndefined();
     });
   });
+
+  describe('mineIfNeeded', () => {
+    let existsSyncMock: jest.SpyInstance;
+    let readdirSyncMock: jest.SpyInstance;
+
+    beforeEach(() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const fs = require('fs');
+      existsSyncMock = jest.spyOn(fs, 'existsSync');
+      readdirSyncMock = jest.spyOn(fs, 'readdirSync');
+    });
+
+    afterEach(() => {
+      existsSyncMock.mockRestore();
+      readdirSyncMock.mockRestore();
+    });
+
+    it('returns { mined: false } when staging dir does not exist', async () => {
+      existsSyncMock.mockReturnValue(false);
+      const result = await service.mineIfNeeded('/tmp/staging', 'slack');
+      expect(result).toEqual({ mined: false });
+      expect(mockSpawn).not.toHaveBeenCalled();
+    });
+
+    it('returns { mined: false } when staging dir has no .json files', async () => {
+      existsSyncMock.mockReturnValue(true);
+      readdirSyncMock.mockReturnValue(['readme.txt', 'data.csv']);
+      const result = await service.mineIfNeeded('/tmp/staging', 'slack');
+      expect(result).toEqual({ mined: false });
+      expect(mockSpawn).not.toHaveBeenCalled();
+    });
+
+    it('mines and returns { mined: true } when .json files exist', async () => {
+      existsSyncMock.mockReturnValue(true);
+      readdirSyncMock.mockReturnValue(['channel1.json', 'channel2.json']);
+      mockSpawn.mockReturnValueOnce({
+        exited: Promise.resolve(0),
+        stderr: new ReadableStream(),
+      });
+
+      const result = await service.mineIfNeeded('/tmp/staging', 'slack');
+
+      expect(result).toEqual({ mined: true });
+      expect(mockSpawn).toHaveBeenCalledWith(
+        ['mempalace', 'mine', '/tmp/staging', '--mode', 'convos', '--wing', 'slack'],
+        { stdout: 'pipe', stderr: 'pipe' },
+      );
+    });
+  });
 });
