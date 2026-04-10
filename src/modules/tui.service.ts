@@ -199,8 +199,8 @@ export class TuiService {
           status: mineResult.mined ? 'done' : 'skip',
         });
 
-        // Step 2b: Fetch conversations if no existing data
-        if (!mineResult.mined) {
+        // Step 2b: Fetch conversations (skipExisting skips already-processed channels)
+        {
           await this.slackIngestionService.ingest(
             (info) => {
               if (info.phase === 'waiting') {

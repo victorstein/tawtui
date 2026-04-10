@@ -118,6 +118,7 @@ export function OracleSetupScreen(props: OracleSetupScreenProps) {
         if (message === ORACLE_INIT_CANCELLED) {
           setCancelled(true);
           setInitError(null);
+          setInitMessages((prev) => prev.filter((p) => p.status !== 'running'));
         } else {
           setCancelled(false);
           setInitError(message);
