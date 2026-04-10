@@ -107,8 +107,10 @@ export class SlackIngestionService {
           page: 0,
         });
       } else if (cacheValid) {
-        // Sync/poll: use cache if fresh enough
+        // Sync/poll: use cache if fresh enough — refresh timestamp to keep TTL rolling
         conversations = state.conversations!;
+        state.channelsCachedAt = new Date().toISOString();
+        this.saveState(state);
       } else {
         // Cache missing or stale: fetch fresh
         onProgress?.({ phase: 'listing' });
