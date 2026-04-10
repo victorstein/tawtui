@@ -95,17 +95,22 @@ export class SlackIngestionService {
         });
       } else {
         onProgress?.({ phase: 'listing' });
-        conversations = await this.slackService.getConversations((info) => {
-          waitCtx = { channelsSoFar: info.channelsSoFar };
-          onProgress?.({
-            phase: 'listing',
-            channelsSoFar: info.channelsSoFar,
-            page: info.page,
-          });
-        });
+        conversations = await this.slackService.getConversations(
+          (info) => {
+            waitCtx = { channelsSoFar: info.channelsSoFar };
+            onProgress?.({
+              phase: 'listing',
+              channelsSoFar: info.channelsSoFar,
+              page: info.page,
+            });
+          },
+          () => this._generation !== gen,
+        );
+        if (this._generation !== gen) return { messagesStored: 0 };
         state.conversations = conversations;
         this.saveState(state);
       }
+      if (this._generation !== gen) return { messagesStored: 0 };
 
       // Detect active channels (skip if cached during retry)
       let activeChannelIds: Set<string>;
@@ -128,10 +133,13 @@ export class SlackIngestionService {
               page: info.page,
             });
           },
+          () => this._generation !== gen,
         );
+        if (this._generation !== gen) return { messagesStored: 0 };
         state.activeChannelIds = [...activeChannelIds];
         this.saveState(state);
       }
+      if (this._generation !== gen) return { messagesStored: 0 };
 
       // Filter: all DMs/MPIMs + channels the user is active in
       const filteredConversations = conversations.filter(
@@ -276,8 +284,19 @@ export class SlackIngestionService {
     this._ingesting = false;
     this.onStatusChange?.(false);
 
+    // Preserve conversation/active-channel caches across reset
+    const prev = this.loadState();
     rmSync(this.statePath, { force: true });
     rmSync(this.stagingDir, { recursive: true, force: true });
+
+    if (prev.conversations?.length || prev.activeChannelIds?.length) {
+      this.saveState({
+        lastChecked: null,
+        channelCursors: {},
+        conversations: prev.conversations,
+        activeChannelIds: prev.activeChannelIds,
+      });
+    }
 
     this.logger.log('Ingestion state reset');
   }

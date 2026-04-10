@@ -143,7 +143,7 @@ describe('SlackIngestionService', () => {
     expect(files[0]).toContain('dm-victor');
   });
 
-  it('resetState removes oracle-state.json and staging dir', () => {
+  it('resetState removes staging dir and clears cursors but preserves channel caches', () => {
     const stagingDir: string = (service as any).stagingDir;
     const statePath: string = (service as any).statePath;
 
@@ -151,15 +151,51 @@ describe('SlackIngestionService', () => {
     mkdirSync(stagingDir, { recursive: true });
     writeFileSync(join(stagingDir, 'test-file.json'), '[]', 'utf-8');
 
-    // Pre-create state file
+    // Pre-create state file with conversations and activeChannelIds
+    const conversations = [
+      { id: 'C1', name: 'general', isDm: false, isPrivate: false },
+    ];
+    const activeChannelIds = ['C1'];
     writeFileSync(
       statePath,
-      JSON.stringify({ lastChecked: '2026-01-01', channelCursors: {} }),
+      JSON.stringify({
+        lastChecked: '2026-01-01',
+        channelCursors: { C1: '1700000300.000000' },
+        conversations,
+        activeChannelIds,
+      }),
       'utf-8',
     );
 
     expect(existsSync(stagingDir)).toBe(true);
     expect(existsSync(statePath)).toBe(true);
+
+    service.resetState();
+
+    // Staging dir should be gone
+    expect(existsSync(stagingDir)).toBe(false);
+
+    // State file should still exist with preserved caches but cleared cursors
+    expect(existsSync(statePath)).toBe(true);
+    const state = JSON.parse(readFileSync(statePath, 'utf-8'));
+    expect(state.lastChecked).toBeNull();
+    expect(state.channelCursors).toEqual({});
+    expect(state.conversations).toEqual(conversations);
+    expect(state.activeChannelIds).toEqual(activeChannelIds);
+  });
+
+  it('resetState removes state file entirely when no channel caches exist', () => {
+    const stagingDir: string = (service as any).stagingDir;
+    const statePath: string = (service as any).statePath;
+
+    mkdirSync(stagingDir, { recursive: true });
+    writeFileSync(join(stagingDir, 'test-file.json'), '[]', 'utf-8');
+
+    writeFileSync(
+      statePath,
+      JSON.stringify({ lastChecked: '2026-01-01', channelCursors: {} }),
+      'utf-8',
+    );
 
     service.resetState();
 

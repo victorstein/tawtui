@@ -134,12 +134,14 @@ export class SlackService {
       channelsSoFar: number;
       hasMore: boolean;
     }) => void,
+    shouldAbort?: () => boolean,
   ): Promise<SlackConversation[]> {
     const results: SlackConversation[] = [];
     let cursor = '';
     let page = 0;
 
     do {
+      if (shouldAbort?.()) return results;
       page++;
       const params: Record<string, string> = {
         types: 'public_channel,private_channel,im,mpim',
@@ -255,12 +257,14 @@ export class SlackService {
   async getActiveChannelIds(
     afterDate: string,
     onPage?: (info: { page: number; matchesSoFar: number }) => void,
+    shouldAbort?: () => boolean,
   ): Promise<Set<string>> {
     const channelIds = new Set<string>();
     let page = 1;
     let totalPages = 1;
 
     do {
+      if (shouldAbort?.()) return channelIds;
       const data = await this.slackGet<SlackSearchResponse>(
         'search.messages',
         {
