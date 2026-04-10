@@ -186,6 +186,7 @@ function AppContent() {
               refreshTrigger={refreshTrigger}
               onInputCapturedChange={(captured) => setInputCaptured(captured)}
               onOracleReadyChange={(ready) => setOracleReady(ready)}
+              initialReady={oracleReady()}
             />
           </Match>
         </Switch>

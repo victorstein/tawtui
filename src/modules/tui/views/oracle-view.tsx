@@ -41,6 +41,7 @@ interface OracleViewProps {
   refreshTrigger?: () => number;
   onInputCapturedChange?: (captured: boolean) => void;
   onOracleReadyChange?: (ready: boolean) => void;
+  initialReady?: boolean;
 }
 
 export function OracleView(props: OracleViewProps) {
@@ -50,7 +51,7 @@ export function OracleView(props: OracleViewProps) {
 
   // Dependency status
   const [depStatus, setDepStatus] = createSignal<DependencyStatus | null>(null);
-  const [oracleReady, setOracleReady] = createSignal(false);
+  const [oracleReady, setOracleReady] = createSignal(props.initialReady ?? false);
 
   // Guard: when true, checkDependencies() won't set oracleReady to true.
   // Prevents premature transition while initializeOracle is in-flight.
