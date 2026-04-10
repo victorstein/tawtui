@@ -320,6 +320,45 @@ export class SlackService {
     return results;
   }
 
+  /**
+   * Fetch a complete thread: parent message + all replies.
+   * Returns messages in chronological order (oldest first).
+   */
+  async getFullThread(
+    channelId: string,
+    threadTs: string,
+  ): Promise<Array<{ ts: string; userId: string; text: string }>> {
+    const results: Array<{ ts: string; userId: string; text: string }> = [];
+    let cursor = '';
+
+    do {
+      const params: Record<string, string> = {
+        channel: channelId,
+        ts: threadTs,
+        limit: '200',
+      };
+      if (cursor) params.cursor = cursor;
+
+      const data = await this.slackGet<SlackRepliesResponse>(
+        'conversations.replies',
+        params,
+      );
+
+      if (!data.ok) {
+        throw new Error(`Slack conversations.replies error: ${data.error}`);
+      }
+
+      for (const msg of data.messages) {
+        if (msg.subtype || !msg.user || !msg.text) continue;
+        results.push({ ts: msg.ts, userId: msg.user, text: msg.text });
+      }
+
+      cursor = data.has_more ? (data.response_metadata?.next_cursor ?? '') : '';
+    } while (cursor);
+
+    return results;
+  }
+
   /** Resolve a Slack user ID to a display name, with in-memory caching */
   async resolveUserName(userId: string): Promise<string> {
     if (this.userNameCache.has(userId)) {

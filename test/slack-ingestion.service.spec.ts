@@ -20,6 +20,7 @@ const mockSlackService = {
   getActiveChannelIds: jest.fn().mockResolvedValue(new Set<string>()),
   getMessagesSince: jest.fn(),
   getThreadReplies: jest.fn().mockResolvedValue([]),
+  getFullThread: jest.fn().mockResolvedValue([]),
   buildMessage: jest.fn(),
   resolveUserName: jest.fn(),
   hydrateUserCache: jest.fn(),
@@ -282,6 +283,12 @@ describe('SlackIngestionService', () => {
     mockSlackService.getActiveChannelIds.mockResolvedValue(new Set(['C123']));
     mockSlackService.getMessagesSince.mockResolvedValue([]);
     mockSlackService.getThreadReplies.mockResolvedValue([
+      { ts: reply1Ts, userId: 'U222', text: 'old reply' },
+      { ts: reply2Ts, userId: 'U333', text: 'old reply 2' },
+      { ts: newReplyTs, userId: 'U444', text: 'new reply!' },
+    ]);
+    mockSlackService.getFullThread.mockResolvedValue([
+      { ts: parentTs, userId: 'U111', text: 'parent message' },
       { ts: reply1Ts, userId: 'U222', text: 'old reply' },
       { ts: reply2Ts, userId: 'U333', text: 'old reply 2' },
       { ts: newReplyTs, userId: 'U444', text: 'new reply!' },

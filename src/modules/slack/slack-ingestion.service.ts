@@ -333,47 +333,58 @@ export class SlackIngestionService {
         });
 
         for (const tracked of activeThreads) {
-            if (this._generation !== gen) return { messagesStored };
+          if (this._generation !== gen) return { messagesStored };
 
-            let replies: Array<{ ts: string; userId: string; text: string }>;
-            try {
-              replies = await this.slackService.getThreadReplies(
-                conversation.id,
-                tracked.threadTs,
-              );
-            } catch {
-              continue;
-            }
-
-            // Filter to only new replies
-            const newReplies = replies.filter((r) => r.ts > tracked.lastReplyTs);
-            if (newReplies.length === 0) continue;
-
-            // Resolve usernames and write to staging
-            const slackExport: Array<Record<string, string>> = [];
-            for (const reply of newReplies) {
-              const userName = await this.slackService.resolveUserName(reply.userId);
-              slackExport.push({
-                type: 'message',
-                user: userName,
-                text: `${userName}: ${reply.text}`,
-                ts: reply.ts,
-              });
-            }
-
-            const channelSlug = this.slugify(conversation.name, conversation.isDm);
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            const fileName = `${timestamp}_thread-${tracked.threadTs}_${channelSlug}.json`;
-            writeFileSync(
-              join(this.stagingDir, fileName),
-              JSON.stringify(slackExport, null, 2),
-              'utf-8',
+          let replies: Array<{ ts: string; userId: string; text: string }>;
+          try {
+            replies = await this.slackService.getThreadReplies(
+              conversation.id,
+              tracked.threadTs,
             );
-
-            filesWritten++;
-            messagesStored += newReplies.length;
-            tracked.lastReplyTs = newReplies[newReplies.length - 1].ts;
+          } catch {
+            continue;
           }
+
+          // Check if there are new replies since last sync
+          const newReplies = replies.filter((r) => r.ts > tracked.lastReplyTs);
+          if (newReplies.length === 0) continue;
+
+          // Fetch full thread (parent + all replies) so mempalace gets the complete conversation
+          let fullThread: Array<{ ts: string; userId: string; text: string }>;
+          try {
+            fullThread = await this.slackService.getFullThread(
+              conversation.id,
+              tracked.threadTs,
+            );
+          } catch {
+            continue;
+          }
+
+          // Resolve usernames and write full thread to staging
+          const slackExport: Array<Record<string, string>> = [];
+          for (const msg of fullThread) {
+            const userName = await this.slackService.resolveUserName(msg.userId);
+            slackExport.push({
+              type: 'message',
+              user: userName,
+              text: `${userName}: ${msg.text}`,
+              ts: msg.ts,
+            });
+          }
+
+          const channelSlug = this.slugify(conversation.name, conversation.isDm);
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+          const fileName = `${timestamp}_thread-${tracked.threadTs}_${channelSlug}.json`;
+          writeFileSync(
+            join(this.stagingDir, fileName),
+            JSON.stringify(slackExport, null, 2),
+            'utf-8',
+          );
+
+          filesWritten++;
+          messagesStored += newReplies.length;
+          tracked.lastReplyTs = newReplies[newReplies.length - 1].ts;
+        }
 
           this.saveState(state);
         }
