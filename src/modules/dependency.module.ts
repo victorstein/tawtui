@@ -7,7 +7,13 @@ import { ConfigModule } from './config.module';
 import { SlackModule } from './slack/slack.module';
 
 @Module({
-  imports: [GithubModule, TaskwarriorModule, CalendarModule, ConfigModule, SlackModule],
+  imports: [
+    GithubModule,
+    TaskwarriorModule,
+    CalendarModule,
+    ConfigModule,
+    SlackModule,
+  ],
   providers: [DependencyService],
   exports: [DependencyService],
 })

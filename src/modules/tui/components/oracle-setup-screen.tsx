@@ -1,4 +1,4 @@
-import { createSignal, createEffect, Show, For } from 'solid-js';
+import { createSignal, createEffect, onCleanup, Show, For } from 'solid-js';
 import { useKeyboard } from '@opentui/solid';
 import type { SlackDepStatus } from '../../dependency.types';
 import type {
@@ -79,6 +79,15 @@ export function OracleSetupScreen(props: OracleSetupScreenProps) {
     Array<{ message: string; status: 'running' | 'done' | 'skip' }>
   >([]);
   const [initError, setInitError] = createSignal<string | null>(null);
+
+  // Animated spinner for running items
+  const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+  const [spinnerIdx, setSpinnerIdx] = createSignal(0);
+  const spinnerTimer = setInterval(
+    () => setSpinnerIdx((i) => (i + 1) % SPINNER_FRAMES.length),
+    80,
+  );
+  onCleanup(() => clearInterval(spinnerTimer));
 
   const hasInstallablePackages = () =>
     props.slackStatus.pipxInstalled && !props.slackStatus.mempalaceInstalled;
@@ -528,7 +537,7 @@ export function OracleSetupScreen(props: OracleSetupScreenProps) {
                   ? '✓ '
                   : msg.status === 'skip'
                     ? '– '
-                    : '⟳ '}
+                    : `${SPINNER_FRAMES[spinnerIdx()]} `}
               </text>
               <text
                 fg={

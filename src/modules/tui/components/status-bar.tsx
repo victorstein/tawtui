@@ -1,5 +1,6 @@
+import { Show } from 'solid-js';
 import type { Accessor } from 'solid-js';
-import { FG_DIM } from '../theme';
+import { FG_DIM, FG_MUTED } from '../theme';
 
 export type ReviewsHintContext =
   | { mode: 'repo-left' }
@@ -13,6 +14,8 @@ interface StatusBarProps {
   activeTab: Accessor<number>;
   archiveMode?: Accessor<boolean>;
   reviewsHintCtx?: Accessor<ReviewsHintContext>;
+  oracleReady?: Accessor<boolean>;
+  ingesting?: Accessor<boolean>;
 }
 
 const TAB_HINTS = [
@@ -21,6 +24,9 @@ const TAB_HINTS = [
   '1-4 switch tab | h/l day | j/k events | [ / ] week | t today | enter convert | r refresh | q quit',
   '1-4 switch tab | n start session | i interactive | K kill | r recheck | t tokens | q quit',
 ];
+
+const ORACLE_SETUP_HINT = '1-4 switch tab | r recheck | q quit';
+const ORACLE_HINT_SUFFIX = ' | R reset | S sync';
 
 const ARCHIVE_HINT =
   '1-4 switch tab | j/k navigate | u undo | D delete | A back to board | q quit';
@@ -53,12 +59,22 @@ export function StatusBar(props: StatusBarProps) {
     if (props.activeTab() === 1 && props.reviewsHintCtx) {
       return getReviewsHint(props.reviewsHintCtx());
     }
-    return TAB_HINTS[props.activeTab()] ?? TAB_HINTS[0];
+    if (props.activeTab() === 3 && !props.oracleReady?.()) {
+      return ORACLE_SETUP_HINT;
+    }
+    const base = TAB_HINTS[props.activeTab()] ?? TAB_HINTS[0];
+    if (props.activeTab() === 3 && props.oracleReady?.()) {
+      return base + ORACLE_HINT_SUFFIX;
+    }
+    return base;
   };
 
   return (
-    <box height={1} width="100%">
-      <text fg={FG_DIM} truncate>{` ${hint()}`}</text>
+    <box height={1} width="100%" flexDirection="row">
+      <text fg={FG_DIM} truncate flexGrow={1}>{` ${hint()}`}</text>
+      <Show when={props.ingesting?.()}>
+        <text fg={FG_MUTED} flexShrink={0}>{' ⟳ syncing '}</text>
+      </Show>
     </box>
   );
 }

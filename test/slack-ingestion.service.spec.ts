@@ -3,7 +3,15 @@ import { SlackIngestionService } from '../src/modules/slack/slack-ingestion.serv
 import { SlackService } from '../src/modules/slack/slack.service';
 import { MempalaceService } from '../src/modules/slack/mempalace.service';
 import type { SlackConversation } from '../src/modules/slack/slack.types';
-import { readdirSync, readFileSync, rmSync, mkdtempSync } from 'fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
@@ -12,6 +20,9 @@ const mockSlackService = {
   getMessagesSince: jest.fn(),
   buildMessage: jest.fn(),
   resolveUserName: jest.fn(),
+  hydrateUserCache: jest.fn(),
+  exportUserCache: jest.fn().mockReturnValue({}),
+  onWait: null,
 } as unknown as jest.Mocked<SlackService>;
 
 const mockMempalaceService = {
@@ -63,7 +74,7 @@ describe('SlackIngestionService', () => {
     expect(content[0]).toMatchObject({
       type: 'message',
       user: 'Alfonso',
-      text: 'Ship it on Friday',
+      text: 'Alfonso: Ship it on Friday',
     });
 
     expect(mockMempalaceService.mine).toHaveBeenCalledWith(stagingDir, 'slack');
@@ -124,5 +135,29 @@ describe('SlackIngestionService', () => {
     const stagingDir = (service as any).stagingDir;
     const files = readdirSync(stagingDir);
     expect(files[0]).toContain('dm-victor');
+  });
+
+  it('resetState removes oracle-state.json and staging dir', () => {
+    const stagingDir: string = (service as any).stagingDir;
+    const statePath: string = (service as any).statePath;
+
+    // Pre-create staging directory with a dummy file
+    mkdirSync(stagingDir, { recursive: true });
+    writeFileSync(join(stagingDir, 'test-file.json'), '[]', 'utf-8');
+
+    // Pre-create state file
+    writeFileSync(
+      statePath,
+      JSON.stringify({ lastChecked: '2026-01-01', channelCursors: {} }),
+      'utf-8',
+    );
+
+    expect(existsSync(stagingDir)).toBe(true);
+    expect(existsSync(statePath)).toBe(true);
+
+    service.resetState();
+
+    expect(existsSync(statePath)).toBe(false);
+    expect(existsSync(stagingDir)).toBe(false);
   });
 });

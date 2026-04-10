@@ -106,12 +106,12 @@ describe('MempalaceService', () => {
       existsSyncMock.mockRestore();
     });
 
-    it('returns true when palace.db exists at palace path', () => {
+    it('returns true when mempalace.yaml exists at palace path', () => {
       existsSyncMock.mockReturnValue(true);
       expect(service.isInitialized()).toBe(true);
     });
 
-    it('returns false when palace.db does not exist', () => {
+    it('returns false when mempalace.yaml does not exist', () => {
       existsSyncMock.mockReturnValue(false);
       expect(service.isInitialized()).toBe(false);
     });
@@ -121,13 +121,27 @@ describe('MempalaceService', () => {
       service.isInitialized();
       const [[calledPath]] = existsSyncMock.mock.calls as [[string]];
       expect(calledPath).toMatch(
-        /\.local\/share\/tawtui\/mempalace\/palace\.db$/,
+        /\.local\/share\/tawtui\/mempalace\/mempalace\.yaml$/,
       );
     });
   });
 
   describe('init', () => {
-    it('runs mempalace init with the palace path', async () => {
+    let mkdirSyncMock: jest.SpyInstance;
+
+    beforeEach(() => {
+      mkdirSyncMock = jest.spyOn(
+        jest.requireActual<typeof import('fs')>('fs'),
+        'mkdirSync',
+      );
+      mkdirSyncMock.mockReturnValue(undefined);
+    });
+
+    afterEach(() => {
+      mkdirSyncMock.mockRestore();
+    });
+
+    it('creates the directory and runs mempalace init with the palace path', async () => {
       const mockProc = {
         exited: Promise.resolve(0),
         stdout: new ReadableStream(),
@@ -137,9 +151,17 @@ describe('MempalaceService', () => {
 
       await service.init('/tmp/test-palace');
 
+      expect(mkdirSyncMock).toHaveBeenCalledWith('/tmp/test-palace', {
+        recursive: true,
+      });
       expect(mockSpawn).toHaveBeenCalledWith(
         ['mempalace', 'init', '/tmp/test-palace'],
-        { stdout: 'pipe', stderr: 'pipe' },
+        expect.objectContaining({
+          stdout: 'pipe',
+          stderr: 'pipe',
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          stdin: expect.any(Blob),
+        }),
       );
     });
 

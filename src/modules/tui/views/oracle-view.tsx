@@ -11,6 +11,8 @@ import { useKeyboard, useTerminalDimensions, usePaste, useRenderer } from '@open
 import type { ScrollBoxRenderable } from '@opentui/core';
 import { OracleSetupScreen, ORACLE_GRAD } from '../components/oracle-setup-screen';
 import { TerminalOutput } from '../components/terminal-output';
+import { DialogConfirm } from '../components/dialog-confirm';
+import { useDialog } from '../context/dialog';
 import {
   getDependencyService,
   getTerminalService,
@@ -19,6 +21,7 @@ import {
   getCreateOracleSession,
   getExtractSlackTokens,
   getInitializeOracle,
+  getResetOracleData,
 } from '../bridge';
 import type { ExtractionResult } from '../../slack/token-extractor.service';
 import type { DependencyStatus, SlackDepStatus } from '../../dependency.types';
@@ -37,11 +40,13 @@ import { lerpHex, LEFT_CAP, RIGHT_CAP } from '../utils';
 interface OracleViewProps {
   refreshTrigger?: () => number;
   onInputCapturedChange?: (captured: boolean) => void;
+  onOracleReadyChange?: (ready: boolean) => void;
 }
 
 export function OracleView(props: OracleViewProps) {
   const dimensions = useTerminalDimensions();
   const renderer = useRenderer();
+  const dialog = useDialog();
 
   // Dependency status
   const [depStatus, setDepStatus] = createSignal<DependencyStatus | null>(null);
@@ -73,6 +78,11 @@ export function OracleView(props: OracleViewProps) {
   // Propagate interactive state to parent
   createEffect(() => {
     props.onInputCapturedChange?.(interactive());
+  });
+
+  // Propagate oracle readiness to parent
+  createEffect(() => {
+    props.onOracleReadyChange?.(oracleReady());
   });
 
   // ------------------------------------------------------------------
@@ -299,6 +309,45 @@ export function OracleView(props: OracleViewProps) {
     setInteractive(false);
   }
 
+  function showResetConfirmation(): void {
+    dialog.show(
+      () => (
+        <DialogConfirm
+          message="Reset all Oracle data? This will clear mined conversations and re-fetch from Slack."
+          onConfirm={() => {
+            dialog.close();
+            void (async () => {
+              const resetFn = getResetOracleData();
+              if (!resetFn) {
+                showError('Reset function not available');
+                return;
+              }
+              try {
+                // Kill active session first if present
+                if (oracleSessionId()) {
+                  await killOracleSession();
+                }
+                await resetFn();
+                setOracleReady(false);
+                setOracleSessionId(null);
+                // Re-check dependencies to refresh setup screen state
+                await checkDependencies();
+              } catch {
+                showError('Failed to reset Oracle data');
+              }
+            })();
+          }}
+          onCancel={() => dialog.close()}
+        />
+      ),
+      {
+        size: 'medium',
+        gradStart: ORACLE_GRAD[0],
+        gradEnd: ORACLE_GRAD[1],
+      },
+    );
+  }
+
   // ------------------------------------------------------------------
   // Setup screen callbacks
   // ------------------------------------------------------------------
@@ -504,8 +553,16 @@ export function OracleView(props: OracleViewProps) {
       return;
     }
 
+    // [R] Reset Oracle data (must check before lowercase r)
+    if (key.name === 'r' && key.shift) {
+      if (oracleReady() && !dialog.isOpen()) {
+        showResetConfirmation();
+      }
+      return;
+    }
+
     // [r] Recheck dependencies
-    if (key.name === 'r') {
+    if (key.name === 'r' && !key.shift) {
       void checkDependencies();
       detectExistingSession();
       return;

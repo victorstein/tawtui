@@ -63,4 +63,6 @@ export interface SlackUserInfoResponse {
 export interface OracleState {
   lastChecked: string | null;
   channelCursors: Record<string, string>;
+  /** Persisted userId → display name cache to avoid redundant users.info calls */
+  userNames?: Record<string, string>;
 }

@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { join } from 'path';
 import { homedir } from 'os';
-import { existsSync, readdirSync, mkdirSync } from 'fs';
+import { existsSync, readdirSync, mkdirSync, rmSync } from 'fs';
 
 /** Base directory for all tawtui data files. */
 export const TAWTUI_DATA_DIR = join(homedir(), '.local', 'share', 'tawtui');
@@ -28,14 +28,25 @@ export class MempalaceService {
     return result.exitCode === 0;
   }
 
-  /** Check if the palace has been initialized (palace.db exists). */
+  /** Delete both the local config and the ChromaDB data so the setup flow can reinitialize. */
+  reset(): void {
+    rmSync(PALACE_PATH, { recursive: true, force: true });
+    const chromaPath = join(homedir(), '.mempalace', 'palace');
+    rmSync(chromaPath, { recursive: true, force: true });
+    this.logger.log('Palace deleted (config + ChromaDB data)');
+  }
+
+  /** Check if the palace has been initialized (mempalace.yaml exists). */
   isInitialized(): boolean {
-    return existsSync(join(PALACE_PATH, 'palace.db'));
+    return existsSync(join(PALACE_PATH, 'mempalace.yaml'));
   }
 
   /** Initialize a new mempalace palace at the given path. */
   async init(palacePath: string): Promise<void> {
+    mkdirSync(palacePath, { recursive: true });
+
     const proc = Bun.spawn(['mempalace', 'init', palacePath], {
+      stdin: new Blob(['\n']),
       stdout: 'pipe',
       stderr: 'pipe',
     });

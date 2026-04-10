@@ -7,6 +7,7 @@ import { ConfigService } from './config.service';
 import { TerminalService } from './terminal.service';
 import { DependencyService } from './dependency.service';
 import { CalendarService } from './calendar.service';
+import { SlackService } from './slack/slack.service';
 import { SlackIngestionService } from './slack/slack-ingestion.service';
 import { TokenExtractorService } from './slack/token-extractor.service';
 import {
@@ -69,6 +70,7 @@ interface TawtuiGlobal {
         status: 'running' | 'done' | 'skip';
       }) => void,
     ) => Promise<void>;
+    resetOracleData: () => Promise<void>;
   };
   __tuiExit?: () => void;
 }
@@ -82,6 +84,7 @@ export class TuiService {
     private readonly terminalService: TerminalService,
     private readonly dependencyService: DependencyService,
     private readonly calendarService: CalendarService,
+    private readonly slackService: SlackService,
     private readonly slackIngestionService: SlackIngestionService,
     private readonly tokenExtractorService: TokenExtractorService,
     private readonly mempalaceService: MempalaceService,
@@ -153,6 +156,28 @@ export class TuiService {
           onProgress({ message: 'Palace already initialized', status: 'skip' });
         }
 
+        // Step 1b: Detect user identity
+        const oracleConfig = this.configService.getOracleConfig();
+        if (!oracleConfig.slack?.userName) {
+          onProgress({
+            message: 'Detecting user identity...',
+            status: 'running',
+          });
+          const { userName } = await this.slackService.getCurrentUser();
+          this.configService.updateOracleConfig({
+            slack: { ...oracleConfig.slack!, userName },
+          });
+          onProgress({
+            message: `Detected user: ${userName}`,
+            status: 'done',
+          });
+        } else {
+          onProgress({
+            message: `User: ${oracleConfig.slack.userName}`,
+            status: 'skip',
+          });
+        }
+
         // Step 2: Mine existing data
         onProgress({ message: 'Mining existing data...', status: 'running' });
         const mineResult = await this.mempalaceService.mineIfNeeded(
@@ -166,6 +191,49 @@ export class TuiService {
           status: mineResult.mined ? 'done' : 'skip',
         });
 
+        // Step 2b: Fetch conversations if no existing data
+        if (!mineResult.mined) {
+          await this.slackIngestionService.ingest(
+            (info) => {
+              if (info.phase === 'waiting') {
+                const secs = Math.ceil((info.waitMs ?? 0) / 1000);
+                const ctx = info.channel
+                  ? ` (${info.channel} [${info.channelIndex}/${info.totalChannels}])`
+                  : ' (channel list)';
+                const reason =
+                  info.waitReason === 'rate-limited'
+                    ? `Rate limited${ctx}, retrying in ${secs}s...`
+                    : `Throttling${ctx}, ${secs}s...`;
+                onProgress({ message: reason, status: 'running' });
+              } else if (info.phase === 'skipped') {
+                onProgress({
+                  message: `Skipping ${info.channel} (cached) [${info.channelIndex}/${info.totalChannels}]`,
+                  status: 'running',
+                });
+              } else if (info.phase === 'listing') {
+                onProgress({
+                  message: info.channelsSoFar
+                    ? `Fetching channel list... (${info.channelsSoFar} found, page ${info.page})`
+                    : 'Fetching channel list...',
+                  status: 'running',
+                });
+              } else if (info.messageCount && info.messageCount > 0) {
+                onProgress({
+                  message: `Fetched ${info.channel} (${info.messageCount} messages) [${info.channelIndex}/${info.totalChannels}]`,
+                  status: 'running',
+                });
+              } else {
+                onProgress({
+                  message: `Fetching ${info.channel}... [${info.channelIndex}/${info.totalChannels}]`,
+                  status: 'running',
+                });
+              }
+            },
+            { skipExisting: true },
+          );
+          onProgress({ message: 'Conversations fetched', status: 'done' });
+        }
+
         // Step 3: Install Claude Code plugin
         onProgress({
           message: 'Installing Claude Code plugin...',
@@ -173,6 +241,16 @@ export class TuiService {
         });
         await this.mempalaceService.installPlugin(ORACLE_WORKSPACE_DIR);
         onProgress({ message: 'Plugin installed', status: 'done' });
+      },
+      resetOracleData: async () => {
+        this.slackIngestionService.resetState();
+        this.mempalaceService.reset();
+        const currentConfig = this.configService.getOracleConfig();
+        if (currentConfig.slack) {
+          this.configService.updateOracleConfig({
+            slack: { ...currentConfig.slack, userName: undefined },
+          });
+        }
       },
     };
 
@@ -206,6 +284,8 @@ export class TuiService {
     // The App component calls g.__tuiExit() on quit.
     await exitPromise;
 
+    // Stop polling and abort any in-flight ingestion to release Slack API quota
     this.slackIngestionService.stopPolling();
+    this.slackIngestionService.abort();
   }
 }

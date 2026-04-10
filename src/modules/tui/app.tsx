@@ -1,4 +1,4 @@
-import { createSignal, Match, Switch, onMount } from 'solid-js';
+import { createSignal, Match, Switch, onMount, onCleanup } from 'solid-js';
 import { useKeyboard, useRenderer } from '@opentui/solid';
 import { TabBar } from './components/tab-bar';
 import { StatusBar } from './components/status-bar';
@@ -10,7 +10,7 @@ import { OracleView } from './views/oracle-view';
 import { DialogProvider, useDialog } from './context/dialog';
 import { DialogConfirm } from './components/dialog-confirm';
 import { DialogSetupWizard } from './components/dialog-setup-wizard';
-import { getDependencyService, getTuiExit } from './bridge';
+import { getDependencyService, getSlackIngestionService, getTuiExit } from './bridge';
 import type { DependencyStatus } from '../dependency.types';
 
 const TABS = [
@@ -38,9 +38,24 @@ function AppContent() {
   const [reviewsHintCtx, setReviewsHintCtx] = createSignal<ReviewsHintContext>({
     mode: 'empty',
   });
+  const [oracleReady, setOracleReady] = createSignal(false);
   const [pendingTaskUuid, setPendingTaskUuid] = createSignal<string | null>(
     null,
   );
+  const [ingesting, setIngesting] = createSignal(false);
+
+  // Hook up Slack ingestion status
+  onMount(() => {
+    const svc = getSlackIngestionService();
+    if (!svc) return;
+    setIngesting(svc.ingesting);
+    svc.onStatusChange = (status: boolean) => setIngesting(status);
+  });
+
+  onCleanup(() => {
+    const svc = getSlackIngestionService();
+    if (svc) svc.onStatusChange = null;
+  });
 
   // Check dependencies on startup
   onMount(() => {
@@ -128,6 +143,14 @@ function AppContent() {
       );
       return;
     }
+
+    // Manual Slack sync
+    if (key.name === 'S' && !key.ctrl && !key.meta) {
+      if (!oracleReady() || ingesting()) return;
+      const svc = getSlackIngestionService();
+      if (svc) void svc.triggerIngest();
+      return;
+    }
   });
 
   return (
@@ -162,6 +185,7 @@ function AppContent() {
             <OracleView
               refreshTrigger={refreshTrigger}
               onInputCapturedChange={(captured) => setInputCaptured(captured)}
+              onOracleReadyChange={(ready) => setOracleReady(ready)}
             />
           </Match>
         </Switch>
@@ -171,6 +195,8 @@ function AppContent() {
         activeTab={activeTab}
         archiveMode={archiveMode}
         reviewsHintCtx={reviewsHintCtx}
+        oracleReady={oracleReady}
+        ingesting={ingesting}
       />
     </box>
   );

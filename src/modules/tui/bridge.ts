@@ -56,6 +56,7 @@ export interface TawtuiBridge {
   initializeOracle: (
     onProgress: (progress: OracleInitProgress) => void,
   ) => Promise<void>;
+  resetOracleData: () => Promise<void>;
 }
 
 function getBridge(): TawtuiBridge | undefined {
@@ -122,6 +123,10 @@ export function getExtractSlackTokens():
 
 export function getInitializeOracle(): TawtuiBridge['initializeOracle'] | null {
   return getBridge()?.initializeOracle ?? null;
+}
+
+export function getResetOracleData(): TawtuiBridge['resetOracleData'] | null {
+  return getBridge()?.resetOracleData ?? null;
 }
 
 export function getTuiExit(): (() => void) | null {
