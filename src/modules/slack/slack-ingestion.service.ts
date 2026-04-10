@@ -271,13 +271,44 @@ export class SlackIngestionService {
       }
 
       // Phase 2: Re-check tracked threads for new replies
-      if (state.trackedThreads) {
-        const sevenDaysAgo = String((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000);
+      if (!state.trackedThreads) state.trackedThreads = {};
+      const sevenDaysAgo = String((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000);
 
-        for (const conversation of filteredConversations) {
-          if (this._generation !== gen) return { messagesStored };
-          const threads = state.trackedThreads[conversation.id];
-          if (!threads || threads.length === 0) continue;
+      for (const conversation of filteredConversations) {
+        if (this._generation !== gen) return { messagesStored };
+
+        // Bootstrap: seed trackedThreads for channels with cursors but no tracked threads
+        const channelCursor = state.channelCursors[conversation.id];
+        if (
+          channelCursor &&
+          (!state.trackedThreads[conversation.id] ||
+            state.trackedThreads[conversation.id].length === 0)
+        ) {
+          const backfillCursor = String(
+            parseFloat(channelCursor) - 7 * 24 * 60 * 60,
+          );
+          try {
+            const backfillMessages =
+              await this.slackService.getMessagesSince(
+                conversation.id,
+                backfillCursor,
+              );
+            const threadParents = backfillMessages.filter(
+              (m) => m.replyCount && m.replyCount > 0,
+            );
+            if (threadParents.length > 0) {
+              state.trackedThreads[conversation.id] = threadParents.map(
+                (m) => ({ threadTs: m.ts, lastReplyTs: m.ts }),
+              );
+              this.saveState(state);
+            }
+          } catch {
+            // Backfill failed — will retry next sync
+          }
+        }
+
+        const threads = state.trackedThreads[conversation.id];
+        if (!threads || threads.length === 0) continue;
 
           // Prune threads older than 7 days
           state.trackedThreads[conversation.id] = threads.filter(
@@ -329,7 +360,6 @@ export class SlackIngestionService {
 
           this.saveState(state);
         }
-      }
 
       // Mine all new files into mempalace (idempotent — skips already-mined)
       if (filesWritten > 0) {
