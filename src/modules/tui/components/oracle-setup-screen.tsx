@@ -89,7 +89,6 @@ export function OracleSetupScreen(props: OracleSetupScreenProps) {
     if (
       props.slackStatus.hasTokens &&
       props.slackStatus.mempalaceInstalled &&
-      !props.oracleInitialized &&
       !initTriggered &&
       !initializing() &&
       !initError()

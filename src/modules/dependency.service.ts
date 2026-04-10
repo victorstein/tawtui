@@ -1,12 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { join } from 'path';
-import { existsSync } from 'fs';
 import { GithubService } from './github.service';
 import { TaskwarriorService } from './taskwarrior.service';
 import { CalendarService } from './calendar.service';
 import { ConfigService } from './config.service';
+import { MempalaceService } from './slack/mempalace.service';
 import type { DependencyStatus, SlackDepStatus } from './dependency.types';
-import { PALACE_PATH } from './slack/mempalace.service';
 
 @Injectable()
 export class DependencyService {
@@ -15,6 +13,7 @@ export class DependencyService {
     private readonly taskwarriorService: TaskwarriorService,
     private readonly calendarService: CalendarService,
     private readonly configService: ConfigService,
+    private readonly mempalaceService: MempalaceService,
   ) {}
 
   async checkAll(): Promise<DependencyStatus> {
@@ -40,7 +39,7 @@ export class DependencyService {
 
     const gogCredentialsPath = this.calendarService.getCredentialsPath();
 
-    const oracleInitialized = existsSync(join(PALACE_PATH, 'palace.db'));
+    const oracleInitialized = this.mempalaceService.isInitialized();
 
     return {
       gh: {

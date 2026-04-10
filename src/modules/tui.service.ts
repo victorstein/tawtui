@@ -144,10 +144,14 @@ export class TuiService {
       createOracleSession: () => this.terminalService.createOracleSession(),
       extractSlackTokens: () => this.tokenExtractorService.extractTokens(),
       initializeOracle: async (onProgress) => {
-        // Step 1: Initialize palace
-        onProgress({ message: 'Initializing palace...', status: 'running' });
-        await this.mempalaceService.init(PALACE_PATH);
-        onProgress({ message: 'Palace initialized', status: 'done' });
+        // Step 1: Initialize palace (skip if already done)
+        if (!this.mempalaceService.isInitialized()) {
+          onProgress({ message: 'Initializing palace...', status: 'running' });
+          await this.mempalaceService.init(PALACE_PATH);
+          onProgress({ message: 'Palace initialized', status: 'done' });
+        } else {
+          onProgress({ message: 'Palace already initialized', status: 'skip' });
+        }
 
         // Step 2: Mine existing data
         onProgress({ message: 'Mining existing data...', status: 'running' });

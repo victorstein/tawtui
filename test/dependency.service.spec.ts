@@ -3,6 +3,7 @@ import { ConfigService } from '../src/modules/config.service';
 import { GithubService } from '../src/modules/github.service';
 import { TaskwarriorService } from '../src/modules/taskwarrior.service';
 import { CalendarService } from '../src/modules/calendar.service';
+import { MempalaceService } from '../src/modules/slack/mempalace.service';
 
 // Mock Bun global (tests run under Jest/Node, not Bun runtime)
 const mockBun = { spawnSync: jest.fn().mockReturnValue({ exitCode: 1 }) };
@@ -15,6 +16,7 @@ describe('DependencyService - Oracle checks', () => {
   let mockGithubService: jest.Mocked<Partial<GithubService>>;
   let mockTaskwarriorService: jest.Mocked<Partial<TaskwarriorService>>;
   let mockCalendarService: jest.Mocked<Partial<CalendarService>>;
+  let mockMempalaceService: jest.Mocked<Partial<MempalaceService>>;
 
   beforeEach(() => {
     mockConfigService = {
@@ -37,6 +39,10 @@ describe('DependencyService - Oracle checks', () => {
       getCredentialsPath: jest.fn().mockReturnValue('/tmp/fake-creds'),
     };
 
+    mockMempalaceService = {
+      isInitialized: jest.fn().mockReturnValue(false),
+    };
+
     // Reset Bun.spawnSync mock before each test
     mockBun.spawnSync.mockReturnValue({ exitCode: 1 });
 
@@ -45,6 +51,7 @@ describe('DependencyService - Oracle checks', () => {
       mockTaskwarriorService as TaskwarriorService,
       mockCalendarService as CalendarService,
       mockConfigService as ConfigService,
+      mockMempalaceService as MempalaceService,
     );
   });
 
@@ -55,8 +62,7 @@ describe('DependencyService - Oracle checks', () => {
   });
 
   it('oracleReady depends on hasTokens, mempalaceInstalled, and oracleInitialized', async () => {
-    const fs = jest.requireActual<typeof import('fs')>('fs');
-    const existsSyncSpy = jest.spyOn(fs, 'existsSync').mockReturnValue(true);
+    (mockMempalaceService.isInitialized as jest.Mock).mockReturnValue(true);
 
     (mockConfigService.getOracleConfig as jest.Mock).mockReturnValue({
       pollIntervalSeconds: 300,
@@ -78,8 +84,6 @@ describe('DependencyService - Oracle checks', () => {
 
     const status = await service.checkAll();
     expect(status.oracleReady).toBe(true);
-
-    existsSyncSpy.mockRestore();
   });
 
   it('slack status includes install instructions for mempalace', async () => {

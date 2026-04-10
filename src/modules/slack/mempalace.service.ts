@@ -44,9 +44,7 @@ export class MempalaceService {
 
     if (exitCode !== 0) {
       const stderr = await new Response(proc.stderr).text();
-      throw new Error(
-        `mempalace init failed (exit ${exitCode}): ${stderr}`,
-      );
+      throw new Error(`mempalace init failed (exit ${exitCode}): ${stderr}`);
     }
 
     this.logger.log(`Initialized palace at ${palacePath}`);
@@ -94,9 +92,7 @@ export class MempalaceService {
 
     if (exitCode !== 0) {
       const stderr = await new Response(installProc.stderr).text();
-      throw new Error(
-        `plugin install failed (exit ${exitCode}): ${stderr}`,
-      );
+      throw new Error(`plugin install failed (exit ${exitCode}): ${stderr}`);
     }
 
     this.logger.log(`Installed mempalace plugin in ${workspaceDir}`);
