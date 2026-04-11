@@ -139,7 +139,11 @@ tawtui/
 │   ├── commands/
 │   │   └── tui.command.ts               # Default command → launches TUI
 │   ├── shared/
-│   │   └── types.ts                     # Shared types (RepoConfig, ExecResult)
+│   │   ├── types.ts                     # Shared types (RepoConfig, ExecResult)
+│   │   └── plimit.ts                    # Concurrency limiter utility
+│   ├── notify-helper/                   # Custom Swift notification helper
+│   │   ├── notify.swift                 # Native macOS notification app
+│   │   └── build.sh                     # Compiles to TaWTUI Notify.app
 │   └── modules/
 │       ├── taskwarrior.module.ts         # ← @nestjs
 │       ├── taskwarrior.service.ts        # ← @nestjs (wraps `task` CLI)
@@ -153,13 +157,38 @@ tawtui/
 │       ├── terminal.module.ts           # ← @nestjs
 │       ├── terminal.service.ts          # ← @nestjs (wraps `tmux`)
 │       ├── terminal.types.ts            # ← @nestjs
+│       ├── notification.module.ts       # ← @nestjs
+│       ├── notification.service.ts      # ← @nestjs (macOS notification helper wrapper)
+│       ├── notification.types.ts        # ← @nestjs (notification payload types)
+│       ├── dependency.module.ts         # ← @nestjs
+│       ├── dependency.service.ts        # ← @nestjs (checks all system dependencies)
+│       ├── dependency.types.ts          # ← @nestjs (dependency status types)
+│       ├── calendar.module.ts           # ← @nestjs
+│       ├── calendar.service.ts          # ← @nestjs (calendar integration)
+│       ├── calendar.types.ts            # ← @nestjs (calendar types)
+│       ├── worktree.module.ts           # ← @nestjs (git worktree management)
+│       ├── oracle/                      # ← @nestjs (Oracle channel event system)
+│       │   ├── oracle-channel.ts        # Standalone MCP channel server (spawned by Claude Code)
+│       │   ├── oracle-channel.types.ts  # ← @nestjs (event payload types and constants)
+│       │   └── oracle-event.service.ts  # ← @nestjs (reads rejected tasks, POSTs events to channel server)
+│       ├── slack/                       # ← @nestjs (Slack integration, xoxc auth)
+│       │   ├── slack.module.ts          # ← @nestjs
+│       │   ├── slack.service.ts         # ← @nestjs (Slack API wrapper)
+│       │   ├── slack.types.ts           # ← @nestjs (Slack API types and OracleState)
+│       │   ├── slack-ingestion.service.ts  # ← @nestjs (polls Slack, writes staging files, mines to mempalace)
+│       │   ├── mempalace.service.ts     # ← @nestjs (CLI wrapper for mempalace tool)
+│       │   ├── token-extractor.service.ts  # ← @nestjs (extracts Slack tokens from browser cookies)
+│       │   ├── leveldb-reader.ts        # ← @nestjs (LevelDB reader for cookie extraction)
+│       │   └── cookie-decryptor.ts      # ← @nestjs (macOS Keychain cookie decryption)
 │       ├── tui.module.ts               # Bridge module (imports service modules)
 │       ├── tui.service.ts              # Bridge service (globalThis.__tawtui)
 │       └── tui/                         # ← @tui (all files below)
 │           ├── app.tsx                  # Root app component
 │           ├── theme.ts                 # Color palette + semantic tokens
+│           ├── bridge.ts               # NestJS-to-TUI bridge
 │           ├── context/
-│           │   └── dialog.tsx           # Stack-based dialog context
+│           │   ├── dialog.tsx           # Stack-based dialog context
+│           │   └── toast.tsx            # ← @tui (toast notification context)
 │           ├── components/
 │           │   ├── board-column.tsx
 │           │   ├── task-card.tsx
@@ -174,11 +203,14 @@ tawtui/
 │           │   ├── repo-list.tsx
 │           │   ├── pr-list.tsx
 │           │   ├── agent-list.tsx
-│           │   └── terminal-output.tsx
+│           │   ├── terminal-output.tsx
+│           │   └── oracle-setup-screen.tsx  # ← @tui (Oracle setup wizard)
 │           └── views/
 │               ├── tasks-view.tsx
 │               ├── repos-view.tsx
-│               └── agents-view.tsx
+│               ├── agents-view.tsx
+│               ├── oracle-view.tsx      # ← @tui (Oracle tab view)
+│               └── calendar-view.tsx   # ← @tui (Calendar tab view)
 ├── test/                                # Jest test files
 ├── package.json                         # Bun scripts (start, build, test, lint, format)
 ├── tsconfig.json                        # TS config (ESNext, SolidJS JSX)

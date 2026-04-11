@@ -41,7 +41,7 @@ Provides test commands and conventions. Test framework is Jest 30 with ts-jest a
 
 ### /ship
 
-Runs quality gates sequentially (lint, format, build, test), stages files, and commits with conventional commit format. Scopes: tui, taskwarrior, github, config, terminal, core.
+Runs quality gates sequentially (lint, format, build, test), stages files, and commits with conventional commit format. Scopes: tui, taskwarrior, github, config, terminal, core, oracle, notification, slack, dependency.
 
 ### /dev
 

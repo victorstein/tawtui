@@ -6,6 +6,12 @@
 - **Codebase**: `src/modules/*.module.ts`, `src/modules/*.service.ts`, `src/modules/*.types.ts`, `src/commands/`, `src/main.ts`, `src/app.module.ts`, `src/shared/`
 - **Use for**: New modules, services, CLI wrappers, types, DI configuration
 - **Model**: Opus
+- **Oracle/Slack modules**:
+  - `src/modules/oracle/` — Oracle event service and channel types. Note: `oracle-channel.ts` is a standalone MCP server script, not a regular NestJS module — see note below.
+  - `src/modules/slack/` — Slack API wrapper, ingestion service, mempalace integration
+  - `src/modules/notification.service.ts` — macOS notification helper
+
+> **Oracle channel special case**: `src/modules/oracle/oracle-channel.ts` is NOT a regular NestJS service. It is a standalone Bun script that Claude Code spawns as a subprocess MCP server. It must not be imported into the NestJS module system. The `OracleEventService` is the NestJS-side integration point for Oracle events.
 
 ## @tui
 
@@ -14,6 +20,9 @@
 - **Use for**: Components, views, theme tokens, dialogs, keyboard handling
 - **Model**: Opus
 - **Design Reference**: `.claude/docs/tui-design-reference.md` — semantic tokens, gradient patterns, button styles, border conventions, powerline caps, selection/focus patterns. **Must read before building any new component.**
+- **Oracle UI**:
+  - `src/modules/tui/views/oracle-view.tsx` — Oracle tab view
+  - `src/modules/tui/components/oracle-setup-screen.tsx` — Setup wizard
 
 ## @planning
 
