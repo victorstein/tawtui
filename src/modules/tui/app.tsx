@@ -97,7 +97,7 @@ function AppContent() {
           if (alertHash === lastOracleAlertHash) return;
 
           lastOracleAlertHash = alertHash;
-          toast.show('Oracle found new action items', 'info');
+          toast.show('Oracle found new action items', 'done');
         })
         .catch(() => {
           // Ignore capture errors

@@ -273,7 +273,9 @@ export class TuiService {
           let mcpConfig: Record<string, unknown> = {};
           if (existsSync(mcpJsonPath)) {
             try {
-              mcpConfig = JSON.parse(readFileSync(mcpJsonPath, 'utf-8'));
+              mcpConfig = JSON.parse(
+                readFileSync(mcpJsonPath, 'utf-8'),
+              ) as Record<string, unknown>;
             } catch {
               // Corrupted — will be overwritten
             }
@@ -319,21 +321,16 @@ export class TuiService {
         this.slackIngestionService.startPolling(intervalMs);
 
         // Wire up oracle event service for channel notifications
-        const { OracleEventService } = await import(
-          './oracle/oracle-event.service'
-        );
-        const oracleEventService = new OracleEventService(
-          ORACLE_WORKSPACE_DIR,
-        );
+        const { OracleEventService } =
+          await import('./oracle/oracle-event.service');
+        const oracleEventService = new OracleEventService(ORACLE_WORKSPACE_DIR);
         this.slackIngestionService.oracleEventService = oracleEventService;
 
         // Auto-launch oracle session (reuses existing if running)
         try {
           await this.terminalService.createOracleSession();
-        } catch (err) {
-          this.logger.warn(
-            `Oracle auto-launch failed: ${(err as Error).message}`,
-          );
+        } catch {
+          // Oracle auto-launch failed — non-fatal, session can be started manually
         }
 
         // Fire daily digest if >12h since last one
