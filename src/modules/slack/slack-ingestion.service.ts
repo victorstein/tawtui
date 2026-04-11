@@ -189,17 +189,27 @@ export class SlackIngestionService {
       let changedChannelIds: Set<string> | null = null;
       if (!options?.skipExisting) {
         // Only pre-filter on regular syncs, not initial setup
-        const lastCheckedDate = state.lastChecked
-          ? new Date(state.lastChecked).toISOString().split('T')[0]
+        const lastCheckedTs = state.lastChecked
+          ? new Date(state.lastChecked).getTime()
           : null;
-        if (lastCheckedDate) {
+        if (lastCheckedTs) {
+          // Subtract 1 day: Slack's after: filter is date-based and exclusive
+          // (after:2026-04-11 means April 12+), so we go back a day
+          const searchDate = new Date(lastCheckedTs - 24 * 60 * 60 * 1000)
+            .toISOString()
+            .split('T')[0];
           try {
             changedChannelIds = await this.slackService.getChangedChannelIds(
-              lastCheckedDate,
+              searchDate,
               () => this._generation !== gen,
             );
             if (this._generation !== gen)
               return { messagesStored: 0, channelNames: [] };
+
+            // Force-include self-DM (search.messages doesn't index self-messages)
+            if (this.selfDmChannelId) {
+              changedChannelIds.add(this.selfDmChannelId);
+            }
           } catch {
             // Search failed — fall back to checking all channels
             changedChannelIds = null;
