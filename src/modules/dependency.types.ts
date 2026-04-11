@@ -30,14 +30,18 @@ export interface SlackDepStatus {
   pipxInstallInstructions: string;
 }
 
+export type NotificationDepStatus = DepStatus;
+
 export interface DependencyStatus {
   gh: GhDepStatus;
   gog: GogDepStatus;
   task: DepStatus;
+  notification: NotificationDepStatus;
   platform: NodeJS.Platform;
   allGood: boolean;
   calendarReady: boolean;
   slack: SlackDepStatus;
   oracleInitialized: boolean;
   oracleReady: boolean; // hasTokens && mempalaceInstalled && oracleInitialized
+  notificationsReady: boolean;
 }

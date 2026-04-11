@@ -4,6 +4,7 @@ import type { ConfigService } from '../config.service';
 import type { TerminalService } from '../terminal.service';
 import type { DependencyService } from '../dependency.service';
 import type { CalendarService } from '../calendar.service';
+import type { NotificationService } from '../notification.service';
 import type {
   PullRequestDetail,
   PrDiff,
@@ -26,6 +27,7 @@ export interface TawtuiBridge {
   terminalService: TerminalService;
   dependencyService: DependencyService;
   calendarService: CalendarService;
+  notificationService: NotificationService;
   createPrReviewSession: (
     prNumber: number,
     repoOwner: string,
@@ -135,6 +137,10 @@ export function getResetOracleData(): TawtuiBridge['resetOracleData'] | null {
 
 export function getCancelOracleInit(): TawtuiBridge['cancelOracleInit'] | null {
   return getBridge()?.cancelOracleInit ?? null;
+}
+
+export function getNotificationService(): NotificationService | null {
+  return getBridge()?.notificationService ?? null;
 }
 
 export function getTuiExit(): (() => void) | null {

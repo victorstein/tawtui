@@ -6,6 +6,7 @@ import { TerminalModule } from './terminal.module';
 import { DependencyModule } from './dependency.module';
 import { CalendarModule } from './calendar.module';
 import { SlackModule } from './slack/slack.module';
+import { NotificationModule } from './notification.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { SlackModule } from './slack/slack.module';
     DependencyModule,
     CalendarModule,
     SlackModule,
+    NotificationModule,
   ],
   providers: [TuiService],
   exports: [TuiService],

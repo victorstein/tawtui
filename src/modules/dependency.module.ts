@@ -5,6 +5,7 @@ import { TaskwarriorModule } from './taskwarrior.module';
 import { CalendarModule } from './calendar.module';
 import { ConfigModule } from './config.module';
 import { SlackModule } from './slack/slack.module';
+import { NotificationModule } from './notification.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { SlackModule } from './slack/slack.module';
     CalendarModule,
     ConfigModule,
     SlackModule,
+    NotificationModule,
   ],
   providers: [DependencyService],
   exports: [DependencyService],

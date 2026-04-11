@@ -4,6 +4,7 @@ import { TaskwarriorService } from './taskwarrior.service';
 import { CalendarService } from './calendar.service';
 import { ConfigService } from './config.service';
 import { MempalaceService } from './slack/mempalace.service';
+import { NotificationService } from './notification.service';
 import type { DependencyStatus, SlackDepStatus } from './dependency.types';
 
 @Injectable()
@@ -14,6 +15,7 @@ export class DependencyService {
     private readonly calendarService: CalendarService,
     private readonly configService: ConfigService,
     private readonly mempalaceService: MempalaceService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async checkAll(): Promise<DependencyStatus> {
@@ -29,12 +31,14 @@ export class DependencyService {
       gogInstalled,
       gogAuthenticated,
       gogHasCredentials,
+      notificationInstalled,
     ] = await Promise.all([
       this.githubService.isGhInstalled(),
       this.githubService.isAuthenticated(),
       this.calendarService.isInstalled(),
       this.calendarService.isAuthenticated(),
       this.calendarService.hasCredentials(),
+      this.notificationService.isInstalled(),
     ]);
 
     const gogCredentialsPath = this.calendarService.getCredentialsPath();
@@ -60,6 +64,10 @@ export class DependencyService {
         installed: taskInstalled,
         instructions: this.getTaskInstallInstructions(platform),
       },
+      notification: {
+        installed: notificationInstalled,
+        instructions: 'Rebuild TaWTUI to install the notification helper',
+      },
       platform,
       allGood: ghInstalled && ghAuthenticated && taskInstalled,
       calendarReady: gogInstalled && gogAuthenticated && gogHasCredentials,
@@ -69,6 +77,7 @@ export class DependencyService {
         slackStatus.hasTokens &&
         slackStatus.mempalaceInstalled &&
         oracleInitialized,
+      notificationsReady: notificationInstalled,
     };
   }
 

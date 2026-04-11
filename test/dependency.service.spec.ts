@@ -4,6 +4,7 @@ import { GithubService } from '../src/modules/github.service';
 import { TaskwarriorService } from '../src/modules/taskwarrior.service';
 import { CalendarService } from '../src/modules/calendar.service';
 import { MempalaceService } from '../src/modules/slack/mempalace.service';
+import { NotificationService } from '../src/modules/notification.service';
 
 // Mock Bun global (tests run under Jest/Node, not Bun runtime)
 const mockBun = { spawnSync: jest.fn().mockReturnValue({ exitCode: 1 }) };
@@ -17,6 +18,7 @@ describe('DependencyService - Oracle checks', () => {
   let mockTaskwarriorService: jest.Mocked<Partial<TaskwarriorService>>;
   let mockCalendarService: jest.Mocked<Partial<CalendarService>>;
   let mockMempalaceService: jest.Mocked<Partial<MempalaceService>>;
+  let mockNotificationService: jest.Mocked<Partial<NotificationService>>;
 
   beforeEach(() => {
     mockConfigService = {
@@ -43,6 +45,10 @@ describe('DependencyService - Oracle checks', () => {
       isInitialized: jest.fn().mockReturnValue(false),
     };
 
+    mockNotificationService = {
+      isInstalled: jest.fn().mockResolvedValue(false),
+    };
+
     // Reset Bun.spawnSync mock before each test
     mockBun.spawnSync.mockReturnValue({ exitCode: 1 });
 
@@ -52,6 +58,7 @@ describe('DependencyService - Oracle checks', () => {
       mockCalendarService as CalendarService,
       mockConfigService as ConfigService,
       mockMempalaceService as MempalaceService,
+      mockNotificationService as NotificationService,
     );
   });
 

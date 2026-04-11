@@ -46,6 +46,7 @@ export function DialogSetupWizard(props: DialogSetupWizardProps) {
   const ghStatus = () => status().gh;
   const taskStatus = () => status().task;
   const gogStatus = () => status().gog;
+  const notificationStatus = () => status().notification;
   const hasMissing = () =>
     !ghStatus().installed ||
     !ghStatus().authenticated ||
@@ -189,6 +190,22 @@ export function DialogSetupWizard(props: DialogSetupWizardProps) {
           <text fg={FG_DIM}>{' Authenticate'}</text>
         </box>
       </Show>
+
+      {/* Notifications section (optional) */}
+      <box height={1} />
+      <box flexDirection="row">
+        <text fg={FG_NORMAL} attributes={1}>
+          {'  Notifications '}
+        </text>
+        <text fg={FG_DIM}>{'(Optional)'}</text>
+      </box>
+      <box flexDirection="row">
+        <text>{'    '}</text>
+        <text fg={notificationStatus().installed ? COLOR_SUCCESS : COLOR_ERROR}>
+          {notificationStatus().installed ? '✓' : '✗'}
+        </text>
+        <text fg={FG_DIM}>{' Installed'}</text>
+      </box>
       <box height={1} />
 
       {/* Install instructions — only shown when something is missing */}
@@ -237,6 +254,13 @@ export function DialogSetupWizard(props: DialogSetupWizardProps) {
           <box flexDirection="row">
             <text fg={FG_DIM}>{'  Cal Auth:    '}</text>
             <text fg={COLOR_WARNING}>{gogStatus().authInstructions}</text>
+          </box>
+        </Show>
+
+        <Show when={!notificationStatus().installed}>
+          <box flexDirection="row">
+            <text fg={FG_DIM}>{'  Notifier:    '}</text>
+            <text fg={COLOR_WARNING}>{notificationStatus().instructions}</text>
           </box>
         </Show>
 

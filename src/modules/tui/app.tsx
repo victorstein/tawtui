@@ -11,7 +11,7 @@ import { DialogProvider, useDialog } from './context/dialog';
 import { ToastProvider, useToast } from './context/toast';
 import { DialogConfirm } from './components/dialog-confirm';
 import { DialogSetupWizard } from './components/dialog-setup-wizard';
-import { getDependencyService, getSlackIngestionService, getTerminalService, getTuiExit } from './bridge';
+import { getDependencyService, getNotificationService, getSlackIngestionService, getTerminalService, getTuiExit } from './bridge';
 import type { DependencyStatus } from '../dependency.types';
 
 const TABS = [
@@ -267,6 +267,18 @@ function AppContent() {
             activeSyncToastId = null;
           },
         );
+      return;
+    }
+
+    // Hidden: test notification (Alt+N)
+    if (key.name === 'n' && key.meta) {
+      const notificationService = getNotificationService();
+      if (notificationService) {
+        void notificationService.send({
+          title: 'TaWTUI',
+          message: 'Test notification — if you can see this, notifications work!',
+        });
+      }
       return;
     }
   });

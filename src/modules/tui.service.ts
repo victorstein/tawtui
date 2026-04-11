@@ -19,6 +19,7 @@ import {
   ORACLE_WORKSPACE_DIR,
 } from './slack/mempalace.service';
 import type { ExtractionResult } from './slack/token-extractor.service';
+import { NotificationService } from './notification.service';
 import type {
   PullRequestDetail,
   PrDiff,
@@ -36,6 +37,7 @@ interface TawtuiGlobal {
     terminalService: TerminalService;
     dependencyService: DependencyService;
     calendarService: CalendarService;
+    notificationService: NotificationService;
     createPrReviewSession: (
       prNumber: number,
       repoOwner: string,
@@ -92,6 +94,7 @@ export class TuiService {
     private readonly slackIngestionService: SlackIngestionService,
     private readonly tokenExtractorService: TokenExtractorService,
     private readonly mempalaceService: MempalaceService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async launch(): Promise<void> {
@@ -109,6 +112,7 @@ export class TuiService {
       terminalService: this.terminalService,
       dependencyService: this.dependencyService,
       calendarService: this.calendarService,
+      notificationService: this.notificationService,
       createPrReviewSession: (
         prNumber: number,
         repoOwner: string,
