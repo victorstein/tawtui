@@ -119,8 +119,8 @@ function AppContent() {
       return;
     }
 
-    // Hidden: test notification (Ctrl+N)
-    if (key.name === 'n' && key.ctrl) {
+    // Hidden: test notification (Alt+N)
+    if (key.name === 'n' && key.meta) {
       const notificationService = getNotificationService();
       if (notificationService) {
         void notificationService.send({
