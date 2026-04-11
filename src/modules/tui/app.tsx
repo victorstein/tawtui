@@ -11,7 +11,7 @@ import { DialogProvider, useDialog } from './context/dialog';
 import { ToastProvider, useToast } from './context/toast';
 import { DialogConfirm } from './components/dialog-confirm';
 import { DialogSetupWizard } from './components/dialog-setup-wizard';
-import { getDependencyService, getSlackIngestionService, getTuiExit } from './bridge';
+import { getDependencyService, getSlackIngestionService, getTerminalService, getTuiExit } from './bridge';
 import type { DependencyStatus } from '../dependency.types';
 
 const TABS = [
@@ -55,7 +55,7 @@ function AppContent() {
     if (!svc) return;
     setIngesting(svc.ingesting);
     svc.onStatusChange = (status: boolean) => setIngesting(status);
-    svc.onIngestComplete = (result) => {
+    svc.onIngestComplete = (result: { messagesStored: number; channelNames: string[] }) => {
       toast.show(`Synced ${result.messagesStored} messages`, 'done');
     };
   });
