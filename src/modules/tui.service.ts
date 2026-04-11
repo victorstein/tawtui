@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { join } from 'path';
 import { render } from '@opentui/solid';
 import { App } from './tui/app';
 import { TaskwarriorService } from './taskwarrior.service';
@@ -260,6 +262,37 @@ export class TuiService {
         });
         await this.mempalaceService.installPlugin(ORACLE_WORKSPACE_DIR);
         onProgress({ message: 'Plugin installed', status: 'done' });
+
+        // Step 4: Install Oracle channel server in workspace .mcp.json
+        onProgress({
+          message: 'Installing Oracle channel...',
+          status: 'running',
+        });
+        {
+          const mcpJsonPath = join(ORACLE_WORKSPACE_DIR, '.mcp.json');
+          let mcpConfig: Record<string, unknown> = {};
+          if (existsSync(mcpJsonPath)) {
+            try {
+              mcpConfig = JSON.parse(readFileSync(mcpJsonPath, 'utf-8'));
+            } catch {
+              // Corrupted — will be overwritten
+            }
+          }
+          const mcpServers =
+            (mcpConfig.mcpServers as Record<string, unknown>) ?? {};
+          const channelServerPath = join(
+            __dirname,
+            'oracle',
+            'oracle-channel.ts',
+          );
+          mcpServers['oracle-channel'] = {
+            command: 'bun',
+            args: [channelServerPath],
+          };
+          mcpConfig.mcpServers = mcpServers;
+          writeFileSync(mcpJsonPath, JSON.stringify(mcpConfig, null, 2));
+        }
+        onProgress({ message: 'Oracle channel installed', status: 'done' });
       },
       resetOracleData: async () => {
         this.slackIngestionService.resetState();
