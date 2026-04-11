@@ -215,7 +215,11 @@ function AppContent() {
       activeSyncToastId = id;
       svc
         .triggerIngest((info) => {
-          if (info.phase === 'listing') {
+          if (info.phase === 'prefilter') {
+            toast.update(id, 'Checking for changes...');
+          } else if (info.phase === 'fetching') {
+            toast.update(id, `Fetching ${info.totalChannels} channels...`);
+          } else if (info.phase === 'listing') {
             const count = info.channelsSoFar ? ` (${info.channelsSoFar} channels)` : '';
             toast.update(id, `Fetching channel list...${count}`);
           } else if (info.phase === 'detecting') {
@@ -237,6 +241,8 @@ function AppContent() {
               ? `${info.channel} (${info.messageCount} threads)`
               : `${info.channel} scanning threads...`;
             toast.update(id, count);
+          } else if (info.phase === 'mining') {
+            toast.update(id, 'Mining to mempalace...');
           }
         })
         .then(

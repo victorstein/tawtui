@@ -56,7 +56,10 @@ export class SlackIngestionService {
         | 'waiting'
         | 'skipped'
         | 'detecting'
-        | 'threads';
+        | 'threads'
+        | 'prefilter'
+        | 'fetching'
+        | 'mining';
       channel?: string;
       messageCount?: number;
       channelIndex?: number;
@@ -193,6 +196,7 @@ export class SlackIngestionService {
           ? new Date(state.lastChecked).getTime()
           : null;
         if (lastCheckedTs) {
+          onProgress?.({ phase: 'prefilter' });
           // Subtract 1 day: Slack's after: filter is date-based and exclusive
           // (after:2026-04-11 means April 12+), so we go back a day
           const searchDate = new Date(lastCheckedTs - 24 * 60 * 60 * 1000)
@@ -225,7 +229,7 @@ export class SlackIngestionService {
 
       // Phase 1: Fetch new messages per channel (concurrent, limit 3)
       const limit = pLimit(3);
-      const phase1Tasks = filteredConversations
+      const channelsToFetch = filteredConversations
         .filter((conversation) => {
           if (options?.skipExisting && state.channelCursors[conversation.id]) {
             return false;
@@ -234,7 +238,16 @@ export class SlackIngestionService {
             return false;
           }
           return true;
-        })
+        });
+
+      if (channelsToFetch.length > 0) {
+        onProgress?.({
+          phase: 'fetching',
+          totalChannels: channelsToFetch.length,
+        });
+      }
+
+      const phase1Tasks = channelsToFetch
         .map((conversation) =>
           limit(async () => {
             if (this._generation !== gen) return;
@@ -467,6 +480,7 @@ export class SlackIngestionService {
 
       // Mine all new files into mempalace (idempotent — skips already-mined)
       if (filesWritten > 0) {
+        onProgress?.({ phase: 'mining' });
         await this.mempalaceService.mine(this.stagingDir, 'slack');
       }
 
@@ -487,7 +501,20 @@ export class SlackIngestionService {
   async triggerIngest(
     onProgress?: Parameters<typeof this.ingest>[0],
   ): Promise<{ messagesStored: number; channelNames: string[] }> {
-    return this.ingest(onProgress);
+    const result = await this.ingest(onProgress);
+
+    // Fire sync-complete event to oracle channel (same as safeIngest)
+    if (result.messagesStored > 0 && this.oracleEventService) {
+      const rejectedTasks = this.oracleEventService.readRejectedTasks();
+      void this.oracleEventService.postEvent({
+        type: 'sync-complete',
+        messagesStored: result.messagesStored,
+        channels: result.channelNames,
+        rejectedTasks,
+      });
+    }
+
+    return result;
   }
 
   /** Start periodic ingestion (called by TuiService on launch) */
