@@ -320,6 +320,36 @@ export class TuiService {
         const intervalMs = oracleConfig.pollIntervalSeconds * 1000;
         this.slackIngestionService.startPolling(intervalMs);
 
+        // Ensure channel server is registered in .mcp.json (idempotent)
+        {
+          const mcpJsonPath = join(ORACLE_WORKSPACE_DIR, '.mcp.json');
+          let mcpConfig: Record<string, unknown> = {};
+          if (existsSync(mcpJsonPath)) {
+            try {
+              mcpConfig = JSON.parse(
+                readFileSync(mcpJsonPath, 'utf-8'),
+              ) as Record<string, unknown>;
+            } catch {
+              // Corrupted — will be overwritten
+            }
+          }
+          const mcpServers =
+            (mcpConfig.mcpServers as Record<string, unknown>) ?? {};
+          if (!mcpServers['oracle-channel']) {
+            const channelServerPath = join(
+              __dirname,
+              'oracle',
+              'oracle-channel.ts',
+            );
+            mcpServers['oracle-channel'] = {
+              command: 'bun',
+              args: [channelServerPath],
+            };
+            mcpConfig.mcpServers = mcpServers;
+            writeFileSync(mcpJsonPath, JSON.stringify(mcpConfig, null, 2));
+          }
+        }
+
         // Wire up oracle event service for channel notifications
         const { OracleEventService } =
           await import('./oracle/oracle-event.service');
