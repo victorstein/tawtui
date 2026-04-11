@@ -28,7 +28,7 @@ export class SlackIngestionService {
   private _generation = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
   onStatusChange: ((ingesting: boolean) => void) | null = null;
-  onIngestComplete: ((result: { messagesStored: number }) => void) | null = null;
+  onIngestComplete: ((result: { messagesStored: number; channelNames: string[] }) => void) | null = null;
 
   get ingesting(): boolean {
     return this._ingesting;
@@ -53,8 +53,8 @@ export class SlackIngestionService {
       waitReason?: 'throttle' | 'rate-limited';
     }) => void,
     options?: { skipExisting?: boolean },
-  ): Promise<{ messagesStored: number }> {
-    if (this._ingesting) return { messagesStored: 0 };
+  ): Promise<{ messagesStored: number; channelNames: string[] }> {
+    if (this._ingesting) return { messagesStored: 0, channelNames: [] };
 
     this._ingesting = true;
     const gen = this._generation;
@@ -109,12 +109,12 @@ export class SlackIngestionService {
           },
           () => this._generation !== gen,
         );
-        if (this._generation !== gen) return { messagesStored: 0 };
+        if (this._generation !== gen) return { messagesStored: 0, channelNames: [] };
         state.conversations = conversations;
         state.channelsCachedAt = new Date().toISOString();
         this.saveState(state);
       }
-      if (this._generation !== gen) return { messagesStored: 0 };
+      if (this._generation !== gen) return { messagesStored: 0, channelNames: [] };
 
       // Detect active channels — refresh hourly so new channels are picked up
       const ACTIVE_CHANNELS_TTL_MS = 60 * 60 * 1000; // 1 hour
@@ -141,12 +141,12 @@ export class SlackIngestionService {
           },
           () => this._generation !== gen,
         );
-        if (this._generation !== gen) return { messagesStored: 0 };
+        if (this._generation !== gen) return { messagesStored: 0, channelNames: [] };
         state.activeChannelIds = [...activeChannelIds];
         state.activeChannelsCachedAt = new Date().toISOString();
         this.saveState(state);
       }
-      if (this._generation !== gen) return { messagesStored: 0 };
+      if (this._generation !== gen) return { messagesStored: 0, channelNames: [] };
 
       // Filter: channels the user is active in + channels we've previously synced
       const filteredConversations = conversations.filter(
@@ -155,12 +155,13 @@ export class SlackIngestionService {
 
       let messagesStored = 0;
       let filesWritten = 0;
+      const touchedChannelNames: Set<string> = new Set();
       const totalChannels = filteredConversations.length;
 
       mkdirSync(this.stagingDir, { recursive: true });
 
       for (let i = 0; i < filteredConversations.length; i++) {
-        if (this._generation !== gen) return { messagesStored };
+        if (this._generation !== gen) return { messagesStored, channelNames: [...touchedChannelNames] };
         const conversation = filteredConversations[i];
         const channelIndex = i + 1;
         waitCtx = { channel: conversation.name, channelIndex, totalChannels };
@@ -237,6 +238,7 @@ export class SlackIngestionService {
 
         filesWritten++;
         messagesStored += rawMessages.length;
+        touchedChannelNames.add(conversation.name);
 
         // Advance cursor and persist immediately so progress survives app exit
         const lastTopLevel = rawMessages.filter((m) => !m.threadTs).pop();
@@ -275,7 +277,7 @@ export class SlackIngestionService {
       const sevenDaysAgo = String((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000);
 
       for (const conversation of filteredConversations) {
-        if (this._generation !== gen) return { messagesStored };
+        if (this._generation !== gen) return { messagesStored, channelNames: [...touchedChannelNames] };
 
         // Bootstrap: seed trackedThreads for channels with cursors but no tracked threads
         const channelCursor = state.channelCursors[conversation.id];
@@ -333,7 +335,7 @@ export class SlackIngestionService {
         });
 
         for (const tracked of activeThreads) {
-          if (this._generation !== gen) return { messagesStored };
+          if (this._generation !== gen) return { messagesStored, channelNames: [...touchedChannelNames] };
 
           let replies: Array<{ ts: string; userId: string; text: string }>;
           try {
@@ -383,6 +385,7 @@ export class SlackIngestionService {
 
           filesWritten++;
           messagesStored += newReplies.length;
+          touchedChannelNames.add(conversation.name);
           tracked.lastReplyTs = newReplies[newReplies.length - 1].ts;
         }
 
@@ -397,7 +400,7 @@ export class SlackIngestionService {
       this.logger.log(
         `Ingestion complete: ${messagesStored} messages in ${filesWritten} files`,
       );
-      return { messagesStored };
+      return { messagesStored, channelNames: [...touchedChannelNames] };
     } finally {
       this.slackService.onWait = prevOnWait;
       this.slackService.shouldAbort = prevShouldAbort;
@@ -410,7 +413,7 @@ export class SlackIngestionService {
 
   async triggerIngest(
     onProgress?: Parameters<typeof this.ingest>[0],
-  ): Promise<{ messagesStored: number }> {
+  ): Promise<{ messagesStored: number; channelNames: string[] }> {
     return this.ingest(onProgress);
   }
 
