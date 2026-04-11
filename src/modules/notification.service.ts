@@ -8,6 +8,7 @@ import { TERMINAL_BUNDLE_IDS, DEFAULT_BUNDLE_ID } from './notification.types';
 export class NotificationService {
   private readonly logger = new Logger(NotificationService.name);
   private terminalBundleId: string;
+  private installedCache: boolean | null = null;
 
   constructor() {
     this.terminalBundleId = this.detectTerminalBundleId();
@@ -16,7 +17,9 @@ export class NotificationService {
   async send(payload: NotificationPayload): Promise<boolean> {
     const installed = await this.isInstalled();
     if (!installed) {
-      this.logger.debug('terminal-notifier not installed, skipping notification');
+      this.logger.debug(
+        'terminal-notifier not installed, skipping notification',
+      );
       return false;
     }
 
@@ -25,6 +28,8 @@ export class NotificationService {
   }
 
   async isInstalled(): Promise<boolean> {
+    if (this.installedCache !== null) return this.installedCache;
+
     try {
       const proc = Bun.spawn(['terminal-notifier', '-help'], {
         stdout: 'pipe',
@@ -32,10 +37,12 @@ export class NotificationService {
       });
 
       const exitCode = await proc.exited;
-      return exitCode === 0;
+      this.installedCache = exitCode === 0;
     } catch {
-      return false;
+      this.installedCache = false;
     }
+
+    return this.installedCache;
   }
 
   private buildArgs(payload: NotificationPayload): string[] {
@@ -74,7 +81,9 @@ export class NotificationService {
       ]);
 
       if (exitCode !== 0) {
-        this.logger.debug(`terminal-notifier failed (exit ${exitCode}): ${stderr}`);
+        this.logger.debug(
+          `terminal-notifier failed (exit ${exitCode}): ${stderr}`,
+        );
         return false;
       }
 

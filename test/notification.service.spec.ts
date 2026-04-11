@@ -1,7 +1,6 @@
 // test/notification.service.spec.ts
 
 import { NotificationService } from '../src/modules/notification.service';
-import { DEFAULT_BUNDLE_ID } from '../src/modules/notification.types';
 
 // Save original env and Bun.spawn
 const originalEnv = { ...process.env };
@@ -151,6 +150,3 @@ describe('NotificationService', () => {
     });
   });
 });
-
-// Ensure DEFAULT_BUNDLE_ID is exported and used (suppress unused import warning)
-void DEFAULT_BUNDLE_ID;
