@@ -218,7 +218,13 @@ export class SlackService {
     channelId: string,
     oldestTs: string,
   ): Promise<
-    Array<{ ts: string; userId: string; text: string; threadTs?: string; replyCount?: number }>
+    Array<{
+      ts: string;
+      userId: string;
+      text: string;
+      threadTs?: string;
+      replyCount?: number;
+    }>
   > {
     const topLevel: Array<{
       ts: string;
@@ -256,9 +262,7 @@ export class SlackService {
         });
       }
 
-      cursor = data.has_more
-        ? (data.response_metadata?.next_cursor ?? '')
-        : '';
+      cursor = data.has_more ? (data.response_metadata?.next_cursor ?? '') : '';
     } while (cursor);
 
     // Chronological order (history returns newest first)
@@ -425,14 +429,11 @@ export class SlackService {
 
     do {
       if (shouldAbort?.()) return channelIds;
-      const data = await this.slackGet<SlackSearchResponse>(
-        'search.messages',
-        {
-          query: `from:me after:${afterDate}`,
-          count: '100',
-          page: String(page),
-        },
-      );
+      const data = await this.slackGet<SlackSearchResponse>('search.messages', {
+        query: `from:me after:${afterDate}`,
+        count: '100',
+        page: String(page),
+      });
 
       if (!data.ok) {
         throw new Error(`Slack search.messages error: ${data.error}`);

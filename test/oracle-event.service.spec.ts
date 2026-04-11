@@ -58,9 +58,9 @@ describe('OracleEventService', () => {
     let fetchSpy: jest.SpyInstance;
 
     beforeEach(() => {
-      fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue(
-        new Response('ok', { status: 200 }),
-      );
+      fetchSpy = jest
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(new Response('ok', { status: 200 }));
     });
 
     afterEach(() => {

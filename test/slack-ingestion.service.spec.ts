@@ -202,7 +202,12 @@ describe('SlackIngestionService', () => {
     mockSlackService.getMessagesSince.mockResolvedValue([
       { ts: '1700000100.000000', userId: 'U111', text: 'top level' },
       { ts: '1700000200.000000', userId: 'U222', text: 'parent' },
-      { ts: '1700000250.000000', userId: 'U333', text: 'reply', threadTs: '1700000200.000000' },
+      {
+        ts: '1700000250.000000',
+        userId: 'U333',
+        text: 'reply',
+        threadTs: '1700000200.000000',
+      },
       { ts: '1700000300.000000', userId: 'U444', text: 'last top level' },
     ]);
     mockSlackService.resolveUserName.mockResolvedValue('User');

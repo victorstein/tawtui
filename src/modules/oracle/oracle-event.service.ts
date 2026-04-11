@@ -1,7 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { existsSync, readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
-import { ORACLE_CHANNEL_PORT, OracleChannelEvent } from './oracle-channel.types';
+import {
+  ORACLE_CHANNEL_PORT,
+  OracleChannelEvent,
+} from './oracle-channel.types';
 
 @Injectable()
 export class OracleEventService {
