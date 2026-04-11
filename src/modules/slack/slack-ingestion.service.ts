@@ -282,9 +282,7 @@ export class SlackIngestionService {
                   (m) => m.threadTs === msg.ts,
                 );
                 const lastReply =
-                  replies.length > 0
-                    ? replies[replies.length - 1]
-                    : undefined;
+                  replies.length > 0 ? replies[replies.length - 1] : undefined;
                 const existing = channelThreads.find(
                   (t) => t.threadTs === msg.ts,
                 );
@@ -417,9 +415,7 @@ export class SlackIngestionService {
                 conversation.name,
                 conversation.isDm,
               );
-              const timestamp = new Date()
-                .toISOString()
-                .replace(/[:.]/g, '-');
+              const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
               const fileName = `${timestamp}_thread-${tracked.threadTs}_${channelSlug}.json`;
               writeFileSync(
                 join(this.stagingDir, fileName),

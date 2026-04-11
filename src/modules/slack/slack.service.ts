@@ -466,14 +466,11 @@ export class SlackService {
 
     do {
       if (shouldAbort?.()) return channelIds;
-      const data = await this.slackGet<SlackSearchResponse>(
-        'search.messages',
-        {
-          query: `after:${afterDate}`,
-          count: '100',
-          page: String(page),
-        },
-      );
+      const data = await this.slackGet<SlackSearchResponse>('search.messages', {
+        query: `after:${afterDate}`,
+        count: '100',
+        page: String(page),
+      });
 
       if (!data.ok) {
         throw new Error(`Slack search.messages error: ${data.error}`);
