@@ -5,6 +5,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'fs';
 import { SlackService } from './slack.service';
 import { MempalaceService } from './mempalace.service';
 import type { OracleState, SlackConversation } from './slack.types';
+import { OracleEventService } from '../oracle/oracle-event.service';
 
 
 @Injectable()
@@ -29,6 +30,7 @@ export class SlackIngestionService {
   private timer: ReturnType<typeof setInterval> | null = null;
   onStatusChange: ((ingesting: boolean) => void) | null = null;
   onIngestComplete: ((result: { messagesStored: number; channelNames: string[] }) => void) | null = null;
+  oracleEventService: OracleEventService | null = null;
 
   get ingesting(): boolean {
     return this._ingesting;
@@ -476,6 +478,17 @@ export class SlackIngestionService {
       const result = await this.ingest();
       if (result.messagesStored > 0) {
         this.onIngestComplete?.(result);
+
+        // Fire sync-complete event to oracle channel
+        if (this.oracleEventService) {
+          const rejectedTasks = this.oracleEventService.readRejectedTasks();
+          void this.oracleEventService.postEvent({
+            type: 'sync-complete',
+            messagesStored: result.messagesStored,
+            channels: result.channelNames,
+            rejectedTasks,
+          });
+        }
       }
     } catch (err) {
       this.logger.error(`Ingestion failed: ${(err as Error).message}`);
