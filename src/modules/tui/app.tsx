@@ -77,6 +77,7 @@ function AppContent() {
 
   // Oracle alert detection — poll oracle session capture for [ORACLE ALERT]
   let lastOracleAlertHash = '';
+  let alertSeeded = false;
 
   onMount(() => {
     const interval = setInterval(() => {
@@ -102,6 +103,14 @@ function AppContent() {
           if (alertIdx === -1) return;
 
           const alertHash = `${alertIdx}-${capture.content.length}`;
+
+          // Seed on first capture so stale alerts from previous sessions are ignored
+          if (!alertSeeded) {
+            alertSeeded = true;
+            lastOracleAlertHash = alertHash;
+            return;
+          }
+
           if (alertHash === lastOracleAlertHash) return;
 
           lastOracleAlertHash = alertHash;
