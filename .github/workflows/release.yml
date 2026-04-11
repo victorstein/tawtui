@@ -28,10 +28,19 @@ jobs:
           mkdir -p dist
           bun run scripts/compile.ts
 
-      - name: Generate checksum
+      - name: Build notification helper
+        run: bash src/notify-helper/build.sh
+
+      - name: Package notification helper
+        run: |
+          cd dist
+          tar -czf tawtui-notify-darwin-arm64.tar.gz "TaWTUI Notify.app"
+
+      - name: Generate checksums
         run: |
           cd dist
           shasum -a 256 tawtui-darwin-arm64 > tawtui-darwin-arm64.sha256
+          shasum -a 256 tawtui-notify-darwin-arm64.tar.gz > tawtui-notify-darwin-arm64.tar.gz.sha256
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -40,6 +49,8 @@ jobs:
           files: |
             dist/tawtui-darwin-arm64
             dist/tawtui-darwin-arm64.sha256
+            dist/tawtui-notify-darwin-arm64.tar.gz
+            dist/tawtui-notify-darwin-arm64.tar.gz.sha256
 
       - name: Update Homebrew tap
         uses: peter-evans/repository-dispatch@v3
