@@ -84,9 +84,6 @@ function AppContent() {
       const ts = getTerminalService();
       if (!ts) return;
 
-      // Only check when not on the Oracle tab (index 3)
-      if (activeTab() === 3) return;
-
       const sessions = ts.listSessions();
       const oracleSession = sessions.find(
         (s) => s.isOracleSession && s.status === 'running',
@@ -112,8 +109,11 @@ function AppContent() {
           }
 
           if (alertHash === lastOracleAlertHash) return;
-
           lastOracleAlertHash = alertHash;
+
+          // On Oracle tab: user sees it live, no notification needed
+          if (activeTab() === 3) return;
+
           toast.show('Oracle found new action items', 'done');
 
           // Fire native macOS notification for when user is in another app
