@@ -243,11 +243,16 @@ function AppContent() {
           (result) => {
             activeSyncToastId = null;
             const count = result.messagesStored;
-            toast.update(
-              id,
-              count > 0 ? `Synced ${count} messages` : 'Up to date',
-              'done',
-            );
+            const channels = result.channelNames;
+            let msg: string;
+            if (count > 0 && channels.length > 0) {
+              msg = `Synced ${count} msgs from ${channels.join(', ')}`;
+            } else if (count > 0) {
+              msg = `Synced ${count} messages`;
+            } else {
+              msg = 'All up to date';
+            }
+            toast.update(id, msg, 'done');
           },
           () => {
             if (activeSyncToastId === id) {
