@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { GithubService } from './github.service';
 import { TaskwarriorService } from './taskwarrior.service';
 import { CalendarService } from './calendar.service';
+import { NotificationService } from './notification.service';
 import type { DependencyStatus } from './dependency.types';
 
 @Injectable()
@@ -10,6 +11,7 @@ export class DependencyService {
     private readonly githubService: GithubService,
     private readonly taskwarriorService: TaskwarriorService,
     private readonly calendarService: CalendarService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async checkAll(): Promise<DependencyStatus> {
@@ -23,12 +25,14 @@ export class DependencyService {
       gogInstalled,
       gogAuthenticated,
       gogHasCredentials,
+      notificationInstalled,
     ] = await Promise.all([
       this.githubService.isGhInstalled(),
       this.githubService.isAuthenticated(),
       this.calendarService.isInstalled(),
       this.calendarService.isAuthenticated(),
       this.calendarService.hasCredentials(),
+      this.notificationService.isInstalled(),
     ]);
 
     const gogCredentialsPath = this.calendarService.getCredentialsPath();
@@ -52,9 +56,14 @@ export class DependencyService {
         installed: taskInstalled,
         instructions: this.getTaskInstallInstructions(platform),
       },
+      notification: {
+        installed: notificationInstalled,
+        instructions: 'Rebuild TaWTUI to install the notification helper',
+      },
       platform,
       allGood: ghInstalled && ghAuthenticated && taskInstalled,
       calendarReady: gogInstalled && gogAuthenticated && gogHasCredentials,
+      notificationsReady: notificationInstalled,
     };
   }
 

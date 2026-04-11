@@ -15,11 +15,15 @@ export interface GogDepStatus extends DepStatus {
   credentialsPath: string;
 }
 
+export type NotificationDepStatus = DepStatus;
+
 export interface DependencyStatus {
   gh: GhDepStatus;
   gog: GogDepStatus;
   task: DepStatus;
+  notification: NotificationDepStatus;
   platform: NodeJS.Platform;
   allGood: boolean;
   calendarReady: boolean;
+  notificationsReady: boolean;
 }
