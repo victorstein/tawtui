@@ -65,21 +65,21 @@ describe('NotificationService', () => {
   });
 
   describe('isInstalled', () => {
-    it('returns true when terminal-notifier exits 0', async () => {
+    it('returns true when notification helper exits 0', async () => {
       process.env.TERM_PROGRAM = 'Apple_Terminal';
       const service = new NotificationService();
       mockSpawn(0);
       expect(await service.isInstalled()).toBe(true);
     });
 
-    it('returns false when terminal-notifier exits non-zero', async () => {
+    it('returns false when notification helper exits non-zero', async () => {
       process.env.TERM_PROGRAM = 'Apple_Terminal';
       const service = new NotificationService();
       mockSpawn(1);
       expect(await service.isInstalled()).toBe(false);
     });
 
-    it('returns false when terminal-notifier binary not found', async () => {
+    it('returns false when notification helper binary not found', async () => {
       process.env.TERM_PROGRAM = 'Apple_Terminal';
       const service = new NotificationService();
       mockSpawnThrow();
@@ -99,7 +99,7 @@ describe('NotificationService', () => {
       expect(result).toBe(true);
     });
 
-    it('returns false when terminal-notifier is not installed', async () => {
+    it('returns false when notification helper is not installed', async () => {
       process.env.TERM_PROGRAM = 'Apple_Terminal';
       const service = new NotificationService();
       mockSpawnThrow();
@@ -110,7 +110,7 @@ describe('NotificationService', () => {
       expect(result).toBe(false);
     });
 
-    it('returns false when terminal-notifier fails', async () => {
+    it('returns false when notification helper fails', async () => {
       process.env.TERM_PROGRAM = 'Apple_Terminal';
       const service = new NotificationService();
 

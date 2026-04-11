@@ -28,7 +28,6 @@ class Tawtui < Formula
 
       Optional:
         - Google Calendar:    brew install steipete/tap/gogcli
-        - Notifications:      brew install terminal-notifier
 
       Run `tawtui` to launch the setup wizard.
     EOS

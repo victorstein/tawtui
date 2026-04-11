@@ -6,7 +6,12 @@ import { CalendarModule } from './calendar.module';
 import { NotificationModule } from './notification.module';
 
 @Module({
-  imports: [GithubModule, TaskwarriorModule, CalendarModule, NotificationModule],
+  imports: [
+    GithubModule,
+    TaskwarriorModule,
+    CalendarModule,
+    NotificationModule,
+  ],
   providers: [DependencyService],
   exports: [DependencyService],
 })

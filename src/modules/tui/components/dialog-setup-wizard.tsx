@@ -191,11 +191,11 @@ export function DialogSetupWizard(props: DialogSetupWizardProps) {
         </box>
       </Show>
 
-      {/* Terminal Notifier section (optional) */}
+      {/* Notifications section (optional) */}
       <box height={1} />
       <box flexDirection="row">
         <text fg={FG_NORMAL} attributes={1}>
-          {'  Terminal Notifier '}
+          {'  Notifications '}
         </text>
         <text fg={FG_DIM}>{'(Optional)'}</text>
       </box>

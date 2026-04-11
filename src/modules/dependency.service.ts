@@ -58,7 +58,7 @@ export class DependencyService {
       },
       notification: {
         installed: notificationInstalled,
-        instructions: 'brew install terminal-notifier',
+        instructions: 'Rebuild TaWTUI to install the notification helper',
       },
       platform,
       allGood: ghInstalled && ghAuthenticated && taskInstalled,

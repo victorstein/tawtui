@@ -1,25 +1,28 @@
 // src/modules/notification.service.ts
 
 import { Injectable, Logger } from '@nestjs/common';
+import { resolve } from 'path';
 import type { NotificationPayload } from './notification.types';
 import { TERMINAL_BUNDLE_IDS, DEFAULT_BUNDLE_ID } from './notification.types';
+
+const NOTIFY_APP_REL_PATH = 'TaWTUI Notify.app/Contents/MacOS/tawtui-notify';
 
 @Injectable()
 export class NotificationService {
   private readonly logger = new Logger(NotificationService.name);
   private terminalBundleId: string;
   private installedCache: boolean | null = null;
+  private readonly binaryPath: string;
 
   constructor() {
     this.terminalBundleId = this.detectTerminalBundleId();
+    this.binaryPath = this.resolveHelperPath();
   }
 
   async send(payload: NotificationPayload): Promise<boolean> {
     const installed = await this.isInstalled();
     if (!installed) {
-      this.logger.debug(
-        'terminal-notifier not installed, skipping notification',
-      );
+      this.logger.debug('Notification helper not found, skipping notification');
       return false;
     }
 
@@ -31,7 +34,7 @@ export class NotificationService {
     if (this.installedCache !== null) return this.installedCache;
 
     try {
-      const proc = Bun.spawn(['terminal-notifier', '-help'], {
+      const proc = Bun.spawn([this.binaryPath, '-help'], {
         stdout: 'pipe',
         stderr: 'pipe',
       });
@@ -43,6 +46,11 @@ export class NotificationService {
     }
 
     return this.installedCache;
+  }
+
+  private resolveHelperPath(): string {
+    // __dirname points to src/modules/ — resolve up to project root, then into dist/
+    return resolve(__dirname, '..', '..', 'dist', NOTIFY_APP_REL_PATH);
   }
 
   private buildArgs(payload: NotificationPayload): string[] {
@@ -70,7 +78,7 @@ export class NotificationService {
 
   private async exec(args: string[]): Promise<boolean> {
     try {
-      const proc = Bun.spawn(['terminal-notifier', ...args], {
+      const proc = Bun.spawn([this.binaryPath, ...args], {
         stdout: 'pipe',
         stderr: 'pipe',
       });
@@ -82,14 +90,14 @@ export class NotificationService {
 
       if (exitCode !== 0) {
         this.logger.debug(
-          `terminal-notifier failed (exit ${exitCode}): ${stderr}`,
+          `Notification helper failed (exit ${exitCode}): ${stderr}`,
         );
         return false;
       }
 
       return true;
     } catch {
-      this.logger.debug('terminal-notifier exec failed');
+      this.logger.debug('Notification helper exec failed');
       return false;
     }
   }
