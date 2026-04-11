@@ -26,9 +26,9 @@ export function pLimit(concurrency: number) {
             resolve(val);
             next();
           },
-          (err) => {
+          (err: unknown) => {
             active--;
-            reject(err);
+            reject(err instanceof Error ? err : new Error(String(err)));
             next();
           },
         );

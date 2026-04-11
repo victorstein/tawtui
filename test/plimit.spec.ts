@@ -41,24 +41,22 @@ describe('pLimit', () => {
     const results: string[] = [];
 
     const tasks = [
-      limit(async () => {
+      limit(() => {
         results.push('a');
-        return 'a';
+        return Promise.resolve('a');
       }),
-      limit(async () => {
-        throw new Error('fail');
+      limit(() => {
+        return Promise.reject(new Error('fail'));
       }),
-      limit(async () => {
+      limit(() => {
         results.push('c');
-        return 'c';
+        return Promise.resolve('c');
       }),
     ];
 
     const settled = await Promise.allSettled(tasks);
     expect(settled[0]).toEqual({ status: 'fulfilled', value: 'a' });
-    expect(settled[1]).toEqual(
-      expect.objectContaining({ status: 'rejected' }),
-    );
+    expect(settled[1]).toEqual(expect.objectContaining({ status: 'rejected' }));
     expect(settled[2]).toEqual({ status: 'fulfilled', value: 'c' });
   });
 });
