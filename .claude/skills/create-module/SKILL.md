@@ -44,9 +44,37 @@ export class <Name>Service {
     };
   }
 
+  // If wrapping a CLI tool (async, non-blocking):
+  private async execTool(args: string[]): Promise<void> {
+    const proc = Bun.spawn(['<tool-binary>', ...args], {
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+
+    const exitCode = await proc.exited;
+    if (exitCode !== 0) {
+      const stderr = await new Response(proc.stderr).text();
+      throw new Error(`<tool> failed (exit ${exitCode}): ${stderr}`);
+    }
+  }
+
   // Add your service methods here
 }
 ```
+
+### Subdirectory Modules
+
+For modules with multiple services (e.g., slack/, oracle/), use a subdirectory:
+
+```
+src/modules/<name>/
+├── <name>.module.ts
+├── <name>.service.ts
+├── <name>.types.ts
+└── <other-service>.service.ts
+```
+
+The module file imports from siblings. Register the module in `src/app.module.ts` the same way.
 
 ### 3. `src/modules/<name>.module.ts`
 
@@ -81,11 +109,16 @@ export class AppModule {}
 
 ### 5. (Optional) Bridge to TUI
 
-If TUI components need access, add to `src/modules/tui.service.ts`:
+If TUI components need access, add to `src/modules/tui/bridge.ts`:
 
-1. Import the service
-2. Inject via constructor
-3. Add to `globalThis.__tawtui` object
+```typescript
+// In src/modules/tui/bridge.ts, add a getter:
+export function get<Name>Service(): <Name>Service | null {
+  return (globalThis as TawtuiBridge)?.__tawtui?.<name>Service ?? null;
+}
+```
+
+Also inject the service in `src/modules/tui.service.ts` and assign it on `globalThis.__tawtui`.
 
 ## Reference Implementations
 
@@ -93,3 +126,7 @@ If TUI components need access, add to `src/modules/tui.service.ts`:
 - **github** — Read service wrapping `gh` CLI with JSON output parsing
 - **config** — File-based config service with atomic writes
 - **terminal** — Session management wrapping `tmux`
+- **slack** — Slack API wrapper with HTTP fetch, rate limiting, and pagination
+- **notification** — Wraps custom Swift helper binary
+- **mempalace** — Wraps `mempalace` CLI with async Bun.spawn
+- **oracle-event** — Event posting service with retry logic

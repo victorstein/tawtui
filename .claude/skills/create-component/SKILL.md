@@ -4,7 +4,9 @@ Create a new @opentui/solid component following established patterns.
 
 ## File Location
 
-`src/modules/tui/components/<component-name>.tsx`
+For components: `src/modules/tui/components/<component-name>.tsx`
+
+For views (full-tab content): `src/modules/tui/views/<view-name>.tsx`
 
 Use kebab-case for the filename, PascalCase for the export.
 
@@ -53,10 +55,24 @@ export function <ComponentName>(props: <ComponentName>Props) {
 ## Key Rules
 
 1. **Theme tokens only** — Never hardcode colors. Import from `../theme`.
-2. **Service access** — Use `(globalThis as any).__tawtui?.serviceName` for NestJS services.
+2. **Service access** — Import getter functions from `../bridge`:
+   ```tsx
+   import { getTaskwarriorService, getConfigService } from '../bridge';
+
+   const tw = getTaskwarriorService();
+   if (!tw) return;
+   ```
+   Never access `globalThis.__tawtui` directly.
 3. **Dialog awareness** — If the component uses `useKeyboard`, check `dialog.isOpen()` first.
-4. **Props interface** — Always define a typed props interface.
-5. **Accessor pattern** — SolidJS props are getters. Access via `props.value`, not destructuring.
+4. **Toast notifications** — Use the toast context for ephemeral feedback:
+   ```tsx
+   import { useToast } from '../context/toast';
+
+   const toast = useToast();
+   toast.show('Action completed', 'done');  // status: 'running' | 'done' | 'error'
+   ```
+5. **Props interface** — Always define a typed props interface.
+6. **Accessor pattern** — SolidJS props are getters. Access via `props.value`, not destructuring.
 
 ## @opentui/solid Elements
 
@@ -86,3 +102,6 @@ export function <ComponentName>(props: <ComponentName>Props) {
 - **dialog-confirm.tsx** — Simple dialog with Yes/No
 - **filter-bar.tsx** — Text input component with keyboard capture
 - **tab-bar.tsx** — Horizontal tab navigation
+- **terminal-output.tsx** — Embedded tmux pane display
+- **oracle-setup-screen.tsx** — Multi-step wizard with progress animation
+- **oracle-view.tsx** — Tab view with tmux terminal embedding and adaptive polling
