@@ -945,6 +945,7 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
     if (claudeAgent.autoApproveFlag) {
       command += ` ${claudeAgent.autoApproveFlag}`;
     }
+    command += ' --dangerously-load-development-channels server:oracle-channel';
     command += ` '${escaped}'`;
 
     const session = await this.createSession({
