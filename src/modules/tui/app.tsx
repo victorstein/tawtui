@@ -47,6 +47,7 @@ function AppContent() {
     null,
   );
   const [ingesting, setIngesting] = createSignal(false);
+  const [lastSyncChannels, setLastSyncChannels] = createSignal<string[]>([]);
   let activeSyncToastId: number | null = null;
 
   // Hook up Slack ingestion status + background sync toast
@@ -56,6 +57,9 @@ function AppContent() {
     setIngesting(svc.ingesting);
     svc.onStatusChange = (status: boolean) => setIngesting(status);
     svc.onIngestComplete = (result: { messagesStored: number; channelNames: string[] }) => {
+      if (result.channelNames.length > 0) {
+        setLastSyncChannels(result.channelNames);
+      }
       if (result.messagesStored > 0) {
         toast.show(`Synced ${result.messagesStored} messages`, 'done');
       } else {
@@ -102,6 +106,20 @@ function AppContent() {
 
           lastOracleAlertHash = alertHash;
           toast.show('Oracle found new action items', 'done');
+
+          // Fire native macOS notification for when user is in another app
+          const notificationService = getNotificationService();
+          if (notificationService) {
+            const channels = lastSyncChannels();
+            const message =
+              channels.length > 0
+                ? `New action items from ${channels.join(', ')}`
+                : 'New action items found';
+            void notificationService.send({
+              title: 'TaWTUI Oracle',
+              message,
+            });
+          }
         })
         .catch(() => {
           // Ignore capture errors
