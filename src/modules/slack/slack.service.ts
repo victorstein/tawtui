@@ -451,6 +451,45 @@ export class SlackService {
     return channelIds;
   }
 
+  /**
+   * Find channels that have new messages since the given date.
+   * Uses search.messages to detect activity without fetching full history.
+   * Returns a set of channel IDs.
+   */
+  async getChangedChannelIds(
+    afterDate: string,
+    shouldAbort?: () => boolean,
+  ): Promise<Set<string>> {
+    const channelIds = new Set<string>();
+    let page = 1;
+    let totalPages = 1;
+
+    do {
+      if (shouldAbort?.()) return channelIds;
+      const data = await this.slackGet<SlackSearchResponse>(
+        'search.messages',
+        {
+          query: `after:${afterDate}`,
+          count: '100',
+          page: String(page),
+        },
+      );
+
+      if (!data.ok) {
+        throw new Error(`Slack search.messages error: ${data.error}`);
+      }
+
+      for (const match of data.messages?.matches ?? []) {
+        channelIds.add(match.channel.id);
+      }
+
+      totalPages = data.messages?.paging?.pages ?? 1;
+      page++;
+    } while (page <= totalPages);
+
+    return channelIds;
+  }
+
   /** Build a full SlackMessage with resolved username and channel name */
   async buildMessage(
     raw: { ts: string; userId: string; text: string },

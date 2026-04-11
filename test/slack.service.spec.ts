@@ -274,4 +274,66 @@ describe('SlackService', () => {
     expect(replies).toHaveLength(1);
     expect(replies[0].text).toBe('real reply');
   });
+
+  describe('getChangedChannelIds', () => {
+    it('returns channel IDs from search results', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          ok: true,
+          messages: {
+            matches: [
+              { channel: { id: 'C111' }, ts: '1' },
+              { channel: { id: 'C222' }, ts: '2' },
+              { channel: { id: 'C111' }, ts: '3' },
+            ],
+            paging: { pages: 1, page: 1, count: 100 },
+          },
+        }),
+      });
+
+      const result = await service.getChangedChannelIds('2026-04-11');
+      expect(result).toEqual(new Set(['C111', 'C222']));
+    });
+
+    it('returns empty set when no matches', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          ok: true,
+          messages: { matches: [], paging: { pages: 1, page: 1, count: 100 } },
+        }),
+      });
+
+      const result = await service.getChangedChannelIds('2026-04-11');
+      expect(result).toEqual(new Set());
+    });
+
+    it('paginates through multiple pages', async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            ok: true,
+            messages: {
+              matches: [{ channel: { id: 'C111' }, ts: '1' }],
+              paging: { pages: 2, page: 1, count: 100 },
+            },
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            ok: true,
+            messages: {
+              matches: [{ channel: { id: 'C222' }, ts: '2' }],
+              paging: { pages: 2, page: 2, count: 100 },
+            },
+          }),
+        });
+
+      const result = await service.getChangedChannelIds('2026-04-11');
+      expect(result).toEqual(new Set(['C111', 'C222']));
+    });
+  });
 });
