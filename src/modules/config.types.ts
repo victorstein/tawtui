@@ -28,6 +28,8 @@ export interface SlackCredentials {
   teamName: string;
   /** The authenticated user's display name (auto-detected from Slack) */
   userName?: string;
+  /** The authenticated user's Slack user ID (auto-detected from Slack) */
+  userId?: string;
 }
 
 export interface OracleConfig {

@@ -166,14 +166,14 @@ export class TuiService {
 
         // Step 1b: Detect user identity
         const oracleConfig = this.configService.getOracleConfig();
-        if (!oracleConfig.slack?.userName) {
+        if (!oracleConfig.slack?.userName || !oracleConfig.slack?.userId) {
           onProgress({
             message: 'Detecting user identity...',
             status: 'running',
           });
-          const { userName } = await this.slackService.getCurrentUser();
+          const { userId, userName } = await this.slackService.getCurrentUser();
           this.configService.updateOracleConfig({
-            slack: { ...oracleConfig.slack!, userName },
+            slack: { ...oracleConfig.slack!, userName, userId },
           });
           onProgress({
             message: `Detected user: ${userName}`,
@@ -355,6 +355,23 @@ export class TuiService {
           await import('./oracle/oracle-event.service');
         const oracleEventService = new OracleEventService(ORACLE_WORKSPACE_DIR);
         this.slackIngestionService.oracleEventService = oracleEventService;
+
+        // Pass user's Slack ID so ingestion can detect self-DM channel
+        let slackUserId = oracleConfig.slack?.userId;
+        if (!slackUserId) {
+          try {
+            const { userId } = await this.slackService.getCurrentUser();
+            slackUserId = userId;
+            this.configService.updateOracleConfig({
+              slack: { ...oracleConfig.slack!, userId },
+            });
+          } catch {
+            // Non-fatal — self-DM detection won't work until next startup
+          }
+        }
+        if (slackUserId) {
+          this.slackIngestionService.slackUserId = slackUserId;
+        }
 
         // Auto-launch oracle session (reuses existing if running)
         try {

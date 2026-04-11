@@ -33,6 +33,10 @@ export class SlackIngestionService {
     | ((result: { messagesStored: number; channelNames: string[] }) => void)
     | null = null;
   oracleEventService: OracleEventService | null = null;
+  /** The authenticated user's Slack ID — used to detect self-DM channel */
+  slackUserId: string | null = null;
+  /** Cached self-DM channel ID (detected from conversations list) */
+  private selfDmChannelId: string | null = null;
 
   get ingesting(): boolean {
     return this._ingesting;
@@ -161,6 +165,20 @@ export class SlackIngestionService {
       }
       if (this._generation !== gen)
         return { messagesStored: 0, channelNames: [] };
+
+      // Force-include self-DM channel (search.messages doesn't index self-messages)
+      if (this.selfDmChannelId) {
+        activeChannelIds.add(this.selfDmChannelId);
+      } else if (this.slackUserId) {
+        // Find the self-DM: an im channel whose name matches the user's own ID
+        const selfDm = conversations.find(
+          (c) => c.isDm && c.name === this.slackUserId,
+        );
+        if (selfDm) {
+          this.selfDmChannelId = selfDm.id;
+          activeChannelIds.add(selfDm.id);
+        }
+      }
 
       // Filter: channels the user is active in + channels we've previously synced
       const filteredConversations = conversations.filter(
