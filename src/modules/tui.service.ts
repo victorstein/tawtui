@@ -310,13 +310,52 @@ export class TuiService {
       },
     };
 
-    // Start Oracle ingestion if configured and dependencies are met
+    // Start Oracle ingestion, auto-launch session, and fire daily digest if needed
     const oracleConfig = this.configService.getOracleConfig();
     if (oracleConfig.slack?.xoxcToken && oracleConfig.slack?.xoxdCookie) {
       const depStatus = await this.dependencyService.checkAll();
       if (depStatus.oracleReady) {
         const intervalMs = oracleConfig.pollIntervalSeconds * 1000;
         this.slackIngestionService.startPolling(intervalMs);
+
+        // Wire up oracle event service for channel notifications
+        const { OracleEventService } = await import(
+          './oracle/oracle-event.service'
+        );
+        const oracleEventService = new OracleEventService(
+          ORACLE_WORKSPACE_DIR,
+        );
+        this.slackIngestionService.oracleEventService = oracleEventService;
+
+        // Auto-launch oracle session (reuses existing if running)
+        try {
+          await this.terminalService.createOracleSession();
+        } catch (err) {
+          this.logger.warn(
+            `Oracle auto-launch failed: ${(err as Error).message}`,
+          );
+        }
+
+        // Fire daily digest if >12h since last one
+        const lastDigest = oracleConfig.lastDigestAt
+          ? new Date(oracleConfig.lastDigestAt)
+          : null;
+        const twelveHoursMs = 12 * 60 * 60 * 1000;
+        const needsDigest =
+          !lastDigest || Date.now() - lastDigest.getTime() > twelveHoursMs;
+
+        if (needsDigest) {
+          const rejectedTasks = oracleEventService.readRejectedTasks(
+            lastDigest ?? undefined,
+          );
+          void oracleEventService.postEvent({
+            type: 'daily-digest',
+            rejectedTasks,
+          });
+          this.configService.updateOracleConfig({
+            lastDigestAt: new Date().toISOString(),
+          });
+        }
       }
     }
 
