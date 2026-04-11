@@ -22,7 +22,8 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "build:release": "./scripts/build-release.sh"
+    "build:release": "./scripts/build-release.sh",
+    "build:notify": "./src/notify-helper/build.sh"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
