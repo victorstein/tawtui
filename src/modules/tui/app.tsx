@@ -56,7 +56,11 @@ function AppContent() {
     setIngesting(svc.ingesting);
     svc.onStatusChange = (status: boolean) => setIngesting(status);
     svc.onIngestComplete = (result: { messagesStored: number; channelNames: string[] }) => {
-      toast.show(`Synced ${result.messagesStored} messages`, 'done');
+      if (result.messagesStored > 0) {
+        toast.show(`Synced ${result.messagesStored} messages`, 'done');
+      } else {
+        toast.show('All up to date', 'done');
+      }
     };
   });
 

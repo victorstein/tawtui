@@ -7,7 +7,6 @@ import { MempalaceService } from './mempalace.service';
 import type { OracleState, SlackConversation } from './slack.types';
 import { OracleEventService } from '../oracle/oracle-event.service';
 
-
 @Injectable()
 export class SlackIngestionService {
   private readonly logger = new Logger(SlackIngestionService.name);
@@ -29,7 +28,9 @@ export class SlackIngestionService {
   private _generation = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
   onStatusChange: ((ingesting: boolean) => void) | null = null;
-  onIngestComplete: ((result: { messagesStored: number; channelNames: string[] }) => void) | null = null;
+  onIngestComplete:
+    | ((result: { messagesStored: number; channelNames: string[] }) => void)
+    | null = null;
   oracleEventService: OracleEventService | null = null;
 
   get ingesting(): boolean {
@@ -44,7 +45,13 @@ export class SlackIngestionService {
   /** Run one full ingestion cycle: fetch → write files → mine → update state */
   async ingest(
     onProgress?: (info: {
-      phase: 'listing' | 'channel' | 'waiting' | 'skipped' | 'detecting' | 'threads';
+      phase:
+        | 'listing'
+        | 'channel'
+        | 'waiting'
+        | 'skipped'
+        | 'detecting'
+        | 'threads';
       channel?: string;
       messageCount?: number;
       channelIndex?: number;
@@ -111,12 +118,14 @@ export class SlackIngestionService {
           },
           () => this._generation !== gen,
         );
-        if (this._generation !== gen) return { messagesStored: 0, channelNames: [] };
+        if (this._generation !== gen)
+          return { messagesStored: 0, channelNames: [] };
         state.conversations = conversations;
         state.channelsCachedAt = new Date().toISOString();
         this.saveState(state);
       }
-      if (this._generation !== gen) return { messagesStored: 0, channelNames: [] };
+      if (this._generation !== gen)
+        return { messagesStored: 0, channelNames: [] };
 
       // Detect active channels — refresh hourly so new channels are picked up
       const ACTIVE_CHANNELS_TTL_MS = 60 * 60 * 1000; // 1 hour
@@ -143,12 +152,14 @@ export class SlackIngestionService {
           },
           () => this._generation !== gen,
         );
-        if (this._generation !== gen) return { messagesStored: 0, channelNames: [] };
+        if (this._generation !== gen)
+          return { messagesStored: 0, channelNames: [] };
         state.activeChannelIds = [...activeChannelIds];
         state.activeChannelsCachedAt = new Date().toISOString();
         this.saveState(state);
       }
-      if (this._generation !== gen) return { messagesStored: 0, channelNames: [] };
+      if (this._generation !== gen)
+        return { messagesStored: 0, channelNames: [] };
 
       // Filter: channels the user is active in + channels we've previously synced
       const filteredConversations = conversations.filter(
@@ -163,7 +174,8 @@ export class SlackIngestionService {
       mkdirSync(this.stagingDir, { recursive: true });
 
       for (let i = 0; i < filteredConversations.length; i++) {
-        if (this._generation !== gen) return { messagesStored, channelNames: [...touchedChannelNames] };
+        if (this._generation !== gen)
+          return { messagesStored, channelNames: [...touchedChannelNames] };
         const conversation = filteredConversations[i];
         const channelIndex = i + 1;
         waitCtx = { channel: conversation.name, channelIndex, totalChannels };
@@ -193,7 +205,13 @@ export class SlackIngestionService {
           totalChannels,
         });
 
-        let rawMessages: Array<{ ts: string; userId: string; text: string; threadTs?: string; replyCount?: number }>;
+        let rawMessages: Array<{
+          ts: string;
+          userId: string;
+          text: string;
+          threadTs?: string;
+          replyCount?: number;
+        }>;
         try {
           rawMessages = await this.slackService.getMessagesSince(
             conversation.id,
@@ -244,17 +262,20 @@ export class SlackIngestionService {
 
         // Advance cursor and persist immediately so progress survives app exit
         const lastTopLevel = rawMessages.filter((m) => !m.threadTs).pop();
-        const lastTs = lastTopLevel?.ts ?? rawMessages[rawMessages.length - 1].ts;
+        const lastTs =
+          lastTopLevel?.ts ?? rawMessages[rawMessages.length - 1].ts;
         state.channelCursors[conversation.id] = lastTs;
 
         // Track thread parents for retroactive reply checking
         if (!state.trackedThreads) state.trackedThreads = {};
-        if (!state.trackedThreads[conversation.id]) state.trackedThreads[conversation.id] = [];
+        if (!state.trackedThreads[conversation.id])
+          state.trackedThreads[conversation.id] = [];
         const channelThreads = state.trackedThreads[conversation.id];
         for (const msg of rawMessages) {
           if (msg.replyCount && msg.replyCount > 0) {
             const replies = rawMessages.filter((m) => m.threadTs === msg.ts);
-            const lastReply = replies.length > 0 ? replies[replies.length - 1] : undefined;
+            const lastReply =
+              replies.length > 0 ? replies[replies.length - 1] : undefined;
             const existing = channelThreads.find((t) => t.threadTs === msg.ts);
             if (existing) {
               if (lastReply && lastReply.ts > existing.lastReplyTs) {
@@ -276,10 +297,13 @@ export class SlackIngestionService {
 
       // Phase 2: Re-check tracked threads for new replies
       if (!state.trackedThreads) state.trackedThreads = {};
-      const sevenDaysAgo = String((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000);
+      const sevenDaysAgo = String(
+        (Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000,
+      );
 
       for (const conversation of filteredConversations) {
-        if (this._generation !== gen) return { messagesStored, channelNames: [...touchedChannelNames] };
+        if (this._generation !== gen)
+          return { messagesStored, channelNames: [...touchedChannelNames] };
 
         // Bootstrap: seed trackedThreads for channels with cursors but no tracked threads
         const channelCursor = state.channelCursors[conversation.id];
@@ -297,11 +321,10 @@ export class SlackIngestionService {
             parseFloat(channelCursor) - 7 * 24 * 60 * 60,
           );
           try {
-            const backfillMessages =
-              await this.slackService.getMessagesSince(
-                conversation.id,
-                backfillCursor,
-              );
+            const backfillMessages = await this.slackService.getMessagesSince(
+              conversation.id,
+              backfillCursor,
+            );
             const threadParents = backfillMessages.filter(
               (m) => m.replyCount && m.replyCount > 0,
             );
@@ -337,7 +360,8 @@ export class SlackIngestionService {
         });
 
         for (const tracked of activeThreads) {
-          if (this._generation !== gen) return { messagesStored, channelNames: [...touchedChannelNames] };
+          if (this._generation !== gen)
+            return { messagesStored, channelNames: [...touchedChannelNames] };
 
           let replies: Array<{ ts: string; userId: string; text: string }>;
           try {
@@ -367,7 +391,9 @@ export class SlackIngestionService {
           // Resolve usernames and write full thread to staging
           const slackExport: Array<Record<string, string>> = [];
           for (const msg of fullThread) {
-            const userName = await this.slackService.resolveUserName(msg.userId);
+            const userName = await this.slackService.resolveUserName(
+              msg.userId,
+            );
             slackExport.push({
               type: 'message',
               user: userName,
@@ -376,7 +402,10 @@ export class SlackIngestionService {
             });
           }
 
-          const channelSlug = this.slugify(conversation.name, conversation.isDm);
+          const channelSlug = this.slugify(
+            conversation.name,
+            conversation.isDm,
+          );
           const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
           const fileName = `${timestamp}_thread-${tracked.threadTs}_${channelSlug}.json`;
           writeFileSync(
@@ -391,8 +420,8 @@ export class SlackIngestionService {
           tracked.lastReplyTs = newReplies[newReplies.length - 1].ts;
         }
 
-          this.saveState(state);
-        }
+        this.saveState(state);
+      }
 
       // Mine all new files into mempalace (idempotent — skips already-mined)
       if (filesWritten > 0) {
@@ -476,19 +505,17 @@ export class SlackIngestionService {
   private async safeIngest(): Promise<void> {
     try {
       const result = await this.ingest();
-      if (result.messagesStored > 0) {
-        this.onIngestComplete?.(result);
+      this.onIngestComplete?.(result);
 
-        // Fire sync-complete event to oracle channel
-        if (this.oracleEventService) {
-          const rejectedTasks = this.oracleEventService.readRejectedTasks();
-          void this.oracleEventService.postEvent({
-            type: 'sync-complete',
-            messagesStored: result.messagesStored,
-            channels: result.channelNames,
-            rejectedTasks,
-          });
-        }
+      // Fire sync-complete event to oracle channel (only if new messages)
+      if (result.messagesStored > 0 && this.oracleEventService) {
+        const rejectedTasks = this.oracleEventService.readRejectedTasks();
+        void this.oracleEventService.postEvent({
+          type: 'sync-complete',
+          messagesStored: result.messagesStored,
+          channels: result.channelNames,
+          rejectedTasks,
+        });
       }
     } catch (err) {
       this.logger.error(`Ingestion failed: ${(err as Error).message}`);
