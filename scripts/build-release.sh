@@ -18,6 +18,10 @@ mkdir -p "$DIST_DIR"
 bun run "$ROOT_DIR/scripts/compile.ts"
 
 echo ""
+echo "==> Building notification helper..."
+bash "$ROOT_DIR/src/notify-helper/build.sh"
+
+echo ""
 echo "==> Generating checksums..."
 cd "$DIST_DIR"
 for bin in tawtui-darwin-*; do
