@@ -12,7 +12,7 @@ describe('OracleEventService', () => {
     tmpDir = mkdtempSync(join(tmpdir(), 'oracle-event-test-'));
     rejectedDir = join(tmpDir, 'rejected');
     mkdirSync(rejectedDir, { recursive: true });
-    service = new OracleEventService(tmpDir);
+    service = new OracleEventService(tmpDir, 0);
   });
 
   afterEach(() => {
@@ -51,6 +51,50 @@ describe('OracleEventService', () => {
       const today = new Date().toISOString().split('T')[0];
       writeFileSync(join(rejectedDir, `${today}.md`), 'today rejection\n');
       expect(service.readRejectedTasks()).toContain('today rejection');
+    });
+  });
+
+  describe('postEvent', () => {
+    let fetchSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+      fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue(
+        new Response('ok', { status: 200 }),
+      );
+    });
+
+    afterEach(() => {
+      fetchSpy.mockRestore();
+    });
+
+    it('POSTs event payload to the channel server', async () => {
+      await service.postEvent({ type: 'daily-digest', rejectedTasks: '' });
+      expect(fetchSpy).toHaveBeenCalledWith(
+        'http://127.0.0.1:7851',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ type: 'daily-digest', rejectedTasks: '' }),
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+    });
+
+    it('retries on connection refused (up to 3 attempts)', async () => {
+      const connErr = new TypeError('fetch failed');
+      fetchSpy
+        .mockRejectedValueOnce(connErr)
+        .mockRejectedValueOnce(connErr)
+        .mockResolvedValueOnce(new Response('ok', { status: 200 }));
+
+      await service.postEvent({ type: 'daily-digest', rejectedTasks: '' });
+      expect(fetchSpy).toHaveBeenCalledTimes(3);
+    });
+
+    it('does not throw when all retries fail', async () => {
+      fetchSpy.mockRejectedValue(new TypeError('fetch failed'));
+      await expect(
+        service.postEvent({ type: 'daily-digest', rejectedTasks: '' }),
+      ).resolves.toBeUndefined();
     });
   });
 });
