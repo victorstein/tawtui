@@ -37,6 +37,8 @@ export interface OracleConfig {
   pollIntervalSeconds: number;
   /** Taskwarrior project to assign Oracle-created tasks */
   defaultProject?: string;
+  /** ISO timestamp of the last daily digest event (used to gate >12h check) */
+  lastDigestAt?: string;
 }
 
 export const DEFAULT_ORACLE_CONFIG: OracleConfig = {
