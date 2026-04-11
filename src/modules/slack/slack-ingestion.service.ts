@@ -6,6 +6,7 @@ import { SlackService } from './slack.service';
 import { MempalaceService } from './mempalace.service';
 import type { OracleState, SlackConversation } from './slack.types';
 import { OracleEventService } from '../oracle/oracle-event.service';
+import { pLimit } from '../../shared/plimit';
 
 @Injectable()
 export class SlackIngestionService {
@@ -166,144 +167,166 @@ export class SlackIngestionService {
         (c) => activeChannelIds.has(c.id) || state.channelCursors[c.id],
       );
 
+      // Pre-filter: detect which channels have new messages via search
+      let changedChannelIds: Set<string> | null = null;
+      if (!options?.skipExisting) {
+        // Only pre-filter on regular syncs, not initial setup
+        const lastCheckedDate = state.lastChecked
+          ? new Date(state.lastChecked).toISOString().split('T')[0]
+          : null;
+        if (lastCheckedDate) {
+          try {
+            changedChannelIds = await this.slackService.getChangedChannelIds(
+              lastCheckedDate,
+              () => this._generation !== gen,
+            );
+            if (this._generation !== gen)
+              return { messagesStored: 0, channelNames: [] };
+          } catch {
+            // Search failed — fall back to checking all channels
+            changedChannelIds = null;
+          }
+        }
+      }
+
       let messagesStored = 0;
       let filesWritten = 0;
       const touchedChannelNames: Set<string> = new Set();
-      const totalChannels = filteredConversations.length;
 
       mkdirSync(this.stagingDir, { recursive: true });
 
-      for (let i = 0; i < filteredConversations.length; i++) {
-        if (this._generation !== gen)
-          return { messagesStored, channelNames: [...touchedChannelNames] };
-        const conversation = filteredConversations[i];
-        const channelIndex = i + 1;
-        waitCtx = { channel: conversation.name, channelIndex, totalChannels };
-        // Skip channels already processed when resuming
-        const existingCursor = state.channelCursors[conversation.id];
-        if (options?.skipExisting && existingCursor) {
-          onProgress?.({
-            phase: 'skipped',
-            channel: conversation.name,
-            channelIndex,
-            totalChannels,
-          });
-          continue;
-        }
+      // Phase 1: Fetch new messages per channel (concurrent, limit 3)
+      const limit = pLimit(3);
+      const phase1Tasks = filteredConversations
+        .filter((conversation) => {
+          if (options?.skipExisting && state.channelCursors[conversation.id]) {
+            return false;
+          }
+          if (changedChannelIds && !changedChannelIds.has(conversation.id)) {
+            return false;
+          }
+          return true;
+        })
+        .map((conversation) =>
+          limit(async () => {
+            if (this._generation !== gen) return;
 
-        // Default cursor: 7 days ago (avoids fetching entire channel history on first run)
-        const defaultCursor = String(
-          (Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000,
-        );
-        const cursor = existingCursor ?? defaultCursor;
+            const defaultCursor = String(
+              (Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000,
+            );
+            const cursor =
+              state.channelCursors[conversation.id] ?? defaultCursor;
 
-        onProgress?.({
-          phase: 'channel',
-          channel: conversation.name,
-          messageCount: 0,
-          channelIndex,
-          totalChannels,
-        });
+            let rawMessages: Array<{
+              ts: string;
+              userId: string;
+              text: string;
+              threadTs?: string;
+              replyCount?: number;
+            }>;
+            try {
+              rawMessages = await this.slackService.getMessagesSince(
+                conversation.id,
+                cursor,
+              );
+            } catch (err) {
+              this.logger.warn(
+                `Skipping channel ${conversation.id}: ${(err as Error).message}`,
+              );
+              return;
+            }
 
-        let rawMessages: Array<{
-          ts: string;
-          userId: string;
-          text: string;
-          threadTs?: string;
-          replyCount?: number;
-        }>;
-        try {
-          rawMessages = await this.slackService.getMessagesSince(
-            conversation.id,
-            cursor,
-          );
-        } catch (err) {
-          this.logger.warn(
-            `Skipping channel ${conversation.id}: ${(err as Error).message}`,
-          );
-          continue;
-        }
+            if (rawMessages.length === 0) return;
 
-        onProgress?.({
-          phase: 'channel',
-          channel: conversation.name,
-          messageCount: rawMessages.length,
-          channelIndex,
-          totalChannels,
-        });
-
-        if (rawMessages.length === 0) continue;
-
-        // Resolve usernames for all messages
-        const slackExport: Array<Record<string, string>> = [];
-        for (const raw of rawMessages) {
-          const userName = await this.slackService.resolveUserName(raw.userId);
-          slackExport.push({
-            type: 'message',
-            user: userName,
-            text: `${userName}: ${raw.text}`,
-            ts: raw.ts,
-          });
-        }
-
-        // Write one file per channel per cycle (never modified → mine dedup works)
-        const channelSlug = this.slugify(conversation.name, conversation.isDm);
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const fileName = `${timestamp}_${channelSlug}.json`;
-        writeFileSync(
-          join(this.stagingDir, fileName),
-          JSON.stringify(slackExport, null, 2),
-          'utf-8',
-        );
-
-        filesWritten++;
-        messagesStored += rawMessages.length;
-        touchedChannelNames.add(conversation.name);
-
-        // Advance cursor and persist immediately so progress survives app exit
-        const lastTopLevel = rawMessages.filter((m) => !m.threadTs).pop();
-        const lastTs =
-          lastTopLevel?.ts ?? rawMessages[rawMessages.length - 1].ts;
-        state.channelCursors[conversation.id] = lastTs;
-
-        // Track thread parents for retroactive reply checking
-        if (!state.trackedThreads) state.trackedThreads = {};
-        if (!state.trackedThreads[conversation.id])
-          state.trackedThreads[conversation.id] = [];
-        const channelThreads = state.trackedThreads[conversation.id];
-        for (const msg of rawMessages) {
-          if (msg.replyCount && msg.replyCount > 0) {
-            const replies = rawMessages.filter((m) => m.threadTs === msg.ts);
-            const lastReply =
-              replies.length > 0 ? replies[replies.length - 1] : undefined;
-            const existing = channelThreads.find((t) => t.threadTs === msg.ts);
-            if (existing) {
-              if (lastReply && lastReply.ts > existing.lastReplyTs) {
-                existing.lastReplyTs = lastReply.ts;
-              }
-            } else {
-              channelThreads.push({
-                threadTs: msg.ts,
-                lastReplyTs: lastReply?.ts ?? msg.ts,
+            const slackExport: Array<Record<string, string>> = [];
+            for (const raw of rawMessages) {
+              const userName = await this.slackService.resolveUserName(
+                raw.userId,
+              );
+              slackExport.push({
+                type: 'message',
+                user: userName,
+                text: `${userName}: ${raw.text}`,
+                ts: raw.ts,
               });
             }
-          }
-        }
 
+            const channelSlug = this.slugify(
+              conversation.name,
+              conversation.isDm,
+            );
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const fileName = `${timestamp}_${channelSlug}.json`;
+            writeFileSync(
+              join(this.stagingDir, fileName),
+              JSON.stringify(slackExport, null, 2),
+              'utf-8',
+            );
+
+            filesWritten++;
+            messagesStored += rawMessages.length;
+            touchedChannelNames.add(conversation.name);
+
+            const lastTopLevel = rawMessages.filter((m) => !m.threadTs).pop();
+            const lastTs =
+              lastTopLevel?.ts ?? rawMessages[rawMessages.length - 1].ts;
+            state.channelCursors[conversation.id] = lastTs;
+
+            if (!state.trackedThreads) state.trackedThreads = {};
+            if (!state.trackedThreads[conversation.id])
+              state.trackedThreads[conversation.id] = [];
+            const channelThreads = state.trackedThreads[conversation.id];
+            for (const msg of rawMessages) {
+              if (msg.replyCount && msg.replyCount > 0) {
+                const replies = rawMessages.filter(
+                  (m) => m.threadTs === msg.ts,
+                );
+                const lastReply =
+                  replies.length > 0
+                    ? replies[replies.length - 1]
+                    : undefined;
+                const existing = channelThreads.find(
+                  (t) => t.threadTs === msg.ts,
+                );
+                if (existing) {
+                  if (lastReply && lastReply.ts > existing.lastReplyTs) {
+                    existing.lastReplyTs = lastReply.ts;
+                  }
+                } else {
+                  channelThreads.push({
+                    threadTs: msg.ts,
+                    lastReplyTs: lastReply?.ts ?? msg.ts,
+                  });
+                }
+              }
+            }
+          }),
+        );
+
+      await Promise.allSettled(phase1Tasks);
+
+      // Save state after Phase 1 completes
+      if (messagesStored > 0) {
         state.userNames = this.slackService.exportUserCache();
         state.lastChecked = new Date().toISOString();
         this.saveState(state);
       }
 
-      // Phase 2: Re-check tracked threads for new replies
+      // Phase 2: Re-check tracked threads for new replies (concurrent, limit 3)
       if (!state.trackedThreads) state.trackedThreads = {};
       const sevenDaysAgo = String(
         (Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000,
       );
 
+      const phase2Tasks: Array<Promise<void>> = [];
+
       for (const conversation of filteredConversations) {
-        if (this._generation !== gen)
-          return { messagesStored, channelNames: [...touchedChannelNames] };
+        if (this._generation !== gen) break;
+
+        // Skip thread checks for channels with no new activity
+        if (changedChannelIds && !changedChannelIds.has(conversation.id)) {
+          continue;
+        }
 
         // Bootstrap: seed trackedThreads for channels with cursors but no tracked threads
         const channelCursor = state.channelCursors[conversation.id];
@@ -312,11 +335,6 @@ export class SlackIngestionService {
           (!state.trackedThreads[conversation.id] ||
             state.trackedThreads[conversation.id].length === 0)
         ) {
-          onProgress?.({
-            phase: 'threads',
-            channel: conversation.name,
-            messageCount: 0,
-          });
           const backfillCursor = String(
             parseFloat(channelCursor) - 7 * 24 * 60 * 60,
           );
@@ -332,12 +350,6 @@ export class SlackIngestionService {
               state.trackedThreads[conversation.id] = threadParents.map(
                 (m) => ({ threadTs: m.ts, lastReplyTs: m.ts }),
               );
-              onProgress?.({
-                phase: 'threads',
-                channel: conversation.name,
-                messageCount: threadParents.length,
-              });
-              this.saveState(state);
             }
           } catch {
             // Backfill failed — will retry next sync
@@ -353,75 +365,81 @@ export class SlackIngestionService {
         );
 
         const activeThreads = state.trackedThreads[conversation.id];
-        onProgress?.({
-          phase: 'threads',
-          channel: conversation.name,
-          messageCount: activeThreads.length,
-        });
 
         for (const tracked of activeThreads) {
-          if (this._generation !== gen)
-            return { messagesStored, channelNames: [...touchedChannelNames] };
+          phase2Tasks.push(
+            limit(async () => {
+              if (this._generation !== gen) return;
 
-          let replies: Array<{ ts: string; userId: string; text: string }>;
-          try {
-            replies = await this.slackService.getThreadReplies(
-              conversation.id,
-              tracked.threadTs,
-            );
-          } catch {
-            continue;
-          }
+              let replies: Array<{ ts: string; userId: string; text: string }>;
+              try {
+                replies = await this.slackService.getThreadReplies(
+                  conversation.id,
+                  tracked.threadTs,
+                );
+              } catch {
+                return;
+              }
 
-          // Check if there are new replies since last sync
-          const newReplies = replies.filter((r) => r.ts > tracked.lastReplyTs);
-          if (newReplies.length === 0) continue;
+              const newReplies = replies.filter(
+                (r) => r.ts > tracked.lastReplyTs,
+              );
+              if (newReplies.length === 0) return;
 
-          // Fetch full thread (parent + all replies) so mempalace gets the complete conversation
-          let fullThread: Array<{ ts: string; userId: string; text: string }>;
-          try {
-            fullThread = await this.slackService.getFullThread(
-              conversation.id,
-              tracked.threadTs,
-            );
-          } catch {
-            continue;
-          }
+              let fullThread: Array<{
+                ts: string;
+                userId: string;
+                text: string;
+              }>;
+              try {
+                fullThread = await this.slackService.getFullThread(
+                  conversation.id,
+                  tracked.threadTs,
+                );
+              } catch {
+                return;
+              }
 
-          // Resolve usernames and write full thread to staging
-          const slackExport: Array<Record<string, string>> = [];
-          for (const msg of fullThread) {
-            const userName = await this.slackService.resolveUserName(
-              msg.userId,
-            );
-            slackExport.push({
-              type: 'message',
-              user: userName,
-              text: `${userName}: ${msg.text}`,
-              ts: msg.ts,
-            });
-          }
+              const slackExport: Array<Record<string, string>> = [];
+              for (const msg of fullThread) {
+                const userName = await this.slackService.resolveUserName(
+                  msg.userId,
+                );
+                slackExport.push({
+                  type: 'message',
+                  user: userName,
+                  text: `${userName}: ${msg.text}`,
+                  ts: msg.ts,
+                });
+              }
 
-          const channelSlug = this.slugify(
-            conversation.name,
-            conversation.isDm,
+              const channelSlug = this.slugify(
+                conversation.name,
+                conversation.isDm,
+              );
+              const timestamp = new Date()
+                .toISOString()
+                .replace(/[:.]/g, '-');
+              const fileName = `${timestamp}_thread-${tracked.threadTs}_${channelSlug}.json`;
+              writeFileSync(
+                join(this.stagingDir, fileName),
+                JSON.stringify(slackExport, null, 2),
+                'utf-8',
+              );
+
+              filesWritten++;
+              messagesStored += newReplies.length;
+              touchedChannelNames.add(conversation.name);
+              tracked.lastReplyTs = newReplies[newReplies.length - 1].ts;
+            }),
           );
-          const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-          const fileName = `${timestamp}_thread-${tracked.threadTs}_${channelSlug}.json`;
-          writeFileSync(
-            join(this.stagingDir, fileName),
-            JSON.stringify(slackExport, null, 2),
-            'utf-8',
-          );
-
-          filesWritten++;
-          messagesStored += newReplies.length;
-          touchedChannelNames.add(conversation.name);
-          tracked.lastReplyTs = newReplies[newReplies.length - 1].ts;
         }
-
-        this.saveState(state);
       }
+
+      await Promise.allSettled(phase2Tasks);
+
+      // Save state after Phase 2 completes
+      this.saveState(state);
 
       // Mine all new files into mempalace (idempotent — skips already-mined)
       if (filesWritten > 0) {
