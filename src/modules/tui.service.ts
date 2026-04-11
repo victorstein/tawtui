@@ -7,6 +7,7 @@ import { ConfigService } from './config.service';
 import { TerminalService } from './terminal.service';
 import { DependencyService } from './dependency.service';
 import { CalendarService } from './calendar.service';
+import { NotificationService } from './notification.service';
 import type {
   PullRequestDetail,
   PrDiff,
@@ -23,6 +24,7 @@ interface TawtuiGlobal {
     terminalService: TerminalService;
     dependencyService: DependencyService;
     calendarService: CalendarService;
+    notificationService: NotificationService;
     createPrReviewSession: (
       prNumber: number,
       repoOwner: string,
@@ -64,6 +66,7 @@ export class TuiService {
     private readonly terminalService: TerminalService,
     private readonly dependencyService: DependencyService,
     private readonly calendarService: CalendarService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async launch(): Promise<void> {
@@ -79,6 +82,7 @@ export class TuiService {
       terminalService: this.terminalService,
       dependencyService: this.dependencyService,
       calendarService: this.calendarService,
+      notificationService: this.notificationService,
       createPrReviewSession: (
         prNumber: number,
         repoOwner: string,
