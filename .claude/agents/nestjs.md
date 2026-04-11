@@ -15,10 +15,17 @@ Read, Edit, Write, Bash, Glob, Grep, TodoWrite, Skill
 - `src/modules/*.module.ts` — NestJS module declarations
 - `src/modules/*.service.ts` — Injectable services
 - `src/modules/*.types.ts` — TypeScript interfaces
+- `src/modules/oracle/` — Oracle channel event service and types
+- `src/modules/slack/` — Slack API, ingestion, mempalace, token extraction
+- `src/modules/notification.*` — macOS notification service
+- `src/modules/dependency.*` — System dependency checking
+- `src/modules/calendar.*` — Calendar integration
+- `src/modules/worktree.*` — Git worktree management
 - `src/commands/` — nest-commander commands
 - `src/main.ts` — Bootstrap entry point
 - `src/app.module.ts` — Root module registration
 - `src/shared/` — Shared types (ExecResult, RepoConfig)
+- `src/shared/plimit.ts` — Concurrency limiter utility
 
 ## Tech Stack
 
@@ -64,6 +71,9 @@ Reference implementations:
 - `taskwarrior.service.ts` — wraps `task` CLI with RC overrides
 - `github.service.ts` — wraps `gh` CLI
 - `terminal.service.ts` — wraps `tmux` for embedded terminal sessions
+- `slack.service.ts` — wraps Slack API with xoxc/xoxd auth, rate limiting
+- `notification.service.ts` — wraps custom Swift notification helper
+- `mempalace.service.ts` — wraps `mempalace` CLI
 
 ### Config Service Pattern
 
@@ -78,10 +88,14 @@ SolidJS components cannot access NestJS DI. Services are bridged via:
 
 ```typescript
 (globalThis as any).__tawtui = {
-  taskwarriorService: this.taskwarriorService,
-  githubService: this.githubService,
-  configService: this.configService,
-  terminalService: this.terminalService,
+  taskwarriorService,
+  githubService,
+  configService,
+  terminalService,
+  dependencyService,
+  slackIngestionService,
+  notificationService,
+  // + oracle helpers: createOracleSession, extractSlackTokens, etc.
 };
 ```
 
@@ -120,21 +134,34 @@ interface ExecResult {
 
 ```
 src/modules/
-├── taskwarrior.module.ts    # TaskwarriorModule (providers: [TaskwarriorService])
-├── taskwarrior.service.ts   # Wraps `task` CLI — getTasks, createTask, updateTask, etc.
-├── taskwarrior.types.ts     # Task, CreateTaskDto, UpdateTaskDto
-├── github.module.ts         # GithubModule (providers: [GithubService])
-├── github.service.ts        # Wraps `gh` CLI — listPRs, getPR, validateRepo
-├── github.types.ts          # PullRequest, PullRequestDetail, re-exports RepoConfig
-├── config.module.ts         # ConfigModule (providers: [ConfigService])
-├── config.service.ts        # JSON config at ~/.config/tawtui/ — load, save, repos, prefs
-├── config.types.ts          # AppConfig, UserPreferences, re-exports RepoConfig
-├── terminal.module.ts       # TerminalModule (providers: [TerminalService])
-├── terminal.service.ts      # Wraps `tmux` — create/destroy sessions, send input, capture
-├── terminal.types.ts        # TerminalSession, CaptureResult, CursorPosition
-├── tui.module.ts            # TuiModule — imports all service modules, provides TuiService
-└── tui.service.ts           # Bridge: sets globalThis.__tawtui, calls render(App)
+├── taskwarrior.module.ts / .service.ts / .types.ts
+├── github.module.ts / .service.ts / .types.ts
+├── config.module.ts / .service.ts / .types.ts
+├── terminal.module.ts / .service.ts / .types.ts
+├── notification.module.ts / .service.ts / .types.ts
+├── dependency.module.ts / .service.ts / .types.ts
+├── calendar.module.ts / .service.ts / .types.ts
+├── worktree.module.ts
+├── oracle/
+│   ├── oracle-channel.ts         # Standalone MCP server (NOT a NestJS module)
+│   ├── oracle-channel.types.ts   # Event payload types
+│   └── oracle-event.service.ts   # Reads rejected tasks, POSTs to channel
+├── slack/
+│   ├── slack.module.ts
+│   ├── slack.service.ts          # Slack API wrapper (xoxc auth, rate limiting)
+│   ├── slack.types.ts            # Slack API types, OracleState
+│   ├── slack-ingestion.service.ts # Polls Slack, concurrent fetch, mines to mempalace
+│   ├── mempalace.service.ts      # Wraps mempalace CLI
+│   ├── token-extractor.service.ts # Extracts Slack tokens from browser
+│   ├── leveldb-reader.ts         # LevelDB reader for cookies
+│   └── cookie-decryptor.ts       # macOS Keychain decryption
+├── tui.module.ts                 # Bridge module
+└── tui.service.ts                # Bridge: globalThis.__tawtui + render()
 ```
+
+### Oracle Channel (Special Case)
+
+`src/modules/oracle/oracle-channel.ts` is a standalone Bun script, NOT a NestJS service. Claude Code spawns it as a subprocess MCP server via `.mcp.json`. Do NOT import it into the NestJS module system. The NestJS-side integration point is `OracleEventService`.
 
 ## Skills
 

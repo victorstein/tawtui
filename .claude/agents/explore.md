@@ -18,9 +18,9 @@ You cannot create or modify files. Only read and search.
 
 | Looking for... | Glob Pattern |
 |---|---|
-| All NestJS modules | `src/modules/*.module.ts` |
-| All services | `src/modules/*.service.ts` |
-| All type definitions | `src/modules/*.types.ts`, `src/shared/*.ts` |
+| All NestJS modules | `src/modules/**/*.module.ts` |
+| All services | `src/modules/**/*.service.ts` |
+| All type definitions | `src/modules/**/*.types.ts`, `src/shared/*.ts` |
 | All TUI components | `src/modules/tui/components/*.tsx` |
 | All views | `src/modules/tui/views/*.tsx` |
 | Theme tokens | `src/modules/tui/theme.ts` |
@@ -29,7 +29,13 @@ You cannot create or modify files. Only read and search.
 | Root module | `src/app.module.ts` |
 | Commands | `src/commands/*.ts` |
 | Config files | `package.json`, `tsconfig.json`, `eslint.config.mjs` |
-| Test files | `src/**/*.spec.ts`, `test/**/*.ts` |
+| Test files | `test/**/*.spec.ts` |
+| Oracle module files | `src/modules/oracle/*.ts` |
+| Slack module files | `src/modules/slack/*.ts` |
+| All services (including subdirs) | `src/modules/**/*.service.ts` |
+| All types (including subdirs) | `src/modules/**/*.types.ts` |
+| Shared utilities | `src/shared/*.ts` |
+| Notification helper | `src/notify-helper/*` |
 
 ## Response Format
 

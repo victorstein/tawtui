@@ -15,9 +15,10 @@ Read, Edit, Write, Bash, Glob, Grep, TodoWrite, Skill
 - `src/modules/tui/` — All TUI files
   - `app.tsx` — Root app component
   - `theme.ts` — Color palette and semantic tokens
-  - `context/` — Dialog context (stack-based modals)
+  - `bridge.ts` — NestJS-to-TUI bridge (getService functions)
+  - `context/` — Dialog and toast contexts
   - `components/` — Reusable components
-  - `views/` — Tab views (tasks, repos, agents)
+  - `views/` — Tab views (tasks, repos, agents, oracle, calendar)
 
 ## Tech Stack
 
@@ -108,9 +109,11 @@ if (dialog.isOpen()) return;
 TUI components access NestJS services through the global bridge:
 
 ```tsx
-function getService(): TaskwarriorService | null {
-  return (globalThis as any).__tawtui?.taskwarriorService ?? null;
-}
+import { getTaskwarriorService, getTerminalService, getNotificationService } from './bridge';
+
+// Bridge functions return service | null
+const tw = getTaskwarriorService();
+if (!tw) return;
 ```
 
 Never import services directly — they live in the NestJS DI container.
@@ -122,8 +125,9 @@ Views are full-tab content components rendered by `app.tsx` via `Switch`/`Match`
 ```tsx
 <Switch>
   <Match when={activeTab() === 0}><TasksView /></Match>
-  <Match when={activeTab() === 1}><ReposView /></Match>
-  <Match when={activeTab() === 2}><AgentsView /></Match>
+  <Match when={activeTab() === 1}><ReviewsView /></Match>
+  <Match when={activeTab() === 2}><CalendarView /></Match>
+  <Match when={activeTab() === 3}><OracleView /></Match>
 </Switch>
 ```
 
@@ -251,29 +255,35 @@ useKeyboard((key) => {
 
 ```
 src/modules/tui/
-├── app.tsx                    # Root component — DialogProvider → AppContent
+├── app.tsx                    # Root component — providers → AppContent
 ├── theme.ts                   # Dark navy/teal palette with warm orange accents
+├── bridge.ts                  # NestJS-to-TUI bridge (getService functions)
+├── utils.ts                   # Shared utilities (lerpHex, darkenHex, powerline caps)
 ├── context/
-│   └── dialog.tsx             # DialogProvider, useDialog, DialogSize
+│   ├── dialog.tsx             # DialogProvider, useDialog, DialogSize
+│   └── toast.tsx              # ToastProvider, useToast
 ├── components/
-│   ├── board-column.tsx       # Kanban column with header, separator, scrollable tasks
-│   ├── task-card.tsx          # Task display: priority badge, description, tags, due
-│   ├── task-form.tsx          # Create/edit task dialog form
-│   ├── tab-bar.tsx            # Top tab navigation (Tasks, Repos, Agents)
-│   ├── status-bar.tsx         # Bottom status bar with key hints
+│   ├── board-column.tsx       # Kanban column
+│   ├── task-card.tsx          # Task display
+│   ├── task-form.tsx          # Create/edit task dialog
+│   ├── tab-bar.tsx            # Top tab navigation (Tasks, Reviews, Calendar, Oracle)
+│   ├── status-bar.tsx         # Bottom status bar
 │   ├── filter-bar.tsx         # Taskwarrior filter input
 │   ├── archive-view.tsx       # Completed tasks archive
-│   ├── dialog-confirm.tsx     # Yes/No confirmation dialog
+│   ├── dialog-confirm.tsx     # Yes/No confirmation
 │   ├── dialog-prompt.tsx      # Text input dialog
 │   ├── dialog-select.tsx      # Selection list dialog
-│   ├── repo-list.tsx          # Repository list for Repos tab
+│   ├── repo-list.tsx          # Repository list
 │   ├── pr-list.tsx            # PR list per repository
 │   ├── agent-list.tsx         # Terminal agent list
-│   └── terminal-output.tsx    # Embedded tmux terminal display
+│   ├── terminal-output.tsx    # Embedded tmux terminal display
+│   └── oracle-setup-screen.tsx # Oracle 3-step setup wizard
 └── views/
     ├── tasks-view.tsx         # Kanban board (TODO/IN PROGRESS/DONE)
-    ├── repos-view.tsx         # GitHub repos + PRs
-    └── agents-view.tsx        # Terminal agent management
+    ├── repos-view.tsx         # GitHub repos + PRs (now "Reviews" tab)
+    ├── agents-view.tsx        # Terminal agent management
+    ├── oracle-view.tsx        # Oracle tab — session management + terminal output
+    └── calendar-view.tsx      # Calendar integration view
 ```
 
 ## Skills
