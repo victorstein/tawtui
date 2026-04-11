@@ -9,7 +9,7 @@ import { CalendarView } from './views/calendar-view';
 import { DialogProvider, useDialog } from './context/dialog';
 import { DialogConfirm } from './components/dialog-confirm';
 import { DialogSetupWizard } from './components/dialog-setup-wizard';
-import { getDependencyService, getTuiExit } from './bridge';
+import { getDependencyService, getNotificationService, getTuiExit } from './bridge';
 import type { DependencyStatus } from '../dependency.types';
 
 const TABS = [{ name: 'Tasks' }, { name: 'Reviews' }, { name: 'Calendar' }];
@@ -116,6 +116,18 @@ function AppContent() {
         ),
         { size: 'small' },
       );
+      return;
+    }
+
+    // Hidden: test notification (Ctrl+N)
+    if (key.name === 'n' && key.ctrl) {
+      const notificationService = getNotificationService();
+      if (notificationService) {
+        void notificationService.send({
+          title: 'TaWTUI',
+          message: 'Test notification — if you can see this, notifications work!',
+        });
+      }
       return;
     }
   });
