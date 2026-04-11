@@ -932,7 +932,7 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
       '## Rejected Task Tracking',
       '',
       `When ${userName} rejects a proposed task, append a line to rejected/YYYY-MM-DD.md`,
-      '(using today\'s date) with the original quote from the conversation.',
+      "(using today's date) with the original quote from the conversation.",
       'Format: one line per rejection, e.g.:',
       '  "I\'ll review the API docs" — #backend, rejected 2026-04-11',
       '',
@@ -946,7 +946,7 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
       command += ` ${claudeAgent.autoApproveFlag}`;
     }
     command += ' --dangerously-load-development-channels server:oracle-channel';
-    command += ` '${escaped}'`;
+    command += ` -- '${escaped}'`;
 
     const session = await this.createSession({
       name: 'Oracle',
