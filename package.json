@@ -81,7 +81,6 @@
     ],
     "coverageDirectory": "coverage",
     "testEnvironment": "node",
-    "testPathIgnorePatterns": ["/node_modules/"],
     "moduleNameMapper": {
       "^bun:sqlite$": "<rootDir>/test/__mocks__/bun-sqlite.js"
     }
