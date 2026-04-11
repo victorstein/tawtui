@@ -15,7 +15,7 @@ export interface GogDepStatus extends DepStatus {
   credentialsPath: string;
 }
 
-export interface NotificationDepStatus extends DepStatus {}
+export type NotificationDepStatus = DepStatus;
 
 export interface DependencyStatus {
   gh: GhDepStatus;

@@ -5,7 +5,9 @@ import { DEFAULT_BUNDLE_ID } from '../src/modules/notification.types';
 
 // Save original env and Bun.spawn
 const originalEnv = { ...process.env };
-const originalSpawn = (global as unknown as { Bun: { spawn: typeof Bun.spawn } }).Bun?.spawn;
+const originalSpawn = (
+  global as unknown as { Bun: { spawn: typeof Bun.spawn } }
+).Bun?.spawn;
 
 // Ensure Bun global exists (Jest runs in Node, so we polyfill the Bun global)
 if (!(global as unknown as Record<string, unknown>).Bun) {
@@ -13,10 +15,7 @@ if (!(global as unknown as Record<string, unknown>).Bun) {
 }
 
 function mockSpawn(exitCode: number, stdout = '', stderr = '') {
-  (global as unknown as { Bun: { spawn: unknown } }).Bun.spawn = (
-    _cmd: string[],
-    _opts?: { stdout?: string; stderr?: string },
-  ) => {
+  (global as unknown as { Bun: { spawn: unknown } }).Bun.spawn = () => {
     const stdoutBlob = new Blob([stdout]);
     const stderrBlob = new Blob([stderr]);
     return {
@@ -117,7 +116,7 @@ describe('NotificationService', () => {
       const service = new NotificationService();
 
       let callCount = 0;
-      (global as unknown as { Bun: { spawn: unknown } }).Bun.spawn = (_cmd: string[]) => {
+      (global as unknown as { Bun: { spawn: unknown } }).Bun.spawn = () => {
         callCount++;
         // First call is isInstalled (-help), return success
         // Second call is the actual notification, return failure
