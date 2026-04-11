@@ -49,8 +49,16 @@ export class NotificationService {
   }
 
   private resolveHelperPath(): string {
-    // __dirname points to src/modules/ — resolve up to project root, then into dist/
-    return resolve(__dirname, '..', '..', 'dist', NOTIFY_APP_REL_PATH);
+    const { existsSync } = require('fs');
+    const candidates = [
+      // Development: __dirname is src/modules/, helper is in dist/
+      resolve(__dirname, '..', '..', 'dist', NOTIFY_APP_REL_PATH),
+      // Compiled binary: __dirname is the binary's directory (e.g. dist/)
+      resolve(__dirname, NOTIFY_APP_REL_PATH),
+      // Homebrew: binary in bin/, helper in libexec/
+      resolve(__dirname, '..', 'libexec', NOTIFY_APP_REL_PATH),
+    ];
+    return candidates.find((p) => existsSync(p)) ?? candidates[0];
   }
 
   private buildArgs(payload: NotificationPayload): string[] {
