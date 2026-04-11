@@ -67,6 +67,46 @@ function AppContent() {
     svc.onIngestComplete = null;
   });
 
+  // Oracle alert detection — poll oracle session capture for [ORACLE ALERT]
+  let lastOracleAlertHash = '';
+
+  onMount(() => {
+    const interval = setInterval(() => {
+      const ts = getTerminalService();
+      if (!ts) return;
+
+      // Only check when not on the Oracle tab (index 3)
+      if (activeTab() === 3) return;
+
+      const sessions = ts.listSessions();
+      const oracleSession = sessions.find(
+        (s) => s.isOracleSession && s.status === 'running',
+      );
+      if (!oracleSession) return;
+
+      void ts
+        .captureOutput(oracleSession.id)
+        .then((capture) => {
+          if (!capture.content) return;
+
+          // Check if content contains [ORACLE ALERT] that we haven't seen
+          const alertIdx = capture.content.lastIndexOf('[ORACLE ALERT]');
+          if (alertIdx === -1) return;
+
+          const alertHash = `${alertIdx}-${capture.content.length}`;
+          if (alertHash === lastOracleAlertHash) return;
+
+          lastOracleAlertHash = alertHash;
+          toast.show('Oracle found new action items', 'info');
+        })
+        .catch(() => {
+          // Ignore capture errors
+        });
+    }, 2000); // Check every 2 seconds
+
+    onCleanup(() => clearInterval(interval));
+  });
+
   // Check dependencies on startup
   onMount(() => {
     const depService = getDependencyService();
