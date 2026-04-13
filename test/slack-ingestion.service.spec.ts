@@ -18,6 +18,7 @@ import { tmpdir } from 'os';
 const mockSlackService = {
   getConversations: jest.fn(),
   getActiveChannelIds: jest.fn().mockResolvedValue(new Set<string>()),
+  getChangedChannelIds: jest.fn().mockResolvedValue(new Set<string>()),
   getMessagesSince: jest.fn(),
   getThreadReplies: jest.fn().mockResolvedValue([]),
   getFullThread: jest.fn().mockResolvedValue([]),
@@ -311,14 +312,16 @@ describe('SlackIngestionService', () => {
     expect(threadFile).toBeDefined();
   });
 
-  it('Phase 2 prunes tracked threads older than 7 days', async () => {
+  it('Phase 2 prunes tracked threads older than 30 days', async () => {
     const conversation: SlackConversation = {
       id: 'C123',
       name: 'general',
       isDm: false,
       isPrivate: false,
     };
-    const eightDaysAgo = String((Date.now() - 8 * 24 * 60 * 60 * 1000) / 1000);
+    const thirtyOneDaysAgo = String(
+      (Date.now() - 31 * 24 * 60 * 60 * 1000) / 1000,
+    );
     const oneDayAgo = String((Date.now() - 1 * 24 * 60 * 60 * 1000) / 1000);
 
     const statePath = (service as any).statePath;
@@ -333,7 +336,7 @@ describe('SlackIngestionService', () => {
         activeChannelIds: ['C123'],
         trackedThreads: {
           C123: [
-            { threadTs: eightDaysAgo, lastReplyTs: eightDaysAgo },
+            { threadTs: thirtyOneDaysAgo, lastReplyTs: thirtyOneDaysAgo },
             { threadTs: oneDayAgo, lastReplyTs: oneDayAgo },
           ],
         },
@@ -351,6 +354,94 @@ describe('SlackIngestionService', () => {
     const state = JSON.parse(readFileSync(statePath, 'utf-8'));
     expect(state.trackedThreads['C123']).toHaveLength(1);
     expect(state.trackedThreads['C123'][0].threadTs).toBe(oneDayAgo);
+  });
+
+  it('first call uses 30-day lookback cursor when no state exists', async () => {
+    const conversation: SlackConversation = {
+      id: 'C123',
+      name: 'general',
+      isDm: false,
+      isPrivate: false,
+    };
+    mockSlackService.getConversations.mockResolvedValue([conversation]);
+    mockSlackService.getActiveChannelIds.mockResolvedValue(new Set(['C123']));
+    mockSlackService.getMessagesSince.mockResolvedValue([]);
+
+    const beforeCall = Date.now();
+    await service.ingest();
+    const afterCall = Date.now();
+
+    expect(mockSlackService.getMessagesSince).toHaveBeenCalledTimes(1);
+    const callArgs = mockSlackService.getMessagesSince.mock.calls[0];
+    expect(callArgs[0]).toBe('C123');
+
+    const cursorValue = parseFloat(callArgs[1]);
+    const expectedLow = (beforeCall - 30 * 24 * 60 * 60 * 1000) / 1000;
+    const expectedHigh = (afterCall - 30 * 24 * 60 * 60 * 1000) / 1000;
+    expect(cursorValue).toBeGreaterThanOrEqual(expectedLow - 1);
+    expect(cursorValue).toBeLessThanOrEqual(expectedHigh + 1);
+  });
+
+  it('subsequent sync uses getChangedChannelIds to pre-filter channels', async () => {
+    const changedChannel: SlackConversation = {
+      id: 'C111',
+      name: 'changed',
+      isDm: false,
+      isPrivate: false,
+    };
+    const unchangedChannel: SlackConversation = {
+      id: 'C222',
+      name: 'unchanged',
+      isDm: false,
+      isPrivate: false,
+    };
+    const statePath = (service as any).statePath;
+    const stagingDir = (service as any).stagingDir;
+    mkdirSync(stagingDir, { recursive: true });
+
+    const lastChecked = new Date(
+      Date.now() - 2 * 60 * 60 * 1000,
+    ).toISOString();
+    writeFileSync(
+      statePath,
+      JSON.stringify({
+        lastChecked,
+        channelCursors: {
+          C111: '1700000100.000000',
+          C222: '1700000100.000000',
+        },
+        conversations: [changedChannel, unchangedChannel],
+        activeChannelIds: ['C111', 'C222'],
+      }),
+      'utf-8',
+    );
+
+    mockSlackService.getConversations.mockResolvedValue([
+      changedChannel,
+      unchangedChannel,
+    ]);
+    mockSlackService.getActiveChannelIds.mockResolvedValue(
+      new Set(['C111', 'C222']),
+    );
+    mockSlackService.getChangedChannelIds.mockResolvedValue(
+      new Set(['C111']),
+    );
+    mockSlackService.getMessagesSince.mockResolvedValue([]);
+
+    await service.ingest();
+
+    expect(mockSlackService.getChangedChannelIds).toHaveBeenCalledTimes(1);
+    const changedCallArgs =
+      mockSlackService.getChangedChannelIds.mock.calls[0];
+    // First arg should be a date string (YYYY-MM-DD)
+    expect(changedCallArgs[0]).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
+    // getMessagesSince should only be called for the changed channel
+    const fetchedChannelIds = mockSlackService.getMessagesSince.mock.calls.map(
+      (args: unknown[]) => args[0],
+    );
+    expect(fetchedChannelIds).toContain('C111');
+    expect(fetchedChannelIds).not.toContain('C222');
   });
 
   it('resetState removes state file entirely when no channel caches exist', () => {
