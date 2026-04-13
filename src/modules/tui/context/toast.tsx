@@ -9,6 +9,7 @@ import {
   type ParentProps,
 } from 'solid-js';
 import { P, COLOR_SUCCESS, COLOR_ERROR, FG_NORMAL, BG_SURFACE, BORDER_DIALOG } from '../theme';
+import { useSpinner } from '../utils';
 
 interface Toast {
   id: number;
@@ -43,6 +44,7 @@ const STATUS_COLOR: Record<Toast['status'], string> = {
 };
 
 export function ToastProvider(props: ParentProps): JSX.Element {
+  const spinnerFrame = useSpinner();
   const [toasts, setToasts] = createSignal<Toast[]>([]);
   const timers = new Map<number, ReturnType<typeof setTimeout>>();
 
@@ -112,7 +114,7 @@ export function ToastProvider(props: ParentProps): JSX.Element {
                     paddingRight={1}
                   >
                     <text fg={STATUS_COLOR[toast.status]}>
-                      {`${STATUS_ICON[toast.status]} `}
+                      {`${toast.status === 'running' ? spinnerFrame() : STATUS_ICON[toast.status]} `}
                     </text>
                     <text fg={FG_NORMAL}>{toast.message}</text>
                   </box>

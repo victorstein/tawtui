@@ -55,6 +55,9 @@ export class SlackService {
   /** Optional abort check — if it returns true, waits are cut short */
   shouldAbort: (() => boolean) | null = null;
 
+  /** Serializes API requests so throttle checks are atomic across concurrent callers */
+  private requestQueue: Promise<void> = Promise.resolve();
+
   constructor(private readonly configService: ConfigService) {}
 
   /** Load persisted user name cache (call on startup or before ingestion) */
@@ -123,12 +126,21 @@ export class SlackService {
     }
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      await this.throttle(method);
-      this.lastCallTime.set(method, Date.now());
-      this.lastGlobalCallTime = Date.now();
-
-      const res = await fetch(url.toString(), {
-        headers: this.getAuthHeaders(),
+      // Queue the throttle + fetch so concurrent callers don't bypass rate limits
+      const res = await new Promise<Response>((resolve, reject) => {
+        this.requestQueue = this.requestQueue.then(async () => {
+          try {
+            await this.throttle(method);
+            this.lastCallTime.set(method, Date.now());
+            this.lastGlobalCallTime = Date.now();
+            const response = await fetch(url.toString(), {
+              headers: this.getAuthHeaders(),
+            });
+            resolve(response);
+          } catch (err) {
+            reject(err instanceof Error ? err : new Error(String(err)));
+          }
+        });
       });
 
       if (res.status === 429) {
@@ -217,6 +229,7 @@ export class SlackService {
   async getMessagesSince(
     channelId: string,
     oldestTs: string,
+    onPage?: (info: { page: number; messagesSoFar: number }) => void,
   ): Promise<
     Array<{
       ts: string;
@@ -233,6 +246,7 @@ export class SlackService {
       replyCount: number;
     }> = [];
     let cursor = '';
+    let page = 0;
 
     do {
       const params: Record<string, string> = {
@@ -262,6 +276,8 @@ export class SlackService {
         });
       }
 
+      page++;
+      onPage?.({ page, messagesSoFar: topLevel.length });
       cursor = data.has_more ? (data.response_metadata?.next_cursor ?? '') : '';
     } while (cursor);
 
@@ -459,6 +475,7 @@ export class SlackService {
   async getChangedChannelIds(
     afterDate: string,
     shouldAbort?: () => boolean,
+    onPage?: (info: { page: number; matchesSoFar: number }) => void,
   ): Promise<Set<string>> {
     const channelIds = new Set<string>();
     let page = 1;
@@ -481,6 +498,7 @@ export class SlackService {
       }
 
       totalPages = data.messages?.paging?.pages ?? 1;
+      onPage?.({ page, matchesSoFar: channelIds.size });
       page++;
     } while (page <= totalPages);
 

@@ -241,14 +241,20 @@ export class TuiService {
                     : 'Fetching channel list...',
                   status: 'running',
                 });
-              } else if (info.messageCount && info.messageCount > 0) {
+              } else if (info.phase === 'fetching') {
                 onProgress({
-                  message: `Fetched ${info.channel} (${info.messageCount} messages) [${info.channelIndex}/${info.totalChannels}]`,
+                  message: `Fetching ${info.totalChannels} channels...`,
                   status: 'running',
                 });
-              } else {
+              } else if (info.phase === 'channel') {
+                const progress = info.messageCount
+                  ? `(${info.messageCount} messages)`
+                  : info.page && info.page > 1
+                    ? `(page ${info.page})`
+                    : '';
+                const verb = info.messageCount ? 'Fetched' : 'Fetching';
                 onProgress({
-                  message: `Fetching ${info.channel}... [${info.channelIndex}/${info.totalChannels}]`,
+                  message: `${verb} ${info.channel}${progress ? ` ${progress}` : '...'} [${info.channelIndex}/${info.totalChannels}]`,
                   status: 'running',
                 });
               }
@@ -367,7 +373,7 @@ export class TuiService {
             const { userId } = await this.slackService.getCurrentUser();
             slackUserId = userId;
             this.configService.updateOracleConfig({
-              slack: { ...oracleConfig.slack!, userId },
+              slack: { ...oracleConfig.slack, userId },
             });
           } catch {
             // Non-fatal — self-DM detection won't work until next startup
@@ -377,32 +383,39 @@ export class TuiService {
           this.slackIngestionService.slackUserId = slackUserId;
         }
 
-        // Auto-launch oracle session (reuses existing if running)
-        try {
-          await this.terminalService.createOracleSession();
-        } catch {
-          // Oracle auto-launch failed — non-fatal, session can be started manually
-        }
+        if (this.slackIngestionService.hasCompletedSync) {
+          // Data exists — launch oracle session immediately
+          try {
+            await this.terminalService.createOracleSession();
+          } catch {
+            // Oracle auto-launch failed — non-fatal, session can be started manually
+          }
 
-        // Fire daily digest if >12h since last one
-        const lastDigest = oracleConfig.lastDigestAt
-          ? new Date(oracleConfig.lastDigestAt)
-          : null;
-        const twelveHoursMs = 12 * 60 * 60 * 1000;
-        const needsDigest =
-          !lastDigest || Date.now() - lastDigest.getTime() > twelveHoursMs;
+          // Fire daily digest if >12h since last one
+          const lastDigest = oracleConfig.lastDigestAt
+            ? new Date(oracleConfig.lastDigestAt)
+            : null;
+          const twelveHoursMs = 12 * 60 * 60 * 1000;
+          const needsDigest =
+            !lastDigest || Date.now() - lastDigest.getTime() > twelveHoursMs;
 
-        if (needsDigest) {
-          const rejectedTasks = oracleEventService.readRejectedTasks(
-            lastDigest ?? undefined,
-          );
-          void oracleEventService.postEvent({
-            type: 'daily-digest',
-            rejectedTasks,
-          });
-          this.configService.updateOracleConfig({
-            lastDigestAt: new Date().toISOString(),
-          });
+          if (needsDigest) {
+            const rejectedTasks = oracleEventService.readRejectedTasks(
+              lastDigest ?? undefined,
+            );
+            void oracleEventService.postEvent({
+              type: 'daily-digest',
+              rejectedTasks,
+            });
+            this.configService.updateOracleConfig({
+              lastDigestAt: new Date().toISOString(),
+            });
+          }
+        } else {
+          // No data yet — launch oracle session after first successful ingest
+          this.slackIngestionService.onFirstIngestComplete = () => {
+            void this.terminalService.createOracleSession().catch(() => {});
+          };
         }
       }
     }

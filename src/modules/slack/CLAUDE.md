@@ -23,10 +23,10 @@ LevelDB extraction tries WAL `.log` files first (newest), falls back to SST `.ld
 
 Five phases, abortable via `_generation` counter:
 
-1. **List & Filter** — get conversations, detect active channels (search.messages from:me, 7-day window), identify self-DM
+1. **List & Filter** — get conversations, detect active channels (search.messages from:me, 30-day window), identify self-DM
 2. **Pre-filter** — `getChangedChannelIds()` skips unchanged channels since `lastChecked` (skipped on first sync)
 3. **Fetch Messages** — concurrent (pLimit 3), cursor-based pagination, inline thread replies, write staging JSON files
-4. **Sync Tracked Threads** — bootstrap new channels, prune threads >7 days old, fetch new replies for tracked threads
+4. **Sync Tracked Threads** — bootstrap new channels, prune threads >30 days old, fetch new replies for tracked threads
 5. **Mine to Mempalace** — `mempalace mine <dir> --mode convos --wing slack` (idempotent, skips already-processed files)
 
 ## State File (`~/.config/tawtui/oracle-state.json`)
@@ -34,7 +34,7 @@ Five phases, abortable via `_generation` counter:
 Key fields:
 - `channelCursors: Record<channelId, ts>` — Slack message timestamp (Unix seconds with decimal). Next sync fetches messages strictly newer.
 - `trackedThreads: Record<channelId, Array<{threadTs, lastReplyTs}>>` — active threads being monitored for new replies
-- `activeChannelIds` + `activeChannelsCachedAt` — channels with user activity, refreshed hourly (1hr TTL)
+- `activeChannelIds` + `activeChannelsCachedAt` — channels with user activity (30-day window), refreshed hourly (1hr TTL)
 - `conversations` + `channelsCachedAt` — cached channel list
 - `userNames: Record<userId, displayName>` — avoids redundant users.info calls
 
@@ -66,5 +66,5 @@ Per-method throttle + 200ms global minimum gap:
 - **Active channel TTL**: Refreshed every 60 min. Long-running sessions need this to pick up newly joined channels.
 - **Pre-filter date math**: Subtracts 1 day from `lastChecked` because Slack's `after:` param is exclusive.
 - **Cursor advancement**: Uses top-level message ts only. Thread reply ts is tracked separately in `trackedThreads`.
-- **Thread bootstrap**: First sync of a channel seeds `trackedThreads` by backfilling 7 days and finding messages with `replyCount > 0`.
-- **Thread pruning**: Threads older than 7 days are removed each sync to prevent unbounded growth.
+- **Thread bootstrap**: First sync of a channel seeds `trackedThreads` by backfilling 30 days and finding messages with `replyCount > 0`.
+- **Thread pruning**: Threads older than 30 days are removed each sync to prevent unbounded growth.

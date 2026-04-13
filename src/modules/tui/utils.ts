@@ -1,5 +1,6 @@
 // src/modules/tui/utils.ts
 
+import { createSignal, onCleanup } from 'solid-js';
 import type { CalendarEventDateTime } from '../calendar.types';
 
 /** Format a CalendarEventDateTime as HH:MM or 'All day'. */
@@ -22,6 +23,34 @@ export function formatTimeRange(
     return `${formatTime(start)}\u2013${formatTime(end)}`;
   }
   return 'All day';
+}
+
+/** Braille dot spinner frames — standard loading indicator for all TUI components. */
+export const SPINNER_FRAMES = [
+  '⠋',
+  '⠙',
+  '⠹',
+  '⠸',
+  '⠼',
+  '⠴',
+  '⠦',
+  '⠧',
+  '⠇',
+  '⠏',
+] as const;
+
+/**
+ * Reactive spinner hook. Returns a signal with the current frame character.
+ * Automatically starts/stops the animation interval.
+ */
+export function useSpinner(intervalMs = 80): () => string {
+  const [idx, setIdx] = createSignal(0);
+  const timer = setInterval(
+    () => setIdx((i) => (i + 1) % SPINNER_FRAMES.length),
+    intervalMs,
+  );
+  onCleanup(() => clearInterval(timer));
+  return () => SPINNER_FRAMES[idx()];
 }
 
 /** Powerline left cap (right-facing half-circle). */

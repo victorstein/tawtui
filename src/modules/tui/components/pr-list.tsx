@@ -1,4 +1,4 @@
-import { For, Show, createSignal, createEffect, onMount, onCleanup } from 'solid-js';
+import { For, Show, createEffect } from 'solid-js';
 import type { ScrollBoxRenderable } from '@opentui/core';
 import type { PullRequest } from '../../github.types';
 import type { TerminalSession } from '../../terminal.types';
@@ -22,6 +22,7 @@ import {
   LEFT_CAP,
   RIGHT_CAP,
   getAuthorGradient,
+  useSpinner,
 } from '../utils';
 
 const DIM_FACTOR = 0.5;
@@ -110,27 +111,7 @@ export function PrList(props: PrListProps) {
     }
   });
 
-  const spinnerFrames = [
-    '\u280B',
-    '\u2819',
-    '\u2839',
-    '\u2838',
-    '\u283C',
-    '\u2834',
-    '\u2826',
-    '\u2827',
-    '\u2807',
-    '\u280F',
-  ];
-  const [spinnerIdx, setSpinnerIdx] = createSignal(0);
-
-  let spinnerInterval: ReturnType<typeof setInterval>;
-  onMount(() => {
-    spinnerInterval = setInterval(() => {
-      setSpinnerIdx((i) => (i + 1) % spinnerFrames.length);
-    }, 80);
-  });
-  onCleanup(() => clearInterval(spinnerInterval));
+  const spinnerFrame = useSpinner();
 
   const headerLabel = () => ` PULL REQUESTS (${props.prs.length}) `;
 
@@ -226,7 +207,7 @@ export function PrList(props: PrListProps) {
       </Show>
       <Show when={props.repoLabel && props.loading && props.prs.length === 0}>
         <box paddingX={1} paddingY={1} flexDirection="row">
-          <text fg={gradStart()}>{spinnerFrames[spinnerIdx()]}</text>
+          <text fg={gradStart()}>{spinnerFrame()}</text>
           <text fg={FG_DIM}> Loading pull requests...</text>
         </box>
       </Show>

@@ -1,4 +1,4 @@
-import { createSignal, createEffect, onCleanup, Show, For } from 'solid-js';
+import { createSignal, createEffect, Show, For } from 'solid-js';
 import { useKeyboard } from '@opentui/solid';
 import type { SlackDepStatus } from '../../dependency.types';
 import type {
@@ -19,7 +19,7 @@ import {
   COLOR_WARNING,
   SEPARATOR_COLOR,
 } from '../theme';
-import { lerpHex, LEFT_CAP, RIGHT_CAP } from '../utils';
+import { lerpHex, LEFT_CAP, RIGHT_CAP, useSpinner } from '../utils';
 import { getCancelOracleInit, ORACLE_INIT_CANCELLED } from '../bridge';
 
 /** Oracle gradient: purple -> secondary. Re-exported for use by OracleView. */
@@ -83,13 +83,7 @@ export function OracleSetupScreen(props: OracleSetupScreenProps) {
   const [cancelled, setCancelled] = createSignal(false);
 
   // Animated spinner for running items
-  const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-  const [spinnerIdx, setSpinnerIdx] = createSignal(0);
-  const spinnerTimer = setInterval(
-    () => setSpinnerIdx((i) => (i + 1) % SPINNER_FRAMES.length),
-    80,
-  );
-  onCleanup(() => clearInterval(spinnerTimer));
+  const spinnerFrame = useSpinner();
 
   const hasInstallablePackages = () =>
     props.slackStatus.pipxInstalled && !props.slackStatus.mempalaceInstalled;
@@ -565,7 +559,7 @@ export function OracleSetupScreen(props: OracleSetupScreenProps) {
                   ? '✓ '
                   : msg.status === 'skip'
                     ? '– '
-                    : `${SPINNER_FRAMES[spinnerIdx()]} `}
+                    : `${spinnerFrame()} `}
               </text>
               <text
                 fg={

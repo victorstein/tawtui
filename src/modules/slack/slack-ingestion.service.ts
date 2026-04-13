@@ -8,6 +8,9 @@ import type { OracleState, SlackConversation } from './slack.types';
 import { OracleEventService } from '../oracle/oracle-event.service';
 import { pLimit } from '../../shared/plimit';
 
+const INITIAL_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const INITIAL_LOOKBACK_S = 30 * 24 * 60 * 60; // 30 days in seconds
+
 @Injectable()
 export class SlackIngestionService {
   private readonly logger = new Logger(SlackIngestionService.name);
@@ -32,6 +35,8 @@ export class SlackIngestionService {
   onIngestComplete:
     | ((result: { messagesStored: number; channelNames: string[] }) => void)
     | null = null;
+  /** One-time callback fired after the first successful ingest. Cleared after firing. */
+  onFirstIngestComplete: (() => void) | null = null;
   oracleEventService: OracleEventService | null = null;
   /** The authenticated user's Slack ID — used to detect self-DM channel */
   slackUserId: string | null = null;
@@ -40,6 +45,12 @@ export class SlackIngestionService {
 
   get ingesting(): boolean {
     return this._ingesting;
+  }
+
+  /** Whether at least one successful ingestion has completed (lastChecked is set). */
+  get hasCompletedSync(): boolean {
+    const state = this.loadState();
+    return !!state.lastChecked;
   }
 
   constructor(
@@ -146,7 +157,7 @@ export class SlackIngestionService {
       if (state.activeChannelIds?.length && !activeStale) {
         activeChannelIds = new Set(state.activeChannelIds);
       } else {
-        const afterDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+        const afterDate = new Date(Date.now() - INITIAL_LOOKBACK_MS)
           .toISOString()
           .split('T')[0];
         activeChannelIds = await this.slackService.getActiveChannelIds(
@@ -206,6 +217,13 @@ export class SlackIngestionService {
             changedChannelIds = await this.slackService.getChangedChannelIds(
               searchDate,
               () => this._generation !== gen,
+              (info) => {
+                onProgress?.({
+                  phase: 'prefilter',
+                  channelsSoFar: info.matchesSoFar,
+                  page: info.page,
+                });
+              },
             );
             if (this._generation !== gen)
               return { messagesStored: 0, channelNames: [] };
@@ -229,16 +247,15 @@ export class SlackIngestionService {
 
       // Phase 1: Fetch new messages per channel (concurrent, limit 3)
       const limit = pLimit(3);
-      const channelsToFetch = filteredConversations
-        .filter((conversation) => {
-          if (options?.skipExisting && state.channelCursors[conversation.id]) {
-            return false;
-          }
-          if (changedChannelIds && !changedChannelIds.has(conversation.id)) {
-            return false;
-          }
-          return true;
-        });
+      const channelsToFetch = filteredConversations.filter((conversation) => {
+        if (options?.skipExisting && state.channelCursors[conversation.id]) {
+          return false;
+        }
+        if (changedChannelIds && !changedChannelIds.has(conversation.id)) {
+          return false;
+        }
+        return true;
+      });
 
       if (channelsToFetch.length > 0) {
         onProgress?.({
@@ -247,100 +264,128 @@ export class SlackIngestionService {
         });
       }
 
-      const phase1Tasks = channelsToFetch
-        .map((conversation) =>
-          limit(async () => {
-            if (this._generation !== gen) return;
+      const phase1Tasks = channelsToFetch.map((conversation) =>
+        limit(async () => {
+          if (this._generation !== gen) return;
 
-            const defaultCursor = String(
-              (Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000,
+          // Update waitCtx for rate-limit progress context
+          const channelIdx = channelsToFetch.indexOf(conversation) + 1;
+          waitCtx = {
+            channel: conversation.name,
+            channelIndex: channelIdx,
+            totalChannels: channelsToFetch.length,
+          };
+          onProgress?.({
+            phase: 'channel',
+            channel: conversation.name,
+            channelIndex: channelIdx,
+            totalChannels: channelsToFetch.length,
+          });
+
+          const defaultCursor = String(
+            (Date.now() - INITIAL_LOOKBACK_MS) / 1000,
+          );
+          const cursor = state.channelCursors[conversation.id] ?? defaultCursor;
+
+          let rawMessages: Array<{
+            ts: string;
+            userId: string;
+            text: string;
+            threadTs?: string;
+            replyCount?: number;
+          }>;
+          try {
+            rawMessages = await this.slackService.getMessagesSince(
+              conversation.id,
+              cursor,
+              (info) => {
+                onProgress?.({
+                  phase: 'channel',
+                  channel: conversation.name,
+                  channelIndex: channelIdx,
+                  totalChannels: channelsToFetch.length,
+                  messageCount: info.messagesSoFar,
+                  page: info.page,
+                });
+              },
             );
-            const cursor =
-              state.channelCursors[conversation.id] ?? defaultCursor;
-
-            let rawMessages: Array<{
-              ts: string;
-              userId: string;
-              text: string;
-              threadTs?: string;
-              replyCount?: number;
-            }>;
-            try {
-              rawMessages = await this.slackService.getMessagesSince(
-                conversation.id,
-                cursor,
-              );
-            } catch (err) {
-              this.logger.warn(
-                `Skipping channel ${conversation.id}: ${(err as Error).message}`,
-              );
-              return;
-            }
-
-            if (rawMessages.length === 0) return;
-
-            const slackExport: Array<Record<string, string>> = [];
-            for (const raw of rawMessages) {
-              const userName = await this.slackService.resolveUserName(
-                raw.userId,
-              );
-              slackExport.push({
-                type: 'message',
-                user: userName,
-                text: `${userName}: ${raw.text}`,
-                ts: raw.ts,
-              });
-            }
-
-            const channelSlug = this.slugify(
-              conversation.name,
-              conversation.isDm,
+          } catch (err) {
+            this.logger.warn(
+              `Skipping channel ${conversation.id}: ${(err as Error).message}`,
             );
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            const fileName = `${timestamp}_${channelSlug}.json`;
-            writeFileSync(
-              join(this.stagingDir, fileName),
-              JSON.stringify(slackExport, null, 2),
-              'utf-8',
+            return;
+          }
+
+          if (rawMessages.length === 0) return;
+
+          const slackExport: Array<Record<string, string>> = [];
+          for (const raw of rawMessages) {
+            const userName = await this.slackService.resolveUserName(
+              raw.userId,
             );
+            slackExport.push({
+              type: 'message',
+              user: userName,
+              text: `${userName}: ${raw.text}`,
+              ts: raw.ts,
+            });
+          }
 
-            filesWritten++;
-            messagesStored += rawMessages.length;
-            touchedChannelNames.add(conversation.name);
+          const channelSlug = this.slugify(
+            conversation.name,
+            conversation.isDm,
+          );
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+          const fileName = `${timestamp}_${channelSlug}.json`;
+          writeFileSync(
+            join(this.stagingDir, fileName),
+            JSON.stringify(slackExport, null, 2),
+            'utf-8',
+          );
 
-            const lastTopLevel = rawMessages.filter((m) => !m.threadTs).pop();
-            const lastTs =
-              lastTopLevel?.ts ?? rawMessages[rawMessages.length - 1].ts;
-            state.channelCursors[conversation.id] = lastTs;
+          filesWritten++;
+          messagesStored += rawMessages.length;
+          touchedChannelNames.add(conversation.name);
 
-            if (!state.trackedThreads) state.trackedThreads = {};
-            if (!state.trackedThreads[conversation.id])
-              state.trackedThreads[conversation.id] = [];
-            const channelThreads = state.trackedThreads[conversation.id];
-            for (const msg of rawMessages) {
-              if (msg.replyCount && msg.replyCount > 0) {
-                const replies = rawMessages.filter(
-                  (m) => m.threadTs === msg.ts,
-                );
-                const lastReply =
-                  replies.length > 0 ? replies[replies.length - 1] : undefined;
-                const existing = channelThreads.find(
-                  (t) => t.threadTs === msg.ts,
-                );
-                if (existing) {
-                  if (lastReply && lastReply.ts > existing.lastReplyTs) {
-                    existing.lastReplyTs = lastReply.ts;
-                  }
-                } else {
-                  channelThreads.push({
-                    threadTs: msg.ts,
-                    lastReplyTs: lastReply?.ts ?? msg.ts,
-                  });
+          onProgress?.({
+            phase: 'channel',
+            channel: conversation.name,
+            messageCount: rawMessages.length,
+            channelIndex: channelIdx,
+            totalChannels: channelsToFetch.length,
+          });
+
+          const lastTopLevel = rawMessages.filter((m) => !m.threadTs).pop();
+          const lastTs =
+            lastTopLevel?.ts ?? rawMessages[rawMessages.length - 1].ts;
+          state.channelCursors[conversation.id] = lastTs;
+
+          if (!state.trackedThreads) state.trackedThreads = {};
+          if (!state.trackedThreads[conversation.id])
+            state.trackedThreads[conversation.id] = [];
+          const channelThreads = state.trackedThreads[conversation.id];
+          for (const msg of rawMessages) {
+            if (msg.replyCount && msg.replyCount > 0) {
+              const replies = rawMessages.filter((m) => m.threadTs === msg.ts);
+              const lastReply =
+                replies.length > 0 ? replies[replies.length - 1] : undefined;
+              const existing = channelThreads.find(
+                (t) => t.threadTs === msg.ts,
+              );
+              if (existing) {
+                if (lastReply && lastReply.ts > existing.lastReplyTs) {
+                  existing.lastReplyTs = lastReply.ts;
                 }
+              } else {
+                channelThreads.push({
+                  threadTs: msg.ts,
+                  lastReplyTs: lastReply?.ts ?? msg.ts,
+                });
               }
             }
-          }),
-        );
+          }
+        }),
+      );
 
       await Promise.allSettled(phase1Tasks);
 
@@ -353,11 +398,11 @@ export class SlackIngestionService {
 
       // Phase 2: Re-check tracked threads for new replies (concurrent, limit 3)
       if (!state.trackedThreads) state.trackedThreads = {};
-      const sevenDaysAgo = String(
-        (Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000,
-      );
+      const pruneThreshold = String((Date.now() - INITIAL_LOOKBACK_MS) / 1000);
 
       const phase2Tasks: Array<Promise<void>> = [];
+
+      onProgress?.({ phase: 'threads' });
 
       for (const conversation of filteredConversations) {
         if (this._generation !== gen) break;
@@ -374,8 +419,12 @@ export class SlackIngestionService {
           (!state.trackedThreads[conversation.id] ||
             state.trackedThreads[conversation.id].length === 0)
         ) {
+          onProgress?.({
+            phase: 'threads',
+            channel: conversation.name,
+          });
           const backfillCursor = String(
-            parseFloat(channelCursor) - 7 * 24 * 60 * 60,
+            parseFloat(channelCursor) - INITIAL_LOOKBACK_S,
           );
           try {
             const backfillMessages = await this.slackService.getMessagesSince(
@@ -398,12 +447,18 @@ export class SlackIngestionService {
         const threads = state.trackedThreads[conversation.id];
         if (!threads || threads.length === 0) continue;
 
-        // Prune threads older than 7 days
+        // Prune threads older than 30 days
         state.trackedThreads[conversation.id] = threads.filter(
-          (t) => t.threadTs > sevenDaysAgo,
+          (t) => t.threadTs > pruneThreshold,
         );
 
         const activeThreads = state.trackedThreads[conversation.id];
+
+        onProgress?.({
+          phase: 'threads',
+          channel: conversation.name,
+          messageCount: activeThreads.length,
+        });
 
         for (const tracked of activeThreads) {
           phase2Tasks.push(
@@ -572,9 +627,15 @@ export class SlackIngestionService {
   }
 
   private async safeIngest(): Promise<void> {
+    if (this._ingesting) return; // Skip if a manual sync is already running
     try {
       const result = await this.ingest();
       this.onIngestComplete?.(result);
+
+      if (result.messagesStored > 0 && this.onFirstIngestComplete) {
+        this.onFirstIngestComplete();
+        this.onFirstIngestComplete = null;
+      }
 
       // Fire sync-complete event to oracle channel (only if new messages)
       if (result.messagesStored > 0 && this.oracleEventService) {

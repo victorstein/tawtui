@@ -243,7 +243,8 @@ function AppContent() {
       svc
         .triggerIngest((info) => {
           if (info.phase === 'prefilter') {
-            toast.update(id, 'Checking for changes...');
+            const detail = info.channelsSoFar ? ` (${info.channelsSoFar} channels)` : '';
+            toast.update(id, `Checking for changes...${detail}`);
           } else if (info.phase === 'fetching') {
             toast.update(id, `Fetching ${info.totalChannels} channels...`);
           } else if (info.phase === 'listing') {
@@ -253,9 +254,12 @@ function AppContent() {
             const count = info.channelsSoFar ? ` (${info.channelsSoFar} active)` : '';
             toast.update(id, `Detecting active channels...${count}`);
           } else if (info.phase === 'channel') {
-            const msg = info.messageCount
-              ? `${info.channel} (${info.messageCount} msgs) [${info.channelIndex}/${info.totalChannels}]`
-              : `${info.channel}... [${info.channelIndex}/${info.totalChannels}]`;
+            const progress = info.messageCount
+              ? `(${info.messageCount} msgs)`
+              : info.page && info.page > 1
+                ? `(page ${info.page})`
+                : '';
+            const msg = `${info.channel}${progress ? ` ${progress}` : '...'} [${info.channelIndex}/${info.totalChannels}]`;
             toast.update(id, msg);
           } else if (info.phase === 'skipped') {
             toast.update(id, `${info.channel} (cached) [${info.channelIndex}/${info.totalChannels}]`);
