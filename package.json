@@ -67,7 +67,7 @@
       "ts"
     ],
     "rootDir": ".",
-    "testRegex": ".*\\.spec\\.ts$",
+    "testRegex": "test/.*\\.spec\\.ts$",
     "testPathIgnorePatterns": [
       "/node_modules/"
     ],
