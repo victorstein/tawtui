@@ -309,4 +309,387 @@ describe('TerminalService Integration', () => {
       });
     });
   });
+
+  // ================================================================
+  // Key Mapping
+  // ================================================================
+  describe('Key Mapping', () => {
+    // TS-KM-1: Special key mapping
+    describe('TS-KM-1: Special key mapping', () => {
+      it('should send mapped special keys without -l flag', async () => {
+        const { service } = createService();
+
+        // Given: a running session
+        mockSpawnSequence([
+          ['tmux 3.4', '', 0], // isTmuxInstalled → tmux -V
+          ['', '', 0], // new-session
+          ['', '', 0], // set-option remain-on-exit
+          ['%0', '', 0], // list-panes
+        ]);
+
+        const session = await service.createSession({
+          name: 'Key Map Test',
+          cwd: '/tmp/keymap',
+        });
+
+        mockSpawn.mockClear();
+        mockSpawnSuccess();
+
+        // When: sendInput with 'return' (maps to 'Enter')
+        await service.sendInput(session.id, 'return');
+
+        // Then: spawn called with 'Enter' and no '-l' flag
+        const returnCall = mockSpawn.mock.calls[0] as [string[], unknown];
+        const returnArgs = returnCall[0];
+        expect(returnArgs).toContain('send-keys');
+        expect(returnArgs).toContain('Enter');
+        expect(returnArgs).not.toContain('-l');
+
+        mockSpawn.mockClear();
+        mockSpawnSuccess();
+
+        // When: sendInput with 'C-c' (ctrl combo)
+        await service.sendInput(session.id, 'C-c');
+
+        // Then: spawn called with 'C-c' and no '-l' flag
+        const ctrlCall = mockSpawn.mock.calls[0] as [string[], unknown];
+        const ctrlArgs = ctrlCall[0];
+        expect(ctrlArgs).toContain('send-keys');
+        expect(ctrlArgs).toContain('C-c');
+        expect(ctrlArgs).not.toContain('-l');
+      });
+    });
+
+    // TS-KM-2: Literal text input
+    describe('TS-KM-2: Literal text input', () => {
+      it('should send literal text with -l flag', async () => {
+        const { service } = createService();
+
+        // Given: a running session
+        mockSpawnSequence([
+          ['tmux 3.4', '', 0],
+          ['', '', 0],
+          ['', '', 0],
+          ['%0', '', 0],
+        ]);
+
+        const session = await service.createSession({
+          name: 'Literal Test',
+          cwd: '/tmp/literal',
+        });
+
+        mockSpawn.mockClear();
+        mockSpawnSuccess();
+
+        // When: sendInput with regular text
+        await service.sendInput(session.id, 'hello world');
+
+        // Then: spawn called with '-l' and 'hello world'
+        const call = mockSpawn.mock.calls[0] as [string[], unknown];
+        const args = call[0];
+        expect(args).toContain('send-keys');
+        expect(args).toContain('-l');
+        expect(args).toContain('hello world');
+      });
+    });
+
+    // TS-KM-3: sendInput on non-existent session
+    describe('TS-KM-3: sendInput on non-existent session', () => {
+      it('should throw "Session not found" for unknown session id', async () => {
+        const { service } = createService();
+
+        // When/Then: sendInput rejects with Session not found
+        await expect(
+          service.sendInput('nonexistent', 'test'),
+        ).rejects.toThrow(/Session not found/);
+      });
+    });
+  });
+
+  // ================================================================
+  // Capture & Change Detection
+  // ================================================================
+  describe('Capture & Change Detection', () => {
+    // TS-CD-1: Change detection caching
+    describe('TS-CD-1: Change detection caching', () => {
+      it('should use cached cursor when content hash is unchanged', async () => {
+        const { service } = createService();
+
+        // Given: a running session
+        mockSpawnSequence([
+          ['tmux 3.4', '', 0],
+          ['', '', 0],
+          ['', '', 0],
+          ['%0', '', 0],
+        ]);
+
+        const session = await service.createSession({
+          name: 'Cache Test',
+          cwd: '/tmp/cache',
+        });
+
+        // Set hash to a constant so content always hashes the same
+        mockBunHash.mockReturnValue(42);
+        mockSpawn.mockClear();
+
+        // First captureOutput: capture-pane + display-message (1st poll always queries cursor)
+        mockSpawnSequence([
+          ['some output\n', '', 0], // capture-pane
+          ['5,3,0', '', 0], // display-message → cursor 5,3
+        ]);
+
+        const result1 = await service.captureOutput(session.id);
+
+        // Then: changed is true on first call (no previous hash)
+        expect(result1.changed).toBe(true);
+        expect(result1.cursor).toEqual({ x: 5, y: 3 });
+
+        // Second captureOutput: only capture-pane (same hash → cached cursor, no display-message)
+        mockSpawnSequence([
+          ['some output\n', '', 0], // capture-pane (same content)
+        ]);
+
+        const result2 = await service.captureOutput(session.id);
+
+        // Then: changed is false, cursor is cached
+        expect(result2.changed).toBe(false);
+        expect(result2.cursor).toEqual({ x: 5, y: 3 });
+
+        // Verify display-message was called exactly once across both captures
+        const displayCalls = mockSpawn.mock.calls.filter((call) => {
+          const args = (call as [string[], unknown])[0];
+          return args.includes('display-message');
+        });
+        expect(displayCalls).toHaveLength(1);
+      });
+    });
+
+    // TS-CD-2: Periodic cursor refresh on 10th poll
+    describe('TS-CD-2: Periodic cursor refresh on 10th poll', () => {
+      it('should query cursor on 1st and 10th calls', async () => {
+        const { service } = createService();
+
+        // Given: a running session
+        mockSpawnSequence([
+          ['tmux 3.4', '', 0],
+          ['', '', 0],
+          ['', '', 0],
+          ['%0', '', 0],
+        ]);
+
+        const session = await service.createSession({
+          name: 'Poll Test',
+          cwd: '/tmp/poll',
+        });
+
+        // Constant hash so content is always "unchanged" after the 1st call
+        mockBunHash.mockReturnValue(42);
+        mockSpawn.mockClear();
+
+        // Use mockImplementation to create fresh streams for each call
+        // (ReadableStream can only be consumed once, so mockReturnValue won't work)
+        mockSpawn.mockImplementation(() => ({
+          stdout: new ReadableStream({
+            start(controller: ReadableStreamDefaultController) {
+              controller.enqueue(
+                new TextEncoder().encode('same content\n'),
+              );
+              controller.close();
+            },
+          }),
+          stderr: new ReadableStream({
+            start(controller: ReadableStreamDefaultController) {
+              controller.enqueue(new TextEncoder().encode(''));
+              controller.close();
+            },
+          }),
+          exited: Promise.resolve(0),
+        }));
+
+        // When: call captureOutput 10 times
+        for (let i = 0; i < 10; i++) {
+          await service.captureOutput(session.id);
+        }
+
+        // Then: display-message was called exactly 2 times (1st + 10th poll)
+        const displayCalls = mockSpawn.mock.calls.filter((call) => {
+          const args = (call as [string[], unknown])[0];
+          return args.includes('display-message');
+        });
+        expect(displayCalls).toHaveLength(2);
+      });
+    });
+
+    // TS-CD-3: captureOutput when capture-pane fails
+    describe('TS-CD-3: captureOutput when capture-pane fails', () => {
+      it('should throw when capture-pane returns a non-zero exit code', async () => {
+        const { service } = createService();
+
+        // Given: a running session
+        mockSpawnSequence([
+          ['tmux 3.4', '', 0],
+          ['', '', 0],
+          ['', '', 0],
+          ['%0', '', 0],
+        ]);
+
+        const session = await service.createSession({
+          name: 'Capture Fail Test',
+          cwd: '/tmp/capfail',
+        });
+
+        // Given: capture-pane fails
+        mockSpawnSequence([['', 'no pane', 1]]);
+
+        // When/Then: captureOutput rejects
+        await expect(service.captureOutput(session.id)).rejects.toThrow(
+          /Failed to capture pane/,
+        );
+      });
+    });
+  });
+
+  // ================================================================
+  // Persistence
+  // ================================================================
+  describe('Persistence', () => {
+    // TS-P-1: persistSessions failure is silent
+    describe('TS-P-1: persistSessions failure is silent', () => {
+      it('should not throw when writeFileSync fails', () => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const fs = require('fs');
+        (fs.writeFileSync as jest.Mock).mockImplementationOnce(() => {
+          throw new Error('EPERM');
+        });
+
+        const { service } = createService();
+
+        // When/Then: persistSessions does not throw
+        expect(() => {
+          (service as any).persistSessions();
+        }).not.toThrow();
+      });
+    });
+
+    // TS-P-2: loadPersistedSessions with empty/corrupt file
+    describe('TS-P-2: loadPersistedSessions with empty/corrupt file', () => {
+      it('should return empty Map for empty or corrupt session file', () => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const fs = require('fs');
+
+        const { service } = createService();
+
+        // Case 1: empty file
+        (fs.existsSync as jest.Mock).mockReturnValueOnce(true);
+        (fs.readFileSync as jest.Mock).mockReturnValueOnce('');
+
+        const result1 = (service as any).loadPersistedSessions() as Map<
+          string,
+          unknown
+        >;
+        expect(result1.size).toBe(0);
+
+        // Case 2: truncated JSON
+        (fs.existsSync as jest.Mock).mockReturnValueOnce(true);
+        (fs.readFileSync as jest.Mock).mockReturnValueOnce(
+          '[{"tmuxSessionName":',
+        );
+
+        const result2 = (service as any).loadPersistedSessions() as Map<
+          string,
+          unknown
+        >;
+        expect(result2.size).toBe(0);
+      });
+    });
+
+    // TS-P-3: discoverExistingSessions with no tmux server
+    describe('TS-P-3: discoverExistingSessions with no tmux server', () => {
+      it('should not crash and return no sessions when tmux server is down', async () => {
+        const { service } = createService();
+
+        // Given: list-sessions fails (no tmux server)
+        mockSpawnSequence([['', 'no server running', 1]]);
+
+        // When: discoverExistingSessions is called
+        await (service as any).discoverExistingSessions();
+
+        // Then: no sessions registered, no crash
+        expect(service.listSessions()).toHaveLength(0);
+      });
+    });
+  });
+
+  // ================================================================
+  // Boundary Corruption
+  // ================================================================
+  describe('Boundary Corruption', () => {
+    // TS-BC-1: pasteText fallback when set-buffer fails
+    describe('TS-BC-1: pasteText fallback when set-buffer fails', () => {
+      it('should fall back to send-keys when set-buffer fails', async () => {
+        const { service } = createService();
+
+        // Given: a running session
+        mockSpawnSequence([
+          ['tmux 3.4', '', 0],
+          ['', '', 0],
+          ['', '', 0],
+          ['%0', '', 0],
+        ]);
+
+        const session = await service.createSession({
+          name: 'Paste Fallback Test',
+          cwd: '/tmp/pastefb',
+        });
+
+        mockSpawn.mockClear();
+
+        // Given: set-buffer fails, then send-keys (fallback) succeeds
+        mockSpawnSequence([
+          ['', 'error', 1], // set-buffer fails
+          ['', '', 0], // send-keys fallback succeeds
+        ]);
+
+        // When: pasteText is called
+        await service.pasteText(session.id, 'some text');
+
+        // Then: no exception, and send-keys was called with -l as fallback
+        const sendKeysCall = mockSpawn.mock.calls.find((call) => {
+          const args = (call as [string[], unknown])[0];
+          return args.includes('send-keys');
+        });
+        expect(sendKeysCall).toBeDefined();
+        const args = (sendKeysCall as [string[], unknown])[0];
+        expect(args).toContain('-l');
+      });
+    });
+
+    // TS-BC-2: pasteText with empty string
+    describe('TS-BC-2: pasteText with empty string', () => {
+      it('should return immediately without calling tmux for empty text', async () => {
+        const { service } = createService();
+
+        // Given: a running session
+        mockSpawnSequence([
+          ['tmux 3.4', '', 0],
+          ['', '', 0],
+          ['', '', 0],
+          ['%0', '', 0],
+        ]);
+
+        const session = await service.createSession({
+          name: 'Empty Paste Test',
+          cwd: '/tmp/emptypaste',
+        });
+
+        mockSpawn.mockClear();
+
+        // When: pasteText is called with empty string
+        await service.pasteText(session.id, '');
+
+        // Then: no spawn calls were made (early return)
+        expect(mockSpawn).not.toHaveBeenCalled();
+      });
+    });
+  });
 });
