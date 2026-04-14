@@ -570,4 +570,107 @@ describe('SlackIngestionService Integration', () => {
       });
     });
   });
+
+  // ================================================================
+  // State Machine Violations
+  // ================================================================
+  describe('State Machine Violations', () => {
+    // SM-1: Oracle session gating via onFirstIngestComplete
+    describe('SM-1: Oracle session gating via onFirstIngestComplete', () => {
+      it('should fire onFirstIngestComplete callback after first successful safeIngest', async () => {
+        // Given: a fresh stack with hasCompletedSync = false
+        global.fetch = createRoutedFetch(standardRoutes()) as any;
+        stack = IntegrationHelper.createSlackStack();
+
+        expect(stack.ingestionService.hasCompletedSync).toBe(false);
+
+        // Set onFirstIngestComplete callback
+        const callback = jest.fn();
+        stack.ingestionService.onFirstIngestComplete = callback;
+
+        // When: safeIngest runs to completion (via private access)
+        await (stack.ingestionService as any).safeIngest();
+
+        // Then: callback fired and hasCompletedSync is true
+        expect(callback).toHaveBeenCalledTimes(1);
+        expect(stack.ingestionService.hasCompletedSync).toBe(true);
+        // onFirstIngestComplete is cleared after firing
+        expect(stack.ingestionService.onFirstIngestComplete).toBeNull();
+
+        // Phase 2: Prove onFirstIngestComplete is re-registerable after reset
+        // When: resetState is called
+        stack.ingestionService.resetState();
+
+        // hasCompletedSync should be false again after reset
+        expect(stack.ingestionService.hasCompletedSync).toBe(false);
+
+        // Set a new callback (fetch mocks are still active from above)
+        const secondCallback = jest.fn();
+        stack.ingestionService.onFirstIngestComplete = secondCallback;
+
+        // Run another ingestion cycle
+        await (stack.ingestionService as any).safeIngest();
+
+        // Then: the new callback fires, proving re-registration works
+        expect(secondCallback).toHaveBeenCalledTimes(1);
+        expect(stack.ingestionService.hasCompletedSync).toBe(true);
+        expect(stack.ingestionService.onFirstIngestComplete).toBeNull();
+        // Original callback was not called again
+        expect(callback).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    // SM-2: onFirstIngestComplete lifecycle after reset
+    describe('SM-2: onFirstIngestComplete lifecycle after reset', () => {
+      it('should allow re-registering onFirstIngestComplete after resetState', async () => {
+        // Given: a stack that completes a first ingest
+        global.fetch = createRoutedFetch(standardRoutes()) as any;
+        stack = IntegrationHelper.createSlackStack();
+
+        const firstCallback = jest.fn();
+        stack.ingestionService.onFirstIngestComplete = firstCallback;
+
+        // Complete first ingest via safeIngest
+        await (stack.ingestionService as any).safeIngest();
+        expect(firstCallback).toHaveBeenCalledTimes(1);
+        expect(stack.ingestionService.onFirstIngestComplete).toBeNull();
+
+        // When: reset state and register a new callback
+        stack.ingestionService.resetState();
+
+        const secondCallback = jest.fn();
+        stack.ingestionService.onFirstIngestComplete = secondCallback;
+
+        // Complete another ingest via safeIngest
+        await (stack.ingestionService as any).safeIngest();
+
+        // Then: the new callback fires (proving re-registration works after reset)
+        expect(secondCallback).toHaveBeenCalledTimes(1);
+        expect(stack.ingestionService.onFirstIngestComplete).toBeNull();
+        // First callback was not called again
+        expect(firstCallback).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    // SM-3: Double startPolling
+    describe('SM-3: Double startPolling is idempotent', () => {
+      it('should not leak a second timer when startPolling is called twice', async () => {
+        global.fetch = createRoutedFetch(standardRoutes()) as any;
+        stack = IntegrationHelper.createSlackStack();
+
+        // When: startPolling is called twice
+        stack.ingestionService.startPolling(60000);
+        stack.ingestionService.startPolling(60000);
+
+        // Then: isPolling is true
+        expect(stack.ingestionService.isPolling()).toBe(true);
+
+        // When: stopPolling is called once
+        stack.ingestionService.stopPolling();
+
+        // Then: isPolling is false (no leaked second timer)
+        expect(stack.ingestionService.isPolling()).toBe(false);
+      });
+    });
+  });
 });
