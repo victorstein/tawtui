@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-import { ConfigService } from '../src/modules/config.service';
-import { DEFAULT_ORACLE_CONFIG } from '../src/modules/config.types';
+import { ConfigService } from '../../src/modules/config.service';
+import { DEFAULT_ORACLE_CONFIG } from '../../src/modules/config.types';
 import { mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';

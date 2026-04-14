@@ -1,4 +1,4 @@
-import { TokenExtractorService } from '../src/modules/slack/token-extractor.service';
+import { TokenExtractorService } from '../../src/modules/slack/token-extractor.service';
 
 // Mock Bun global
 const mockSpawnSync = jest.fn();
@@ -14,12 +14,12 @@ jest.mock('fs', () => ({
 }));
 
 // Mock the leveldb-reader module
-jest.mock('../src/modules/slack/leveldb-reader', () => ({
+jest.mock('../../src/modules/slack/leveldb-reader', () => ({
   extractLocalConfig: jest.fn(),
 }));
 
 // Mock the cookie-decryptor module
-jest.mock('../src/modules/slack/cookie-decryptor', () => ({
+jest.mock('../../src/modules/slack/cookie-decryptor', () => ({
   readEncryptedCookie: jest.fn(),
   readKeychainPassword: jest.fn(),
   deriveKey: jest.fn(),
@@ -27,13 +27,13 @@ jest.mock('../src/modules/slack/cookie-decryptor', () => ({
 }));
 
 import { existsSync, readFileSync, readdirSync } from 'fs';
-import { extractLocalConfig } from '../src/modules/slack/leveldb-reader';
+import { extractLocalConfig } from '../../src/modules/slack/leveldb-reader';
 import {
   readEncryptedCookie,
   readKeychainPassword,
   deriveKey,
   decryptValue,
-} from '../src/modules/slack/cookie-decryptor';
+} from '../../src/modules/slack/cookie-decryptor';
 
 const mockExistsSync = existsSync as jest.MockedFunction<typeof existsSync>;
 const mockReadFileSync = readFileSync as jest.MockedFunction<

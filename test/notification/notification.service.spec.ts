@@ -1,6 +1,6 @@
 // test/notification.service.spec.ts
 
-import { NotificationService } from '../src/modules/notification.service';
+import { NotificationService } from '../../src/modules/notification.service';
 
 // Save original env and Bun.spawn
 const originalEnv = { ...process.env };

@@ -1,10 +1,10 @@
-import { DependencyService } from '../src/modules/dependency.service';
-import { ConfigService } from '../src/modules/config.service';
-import { GithubService } from '../src/modules/github.service';
-import { TaskwarriorService } from '../src/modules/taskwarrior.service';
-import { CalendarService } from '../src/modules/calendar.service';
-import { MempalaceService } from '../src/modules/slack/mempalace.service';
-import { NotificationService } from '../src/modules/notification.service';
+import { DependencyService } from '../../src/modules/dependency.service';
+import { ConfigService } from '../../src/modules/config.service';
+import { GithubService } from '../../src/modules/github.service';
+import { TaskwarriorService } from '../../src/modules/taskwarrior.service';
+import { CalendarService } from '../../src/modules/calendar.service';
+import { MempalaceService } from '../../src/modules/slack/mempalace.service';
+import { NotificationService } from '../../src/modules/notification.service';
 
 // Mock Bun global (tests run under Jest/Node, not Bun runtime)
 const mockBun = { spawnSync: jest.fn().mockReturnValue({ exitCode: 1 }) };

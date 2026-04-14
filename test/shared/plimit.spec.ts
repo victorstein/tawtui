@@ -1,4 +1,4 @@
-import { pLimit } from '../src/shared/plimit';
+import { pLimit } from '../../src/shared/plimit';
 
 describe('pLimit', () => {
   it('runs tasks up to the concurrency limit', async () => {

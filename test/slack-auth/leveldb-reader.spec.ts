@@ -4,7 +4,7 @@ import {
   extractLocalConfig,
   decompressSnappy,
   extractLocalConfigFromSst,
-} from '../src/modules/slack/leveldb-reader';
+} from '../../src/modules/slack/leveldb-reader';
 
 describe('LevelDB Reader', () => {
   function buildLogRecord(type: number, data: Buffer): Buffer {

@@ -1,4 +1,4 @@
-import { ORACLE_CHANNEL_PORT } from '../src/modules/oracle/oracle-channel.types';
+import { ORACLE_CHANNEL_PORT } from '../../src/modules/oracle/oracle-channel.types';
 
 describe('oracle-channel server', () => {
   const baseUrl = `http://127.0.0.1:${ORACLE_CHANNEL_PORT}`;

@@ -3,7 +3,7 @@ import {
   decryptValue,
   readEncryptedCookie,
   readKeychainPassword,
-} from '../src/modules/slack/cookie-decryptor';
+} from '../../src/modules/slack/cookie-decryptor';
 import { createCipheriv } from 'crypto';
 import { mkdtempSync, rmSync } from 'fs';
 import { join } from 'path';
