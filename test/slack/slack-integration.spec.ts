@@ -1153,4 +1153,529 @@ describe('SlackIngestionService Integration', () => {
       );
     });
   });
+
+  // ================================================================
+  // Full-Stack Behavioral
+  // ================================================================
+  describe('Full-Stack Behavioral', () => {
+    const testChannel3 = SlackTestHelper.conversation({
+      id: 'C003',
+      name: 'engineering',
+    });
+
+    // FS-1: First launch end-to-end
+    describe('FS-1: First launch end-to-end', () => {
+      it(
+        'should complete full first-launch cycle with correct progress ordering and file output',
+        async () => {
+          // Given: fresh stack with no state file, no staging dir
+          // 3 channels returned by conversations.list, 2 active (C001, C002)
+          global.fetch = jest.fn((url: string) => {
+            if (
+              typeof url === 'string' &&
+              url.includes('conversations.list')
+            ) {
+              return Promise.resolve({
+                status: 200,
+                ok: true,
+                headers: new Headers(),
+                json: async () =>
+                  SlackTestHelper.conversationsListResponse([
+                    testChannel,
+                    testChannel2,
+                    testChannel3,
+                  ]),
+              });
+            }
+            if (typeof url === 'string' && url.includes('search.messages')) {
+              // Active channel detection: from:me query returns C001 and C002
+              return Promise.resolve({
+                status: 200,
+                ok: true,
+                headers: new Headers(),
+                json: async () =>
+                  SlackTestHelper.searchResponse(['C001', 'C002']),
+              });
+            }
+            if (
+              typeof url === 'string' &&
+              url.includes('conversations.history')
+            ) {
+              const channelMatch = url.match(/channel=([^&]+)/);
+              const channel = channelMatch?.[1];
+              if (channel === 'C001') {
+                return Promise.resolve({
+                  status: 200,
+                  ok: true,
+                  headers: new Headers(),
+                  json: async () =>
+                    SlackTestHelper.historyResponse([
+                      {
+                        text: 'hello from general',
+                        ts: '1700000001.000000',
+                        user: 'U100',
+                      },
+                      {
+                        text: 'another msg',
+                        ts: '1700000002.000000',
+                        user: 'U100',
+                      },
+                    ]),
+                });
+              }
+              if (channel === 'C002') {
+                return Promise.resolve({
+                  status: 200,
+                  ok: true,
+                  headers: new Headers(),
+                  json: async () =>
+                    SlackTestHelper.historyResponse([
+                      {
+                        text: 'hello from random',
+                        ts: '1700000003.000000',
+                        user: 'U200',
+                      },
+                    ]),
+                });
+              }
+              // Channel C003 should never be fetched (not active)
+              return Promise.resolve({
+                status: 200,
+                ok: true,
+                headers: new Headers(),
+                json: async () =>
+                  SlackTestHelper.historyResponse([]),
+              });
+            }
+            if (typeof url === 'string' && url.includes('users.info')) {
+              const userMatch = url.match(/user=([^&]+)/);
+              const userId = userMatch?.[1];
+              if (userId === 'U200') {
+                return Promise.resolve({
+                  status: 200,
+                  ok: true,
+                  headers: new Headers(),
+                  json: async () => ({
+                    ok: true,
+                    user: {
+                      id: 'U200',
+                      name: 'randomuser',
+                      profile: { display_name: 'Random User' },
+                    },
+                  }),
+                });
+              }
+              return Promise.resolve({
+                status: 200,
+                ok: true,
+                headers: new Headers(),
+                json: async () => ({
+                  ok: true,
+                  user: {
+                    id: 'U100',
+                    name: 'testuser',
+                    profile: { display_name: 'Test User' },
+                  },
+                }),
+              });
+            }
+            return Promise.resolve({
+              status: 200,
+              ok: true,
+              headers: new Headers(),
+              json: async () => ({ ok: true }),
+            });
+          }) as any;
+
+          stack = IntegrationHelper.createSlackStack();
+
+          // When: run full first-launch ingestion
+          const progressCalls: Array<{
+            phase: string;
+            channel?: string;
+            channelIndex?: number;
+            totalChannels?: number;
+          }> = [];
+          const result = await stack.ingestionService.ingest(
+            (info) => {
+              progressCalls.push({
+                phase: info.phase,
+                channel: info.channel,
+                channelIndex: info.channelIndex,
+                totalChannels: info.totalChannels,
+              });
+            },
+            { skipExisting: false },
+          );
+
+          // Then: verify progress phases appear in correct order
+          const phaseOrder = progressCalls.map((p) => p.phase);
+          const listingIdx = phaseOrder.indexOf('listing');
+          const detectingIdx = phaseOrder.indexOf('detecting');
+          const fetchingIdx = phaseOrder.indexOf('fetching');
+          const firstChannelIdx = phaseOrder.indexOf('channel');
+          const threadsIdx = phaseOrder.indexOf('threads');
+          const miningIdx = phaseOrder.indexOf('mining');
+
+          expect(listingIdx).toBeGreaterThanOrEqual(0);
+          expect(detectingIdx).toBeGreaterThan(listingIdx);
+          expect(fetchingIdx).toBeGreaterThan(detectingIdx);
+          expect(firstChannelIdx).toBeGreaterThan(fetchingIdx);
+          expect(threadsIdx).toBeGreaterThan(firstChannelIdx);
+          expect(miningIdx).toBeGreaterThan(threadsIdx);
+
+          // Verify each 'channel' progress has defined channel, channelIndex, totalChannels
+          const channelProgresses = progressCalls.filter(
+            (p) => p.phase === 'channel',
+          );
+          for (const cp of channelProgresses) {
+            expect(cp.channel).toBeDefined();
+            expect(cp.channelIndex).toBeDefined();
+            expect(cp.totalChannels).toBeDefined();
+          }
+
+          // Verify state file exists with cursors for the 2 active channels
+          expect(existsSync(stack.statePath)).toBe(true);
+          const stateRaw = readFileSync(stack.statePath, 'utf-8');
+          const state: OracleState = JSON.parse(stateRaw);
+          expect(state.channelCursors['C001']).toBeDefined();
+          expect(state.channelCursors['C002']).toBeDefined();
+          // C003 was not active, should not have a cursor
+          expect(state.channelCursors['C003']).toBeUndefined();
+
+          // Verify staging dir has 2 JSON files
+          const { readdirSync } = await import('fs');
+          const stagingFiles = readdirSync(stack.stagingDir).filter(
+            (f: string) => f.endsWith('.json'),
+          );
+          expect(stagingFiles).toHaveLength(2);
+
+          // Verify return value
+          expect(result.messagesStored).toBeGreaterThan(0);
+          expect(result.channelNames).toContain('general');
+          expect(result.channelNames).toContain('random');
+          expect(result.channelNames).not.toContain('engineering');
+        },
+        30000,
+      );
+    });
+
+    // FS-2: Reset and re-sync
+    describe('FS-2: Reset and re-sync', () => {
+      it(
+        'should clear cursors on reset and re-sync all channels with 30-day lookback',
+        async () => {
+          // Given: state file with cursors for 3 channels, lastChecked set
+          const initialState = SlackTestHelper.oracleState({
+            lastChecked: new Date().toISOString(),
+            channelCursors: {
+              C001: '1700000001.000000',
+              C002: '1700000002.000000',
+              C003: '1700000003.000000',
+            },
+            conversations: [testChannel, testChannel2, testChannel3],
+            activeChannelIds: ['C001', 'C002', 'C003'],
+            channelsCachedAt: new Date().toISOString(),
+            activeChannelsCachedAt: new Date().toISOString(),
+          });
+
+          global.fetch = createRoutedFetch({
+            'conversations.history': () =>
+              SlackTestHelper.historyResponse([
+                {
+                  text: 'fresh msg',
+                  ts: '1700100001.000000',
+                  user: 'U100',
+                },
+              ]),
+            'search.messages': () =>
+              SlackTestHelper.searchResponse(['C001', 'C002', 'C003']),
+            'users.info': () => ({
+              ok: true,
+              user: {
+                id: 'U100',
+                name: 'testuser',
+                profile: { display_name: 'Test User' },
+              },
+            }),
+          }) as any;
+
+          stack = IntegrationHelper.createSlackStack({ initialState });
+
+          // When: call resetState
+          stack.ingestionService.resetState();
+
+          // Then: state file exists but has empty cursors and null lastChecked
+          expect(existsSync(stack.statePath)).toBe(true);
+          const resetStateRaw = readFileSync(stack.statePath, 'utf-8');
+          const resetState: OracleState = JSON.parse(resetStateRaw);
+          expect(resetState.lastChecked).toBeNull();
+          expect(resetState.channelCursors).toEqual({});
+          // conversations cache may be preserved
+          expect(resetState.conversations).toBeDefined();
+
+          // Set up fresh fetch mocks to track the oldest param
+          const oldestParams: string[] = [];
+          global.fetch = jest.fn((url: string) => {
+            if (
+              typeof url === 'string' &&
+              url.includes('conversations.history')
+            ) {
+              const oldestMatch = url.match(/oldest=([^&]+)/);
+              if (oldestMatch) oldestParams.push(oldestMatch[1]);
+              return Promise.resolve({
+                status: 200,
+                ok: true,
+                headers: new Headers(),
+                json: async () =>
+                  SlackTestHelper.historyResponse([
+                    {
+                      text: 'fresh msg',
+                      ts: '1700100001.000000',
+                      user: 'U100',
+                    },
+                  ]),
+              });
+            }
+            if (typeof url === 'string' && url.includes('search.messages')) {
+              return Promise.resolve({
+                status: 200,
+                ok: true,
+                headers: new Headers(),
+                json: async () =>
+                  SlackTestHelper.searchResponse(['C001', 'C002', 'C003']),
+              });
+            }
+            if (typeof url === 'string' && url.includes('users.info')) {
+              return Promise.resolve({
+                status: 200,
+                ok: true,
+                headers: new Headers(),
+                json: async () => ({
+                  ok: true,
+                  user: {
+                    id: 'U100',
+                    name: 'testuser',
+                    profile: { display_name: 'Test User' },
+                  },
+                }),
+              });
+            }
+            return Promise.resolve({
+              status: 200,
+              ok: true,
+              headers: new Headers(),
+              json: async () => ({ ok: true }),
+            });
+          }) as any;
+
+          // When: run ingestion again after reset
+          const result = await stack.ingestionService.ingest();
+
+          // Then: all channels fetched fresh with 30-day lookback
+          // Phase 1 calls use defaultCursor (~30 days ago). Phase 2 thread bootstrap
+          // also calls conversations.history with a different oldest. Filter to only
+          // check Phase 1 calls (those within range of the expected 30-day lookback).
+          const INITIAL_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
+          const expectedOldest = (Date.now() - INITIAL_LOOKBACK_MS) / 1000;
+          const phase1OldestParams = oldestParams.filter((oldest) => {
+            const diff = Math.abs(parseFloat(oldest) - expectedOldest);
+            return diff < 60; // within 60 seconds = Phase 1 default cursor
+          });
+          // At least 3 Phase 1 calls should have used the 30-day lookback
+          expect(phase1OldestParams.length).toBeGreaterThanOrEqual(3);
+          // None of the Phase 1 calls reused old cursors (e.g. 1700000001)
+          for (const oldest of phase1OldestParams) {
+            const oldestNum = parseFloat(oldest);
+            expect(Math.abs(oldestNum - expectedOldest)).toBeLessThan(60);
+          }
+
+          // New cursors written to state
+          const newStateRaw = readFileSync(stack.statePath, 'utf-8');
+          const newState: OracleState = JSON.parse(newStateRaw);
+          expect(newState.channelCursors['C001']).toBeDefined();
+          expect(newState.channelCursors['C002']).toBeDefined();
+          expect(newState.channelCursors['C003']).toBeDefined();
+          expect(newState.lastChecked).not.toBeNull();
+
+          expect(result.messagesStored).toBeGreaterThan(0);
+        },
+        30000,
+      );
+    });
+
+    // FS-3: Manual sync progress integrity
+    describe('FS-3: Manual sync progress integrity', () => {
+      it(
+        'should report correct progress phases and channel indices during pre-filtered manual sync',
+        async () => {
+          // Given: state with lastChecked set (triggers pre-filter), 3 channels with cursors
+          // activeChannelIds cached so active detection search doesn't run
+          const initialState = SlackTestHelper.oracleState({
+            lastChecked: new Date(
+              Date.now() - 2 * 60 * 60 * 1000,
+            ).toISOString(), // 2 hours ago
+            channelCursors: {
+              C001: '1700000001.000000',
+              C002: '1700000002.000000',
+              C003: '1700000003.000000',
+            },
+            conversations: [testChannel, testChannel2, testChannel3],
+            activeChannelIds: ['C001', 'C002', 'C003'],
+            channelsCachedAt: new Date().toISOString(),
+            activeChannelsCachedAt: new Date().toISOString(),
+          });
+
+          // Mock search.messages for pre-filter: return only C001 and C002 as changed
+          // (NOT C003 — it's unchanged). The pre-filter query does NOT include from:me.
+          global.fetch = jest.fn((url: string) => {
+            if (typeof url === 'string' && url.includes('search.messages')) {
+              // Pre-filter: no from:me in query, returns C001 and C002
+              return Promise.resolve({
+                status: 200,
+                ok: true,
+                headers: new Headers(),
+                json: async () =>
+                  SlackTestHelper.searchResponse(['C001', 'C002']),
+              });
+            }
+            if (
+              typeof url === 'string' &&
+              url.includes('conversations.history')
+            ) {
+              const channelMatch = url.match(/channel=([^&]+)/);
+              const channel = channelMatch?.[1];
+              if (channel === 'C001') {
+                return Promise.resolve({
+                  status: 200,
+                  ok: true,
+                  headers: new Headers(),
+                  json: async () =>
+                    SlackTestHelper.historyResponse([
+                      {
+                        text: 'new msg general',
+                        ts: '1700100001.000000',
+                        user: 'U100',
+                      },
+                    ]),
+                });
+              }
+              if (channel === 'C002') {
+                return Promise.resolve({
+                  status: 200,
+                  ok: true,
+                  headers: new Headers(),
+                  json: async () =>
+                    SlackTestHelper.historyResponse([
+                      {
+                        text: 'new msg random',
+                        ts: '1700100002.000000',
+                        user: 'U100',
+                      },
+                    ]),
+                });
+              }
+              // C003 should not be fetched (filtered out by pre-filter)
+              return Promise.resolve({
+                status: 200,
+                ok: true,
+                headers: new Headers(),
+                json: async () => SlackTestHelper.historyResponse([]),
+              });
+            }
+            if (typeof url === 'string' && url.includes('users.info')) {
+              return Promise.resolve({
+                status: 200,
+                ok: true,
+                headers: new Headers(),
+                json: async () => ({
+                  ok: true,
+                  user: {
+                    id: 'U100',
+                    name: 'testuser',
+                    profile: { display_name: 'Test User' },
+                  },
+                }),
+              });
+            }
+            return Promise.resolve({
+              status: 200,
+              ok: true,
+              headers: new Headers(),
+              json: async () => ({ ok: true }),
+            });
+          }) as any;
+
+          stack = IntegrationHelper.createSlackStack({ initialState });
+          // Leave oracleEventService as null to avoid needing to mock it
+          stack.ingestionService.oracleEventService = null;
+
+          // When: run triggerIngest with progress tracking
+          const progressCalls: Array<{
+            phase: string;
+            channel?: string;
+            channelIndex?: number;
+            totalChannels?: number;
+          }> = [];
+          const result = await stack.ingestionService.triggerIngest(
+            (info) => {
+              progressCalls.push({
+                phase: info.phase,
+                channel: info.channel,
+                channelIndex: info.channelIndex,
+                totalChannels: info.totalChannels,
+              });
+            },
+          );
+
+          // Then: verify strict phase ordering
+          const phaseOrder = progressCalls.map((p) => p.phase);
+          const prefilterIdx = phaseOrder.indexOf('prefilter');
+          const fetchingIdx = phaseOrder.indexOf('fetching');
+          const firstChannelIdx = phaseOrder.indexOf('channel');
+          const threadsIdx = phaseOrder.indexOf('threads');
+          const miningIdx = phaseOrder.indexOf('mining');
+
+          expect(prefilterIdx).toBeGreaterThanOrEqual(0);
+          expect(fetchingIdx).toBeGreaterThan(prefilterIdx);
+          expect(firstChannelIdx).toBeGreaterThan(fetchingIdx);
+          expect(threadsIdx).toBeGreaterThan(firstChannelIdx);
+          expect(miningIdx).toBeGreaterThanOrEqual(0);
+          expect(miningIdx).toBeGreaterThan(threadsIdx);
+
+          // Verify: no progress call has undefined channel or channelIndex when phase is 'channel'
+          const channelProgresses = progressCalls.filter(
+            (p) => p.phase === 'channel',
+          );
+          for (const cp of channelProgresses) {
+            expect(cp.channel).toBeDefined();
+            expect(cp.channelIndex).toBeDefined();
+          }
+
+          // Verify: channel indices are 1/2 and 2/2 (NOT 1/3, 2/3)
+          const channelIndices = channelProgresses.map(
+            (p) => `${p.channelIndex}/${p.totalChannels}`,
+          );
+          expect(channelIndices).toContain('1/2');
+          expect(channelIndices).toContain('2/2');
+          expect(channelIndices).not.toContain('1/3');
+          expect(channelIndices).not.toContain('2/3');
+          expect(channelIndices).not.toContain('3/3');
+
+          // Verify: 'skipped' phase does NOT fire
+          const skippedPhases = progressCalls.filter(
+            (p) => p.phase === 'skipped',
+          );
+          expect(skippedPhases).toHaveLength(0);
+
+          // Verify: result is correct
+          expect(result.messagesStored).toBeGreaterThan(0);
+          expect(result.channelNames).toContain('general');
+          expect(result.channelNames).toContain('random');
+          expect(result.channelNames).not.toContain('engineering');
+        },
+        30000,
+      );
+    });
+  });
 });
