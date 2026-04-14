@@ -285,7 +285,11 @@ describe('MempalaceService', () => {
     describe('Edge Cases', () => {
       it('should ignore non-json files in staging dir', async () => {
         existsSyncMock.mockReturnValue(true);
-        readdirSyncMock.mockReturnValue(['readme.txt', 'data.csv', '.DS_Store']);
+        readdirSyncMock.mockReturnValue([
+          'readme.txt',
+          'data.csv',
+          '.DS_Store',
+        ]);
         const result = await service.mineIfNeeded('/tmp/staging', 'slack');
         expect(result).toEqual({ mined: false });
         expect(mockSpawn).not.toHaveBeenCalled();
@@ -400,9 +404,9 @@ describe('MempalaceService', () => {
           stderr: errorStream,
         });
 
-        await expect(
-          service.installPlugin('/tmp/workspace'),
-        ).rejects.toThrow(/plugin install failed/);
+        await expect(service.installPlugin('/tmp/workspace')).rejects.toThrow(
+          /plugin install failed/,
+        );
       });
 
       it('should succeed even when marketplace add returns non-zero', async () => {

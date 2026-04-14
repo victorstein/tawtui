@@ -8,9 +8,10 @@ import { tmpdir } from 'os';
  * OracleEventService expects a workspaceDir and appends rejected/ internally.
  * So we create a workspace dir and put the rejected/ dir inside it.
  */
-function createWorkspaceWithRejected(
-  entries: Record<string, string> = {},
-): { workspaceDir: string; cleanup: () => void } {
+function createWorkspaceWithRejected(entries: Record<string, string> = {}): {
+  workspaceDir: string;
+  cleanup: () => void;
+} {
   const workspaceDir = mkdtempSync(join(tmpdir(), 'tawtui-test-workspace-'));
   const rejectedDir = join(workspaceDir, 'rejected');
   mkdirSync(rejectedDir, { recursive: true });
@@ -64,7 +65,9 @@ describe('OracleEventService', () => {
     describe('Error Handling', () => {
       it('should return empty string when rejected/ directory is missing', () => {
         // Create workspace dir but no rejected/ subdir inside it
-        const workspaceDir = mkdtempSync(join(tmpdir(), 'tawtui-test-workspace-'));
+        const workspaceDir = mkdtempSync(
+          join(tmpdir(), 'tawtui-test-workspace-'),
+        );
         const service = new OracleEventService(workspaceDir, 10);
         expect(service.readRejectedTasks()).toBe('');
         rmSync(workspaceDir, { recursive: true, force: true });
@@ -166,7 +169,10 @@ describe('OracleEventService', () => {
             resolveResponse = res;
           }),
         );
-        const promise = service.postEvent({ type: 'daily-digest', rejectedTasks: '' });
+        const promise = service.postEvent({
+          type: 'daily-digest',
+          rejectedTasks: '',
+        });
         // postEvent is NOT fire-and-forget in the pure sense — it awaits fetch internally
         // but its public contract is void: callers can discard without awaiting
         resolveResponse(new Response('ok', { status: 200 }));

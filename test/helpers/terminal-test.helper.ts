@@ -9,11 +9,7 @@ export class TerminalTestHelper {
     };
   }
 
-  static mockSpawn(
-    stdout = '',
-    stderr = '',
-    exitCode = 0,
-  ): jest.Mock {
+  static mockSpawn(stdout = '', stderr = '', exitCode = 0): jest.Mock {
     return jest.fn().mockReturnValue({
       stdout: new ReadableStream({
         start(controller) {

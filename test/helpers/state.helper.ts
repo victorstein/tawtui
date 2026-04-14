@@ -4,9 +4,11 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 
 export class StateHelper {
-  static createStateFile(
-    state: Partial<OracleState> = {},
-  ): { path: string; dir: string; cleanup: () => void } {
+  static createStateFile(state: Partial<OracleState> = {}): {
+    path: string;
+    dir: string;
+    cleanup: () => void;
+  } {
     const dir = mkdtempSync(join(tmpdir(), 'tawtui-test-state-'));
     const path = join(dir, 'oracle-state.json');
     const full: OracleState = {
@@ -15,16 +17,24 @@ export class StateHelper {
       ...state,
     };
     writeFileSync(path, JSON.stringify(full, null, 2));
-    return { path, dir, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+    return {
+      path,
+      dir,
+      cleanup: () => rmSync(dir, { recursive: true, force: true }),
+    };
   }
 
-  static createRejectedDir(
-    entries: Record<string, string> = {},
-  ): { dir: string; cleanup: () => void } {
+  static createRejectedDir(entries: Record<string, string> = {}): {
+    dir: string;
+    cleanup: () => void;
+  } {
     const dir = mkdtempSync(join(tmpdir(), 'tawtui-test-rejected-'));
     for (const [name, content] of Object.entries(entries)) {
       writeFileSync(join(dir, name), content);
     }
-    return { dir, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+    return {
+      dir,
+      cleanup: () => rmSync(dir, { recursive: true, force: true }),
+    };
   }
 }

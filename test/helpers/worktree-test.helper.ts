@@ -100,10 +100,7 @@ export class WorktreeTestHelper {
             return {
               ...result,
               exited: new Promise<number>((resolve) =>
-                setTimeout(
-                  () => resolve(config.exitCode ?? 0),
-                  config.delayMs,
-                ),
+                setTimeout(() => resolve(config.exitCode ?? 0), config.delayMs),
               ),
             };
           }

@@ -190,11 +190,7 @@ describe('WorktreeService Integration', () => {
       (globalThis as Record<string, unknown>).Bun = { spawn: jest.fn() };
       stack = WorktreeTestHelper.createStack();
 
-      actualFs.writeFileSync(
-        stack.worktreesJsonPath,
-        '[{"id":"test"',
-        'utf-8',
-      );
+      actualFs.writeFileSync(stack.worktreesJsonPath, '[{"id":"test"', 'utf-8');
 
       (stack.service as any).loadPersistedWorktrees();
 
@@ -257,14 +253,12 @@ describe('WorktreeService Integration', () => {
       stack = WorktreeTestHelper.createStack();
 
       // Make writeFileSync throw only for worktrees.json
-      mockWriteFileSync.mockImplementation(
-        (path: string, ...args: any[]) => {
-          if (String(path).includes('worktrees.json')) {
-            throw new Error('EPERM');
-          }
-          return (actualFs.writeFileSync as any)(path, ...args);
-        },
-      );
+      mockWriteFileSync.mockImplementation((path: string, ...args: any[]) => {
+        if (String(path).includes('worktrees.json')) {
+          throw new Error('EPERM');
+        }
+        return (actualFs.writeFileSync as any)(path, ...args);
+      });
 
       const result = await stack.service.createWorktree('o', 'r', 1);
 
@@ -291,9 +285,9 @@ describe('WorktreeService Integration', () => {
 
       stack = WorktreeTestHelper.createStack();
 
-      await expect(
-        stack.service.createWorktree('o', 'r', 1),
-      ).rejects.toThrow('Failed to create worktree');
+      await expect(stack.service.createWorktree('o', 'r', 1)).rejects.toThrow(
+        'Failed to create worktree',
+      );
 
       expect(stack.service.listWorktrees()).toHaveLength(0);
     });
@@ -311,12 +305,7 @@ describe('WorktreeService Integration', () => {
       stack = WorktreeTestHelper.createStack();
 
       // The worktree path where the service will look for the setup script
-      const worktreePath = join(
-        stack.baseDir,
-        'o',
-        'r-worktrees',
-        'pr-1',
-      );
+      const worktreePath = join(stack.baseDir, 'o', 'r-worktrees', 'pr-1');
       actualFs.mkdirSync(worktreePath, { recursive: true });
       actualFs.writeFileSync(
         join(worktreePath, '.worktree-setup.sh'),
@@ -335,9 +324,9 @@ describe('WorktreeService Integration', () => {
       (globalThis as Record<string, unknown>).Bun = { spawn: jest.fn() };
       stack = WorktreeTestHelper.createStack();
 
-      await expect(
-        stack.service.removeWorktree('nonexistent'),
-      ).rejects.toThrow('Worktree not found: nonexistent');
+      await expect(stack.service.removeWorktree('nonexistent')).rejects.toThrow(
+        'Worktree not found: nonexistent',
+      );
     });
 
     // WT-FC-4: Partial cleanup on removeWorktree
@@ -404,9 +393,7 @@ describe('WorktreeService Integration', () => {
       (stack.service as any).loadPersistedWorktrees();
       (stack.service as any).detectOrphans();
 
-      const worktree = (stack.service as any).worktrees.get(
-        'owner/repo#pr-99',
-      );
+      const worktree = (stack.service as any).worktrees.get('owner/repo#pr-99');
       expect(worktree).toBeDefined();
       expect(worktree.status).toBe('orphaned');
     });

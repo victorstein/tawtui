@@ -49,9 +49,10 @@ function createMocks() {
   return { taskwarriorService, configService, worktreeService };
 }
 
-function createService(
-  mocks = createMocks(),
-): { service: TerminalService; mocks: ReturnType<typeof createMocks> } {
+function createService(mocks = createMocks()): {
+  service: TerminalService;
+  mocks: ReturnType<typeof createMocks>;
+} {
   const service = new TerminalService(
     mocks.taskwarriorService,
     mocks.configService,
@@ -86,9 +87,7 @@ function mockSpawnSuccess(stdout = '', stderr = '', exitCode = 0) {
  * Configure mockSpawn to return different results for each successive call.
  * Accepts an array of [stdout, stderr, exitCode] tuples.
  */
-function mockSpawnSequence(
-  calls: Array<[string, string, number]>,
-) {
+function mockSpawnSequence(calls: Array<[string, string, number]>) {
   for (const [stdout, stderr, exitCode] of calls) {
     mockSpawn.mockReturnValueOnce({
       stdout: new ReadableStream({
@@ -128,10 +127,10 @@ describe('TerminalService', () => {
       it('should create tmux session via new-session with name, cwd, and size', async () => {
         // Calls: isTmuxInstalled (-V), new-session, set-option, list-panes
         mockSpawnSequence([
-          ['tmux 3.4', '', 0],   // -V
-          ['', '', 0],           // new-session
-          ['', '', 0],           // set-option remain-on-exit
-          ['%0', '', 0],         // list-panes
+          ['tmux 3.4', '', 0], // -V
+          ['', '', 0], // new-session
+          ['', '', 0], // set-option remain-on-exit
+          ['%0', '', 0], // list-panes
         ]);
 
         const { service } = createService();
@@ -180,11 +179,11 @@ describe('TerminalService', () => {
       it('should send short commands (<2KB) via send-keys', async () => {
         const shortCmd = 'echo hello';
         mockSpawnSequence([
-          ['tmux 3.4', '', 0],   // -V
-          ['', '', 0],           // new-session
-          ['', '', 0],           // set-option
-          ['%0', '', 0],         // list-panes
-          ['', '', 0],           // send-keys
+          ['tmux 3.4', '', 0], // -V
+          ['', '', 0], // new-session
+          ['', '', 0], // set-option
+          ['%0', '', 0], // list-panes
+          ['', '', 0], // send-keys
         ]);
 
         const { service } = createService();
@@ -211,7 +210,7 @@ describe('TerminalService', () => {
           ['', '', 0],
           ['', '', 0],
           ['%0', '', 0],
-          ['', '', 0],           // send-keys for wrapper
+          ['', '', 0], // send-keys for wrapper
         ]);
 
         const { service } = createService();
@@ -288,9 +287,9 @@ describe('TerminalService', () => {
         const shortCmd = 'echo hello';
         mockSpawnSequence([
           ['tmux 3.4', '', 0],
-          ['', '', 0],           // new-session succeeds
-          ['', '', 0],           // set-option succeeds
-          ['%0', '', 0],         // list-panes succeeds
+          ['', '', 0], // new-session succeeds
+          ['', '', 0], // set-option succeeds
+          ['%0', '', 0], // list-panes succeeds
           ['', 'send-keys error', 1], // send-keys fails
         ]);
 
@@ -353,7 +352,7 @@ describe('TerminalService', () => {
           ['tmux 3.4', '', 0],
           ['', '', 0],
           ['', '', 0],
-          ['', '', 1],           // list-panes fails
+          ['', '', 1], // list-panes fails
         ]);
 
         const { service } = createService();
@@ -396,11 +395,11 @@ describe('TerminalService', () => {
       it('should build command with oracle prompt and channel flag', async () => {
         // Need enough spawn calls for createSession inside createOracleSession
         mockSpawnSequence([
-          ['tmux 3.4', '', 0],   // isTmuxInstalled
-          ['', '', 0],           // new-session
-          ['', '', 0],           // set-option
-          ['%0', '', 0],         // list-panes
-          ['', '', 0],           // send-keys (the oracle command)
+          ['tmux 3.4', '', 0], // isTmuxInstalled
+          ['', '', 0], // new-session
+          ['', '', 0], // set-option
+          ['%0', '', 0], // list-panes
+          ['', '', 0], // send-keys (the oracle command)
         ]);
 
         const { service, mocks } = createService();
@@ -423,9 +422,7 @@ describe('TerminalService', () => {
         } else {
           // Short command path: check send-keys args
           const cmdArg = args.find(
-            (a) =>
-              typeof a === 'string' &&
-              a.includes('oracle-channel'),
+            (a) => typeof a === 'string' && a.includes('oracle-channel'),
           );
           expect(cmdArg).toBeDefined();
         }
@@ -624,9 +621,9 @@ describe('TerminalService', () => {
     describe('Validation', () => {
       it('should throw when session not found', async () => {
         const { service } = createService();
-        await expect(
-          service.pasteText('nonexistent', 'text'),
-        ).rejects.toThrow('Session not found: nonexistent');
+        await expect(service.pasteText('nonexistent', 'text')).rejects.toThrow(
+          'Session not found: nonexistent',
+        );
       });
 
       it('should return early on empty text', async () => {
@@ -649,7 +646,7 @@ describe('TerminalService', () => {
         mockSpawn.mockClear();
         mockSpawnSequence([
           ['', 'set-buffer failed', 1], // set-buffer fails
-          ['', '', 0],                   // fallback send-keys succeeds
+          ['', '', 0], // fallback send-keys succeeds
         ]);
 
         // Should not throw — falls back to send-keys
@@ -688,7 +685,7 @@ describe('TerminalService', () => {
         mockSpawn.mockClear();
         mockSpawnSequence([
           ['$ echo hello\nhello\n$', '', 0], // capture-pane
-          ['5,3,0', '', 0],                   // display-message (cursor)
+          ['5,3,0', '', 0], // display-message (cursor)
         ]);
         // Bun.hash returns a consistent value
         mockBunHash.mockReturnValueOnce(99999);
@@ -752,8 +749,8 @@ describe('TerminalService', () => {
 
         mockSpawn.mockClear();
         mockSpawnSequence([
-          ['$ exit\n', '', 0],      // capture-pane
-          ['0,0,1', '', 0],         // display-message: pane_dead = 1
+          ['$ exit\n', '', 0], // capture-pane
+          ['0,0,1', '', 0], // display-message: pane_dead = 1
         ]);
         mockBunHash.mockReturnValueOnce(33333);
 

@@ -767,7 +767,9 @@ describe('SlackService', () => {
 
         await expect(
           service.getThreadReplies('C123', '1700000100.000000'),
-        ).rejects.toThrow('Slack conversations.replies error: thread_not_found');
+        ).rejects.toThrow(
+          'Slack conversations.replies error: thread_not_found',
+        );
       });
     });
 
@@ -824,15 +826,13 @@ describe('SlackService', () => {
             ok: true,
             status: 200,
             headers: new Headers(),
-            json: async () =>
-              SlackTestHelper.searchResponse(['C111'], 1, 2),
+            json: async () => SlackTestHelper.searchResponse(['C111'], 1, 2),
           })
           .mockResolvedValueOnce({
             ok: true,
             status: 200,
             headers: new Headers(),
-            json: async () =>
-              SlackTestHelper.searchResponse(['C222'], 2, 2),
+            json: async () => SlackTestHelper.searchResponse(['C222'], 2, 2),
           });
 
         const onPage = jest.fn();
@@ -855,15 +855,13 @@ describe('SlackService', () => {
             ok: true,
             status: 200,
             headers: new Headers(),
-            json: async () =>
-              SlackTestHelper.searchResponse(['C111'], 1, 2),
+            json: async () => SlackTestHelper.searchResponse(['C111'], 1, 2),
           })
           .mockResolvedValueOnce({
             ok: true,
             status: 200,
             headers: new Headers(),
-            json: async () =>
-              SlackTestHelper.searchResponse(['C222'], 2, 2),
+            json: async () => SlackTestHelper.searchResponse(['C222'], 2, 2),
           });
 
         const result = await service.getChangedChannelIds('2026-04-11');
@@ -927,8 +925,7 @@ describe('SlackService', () => {
           ok: true,
           status: 200,
           headers: new Headers(),
-          json: async () =>
-            SlackTestHelper.searchResponse(['C111', 'C222']),
+          json: async () => SlackTestHelper.searchResponse(['C111', 'C222']),
         });
 
         const result = await service.getActiveChannelIds('2026-03-14');
@@ -947,15 +944,13 @@ describe('SlackService', () => {
             ok: true,
             status: 200,
             headers: new Headers(),
-            json: async () =>
-              SlackTestHelper.searchResponse(['C111'], 1, 2),
+            json: async () => SlackTestHelper.searchResponse(['C111'], 1, 2),
           })
           .mockResolvedValueOnce({
             ok: true,
             status: 200,
             headers: new Headers(),
-            json: async () =>
-              SlackTestHelper.searchResponse(['C222'], 2, 2),
+            json: async () => SlackTestHelper.searchResponse(['C222'], 2, 2),
           });
 
         const onPage = jest.fn();
@@ -979,8 +974,7 @@ describe('SlackService', () => {
           ok: true,
           status: 200,
           headers: new Headers(),
-          json: async () =>
-            SlackTestHelper.searchResponse(['C111'], 1, 3),
+          json: async () => SlackTestHelper.searchResponse(['C111'], 1, 3),
         });
 
         let callCount = 0;
@@ -1236,8 +1230,7 @@ describe('SlackService', () => {
           .mockResolvedValue(undefined);
 
         // 4 consecutive 429s (initial + 3 retries)
-        mockFetch
-          .mockResolvedValue(SlackTestHelper.rateLimitResponse(1));
+        mockFetch.mockResolvedValue(SlackTestHelper.rateLimitResponse(1));
 
         await expect(service.resolveUserName('U_FAIL')).rejects.toThrow(
           'Slack API users.info rate-limited after 3 retries',

@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/unbound-method, @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/unbound-method */
 import { SlackIngestionService } from '../../src/modules/slack/slack-ingestion.service';
 import type { SlackService } from '../../src/modules/slack/slack.service';
 import type { MempalaceService } from '../../src/modules/slack/mempalace.service';
@@ -81,7 +81,10 @@ describe('SlackIngestionService', () => {
       });
 
       it('should save state to disk and persist across loads', async () => {
-        const conv = SlackTestHelper.conversation({ id: 'C1', name: 'general' });
+        const conv = SlackTestHelper.conversation({
+          id: 'C1',
+          name: 'general',
+        });
         mockSlack.getConversations.mockResolvedValue([conv]);
         mockSlack.getActiveChannelIds.mockResolvedValue(new Set(['C1']));
         mockSlack.getMessagesSince.mockResolvedValue([
@@ -113,7 +116,10 @@ describe('SlackIngestionService', () => {
   describe('ingest — Phase 1 (List & Filter)', () => {
     describe('Behavior', () => {
       it('should fetch conversations when cache is empty', async () => {
-        const conv = SlackTestHelper.conversation({ id: 'C1', name: 'general' });
+        const conv = SlackTestHelper.conversation({
+          id: 'C1',
+          name: 'general',
+        });
         mockSlack.getConversations.mockResolvedValue([conv]);
         mockSlack.getActiveChannelIds.mockResolvedValue(new Set(['C1']));
 
@@ -123,7 +129,10 @@ describe('SlackIngestionService', () => {
       });
 
       it('should use cached conversations when available', async () => {
-        const conv = SlackTestHelper.conversation({ id: 'C1', name: 'general' });
+        const conv = SlackTestHelper.conversation({
+          id: 'C1',
+          name: 'general',
+        });
         const statePath = (service as any).statePath;
         mkdirSync(tmpDir, { recursive: true });
         writeFileSync(
@@ -145,7 +154,10 @@ describe('SlackIngestionService', () => {
       });
 
       it('should detect active channels via getActiveChannelIds', async () => {
-        const conv = SlackTestHelper.conversation({ id: 'C1', name: 'general' });
+        const conv = SlackTestHelper.conversation({
+          id: 'C1',
+          name: 'general',
+        });
         mockSlack.getConversations.mockResolvedValue([conv]);
         mockSlack.getActiveChannelIds.mockResolvedValue(new Set(['C1']));
 
@@ -187,8 +199,9 @@ describe('SlackIngestionService', () => {
         await service.ingest();
 
         // Should fetch messages for C1 (active) and C2 (previously synced), not C3
-        const fetchedChannelIds =
-          mockSlack.getMessagesSince.mock.calls.map((args: unknown[]) => args[0]);
+        const fetchedChannelIds = mockSlack.getMessagesSince.mock.calls.map(
+          (args: unknown[]) => args[0],
+        );
         expect(fetchedChannelIds).toContain('C1');
         expect(fetchedChannelIds).toContain('C2');
         expect(fetchedChannelIds).not.toContain('C3');
@@ -216,13 +229,17 @@ describe('SlackIngestionService', () => {
 
         await service.ingest();
 
-        const fetchedChannelIds =
-          mockSlack.getMessagesSince.mock.calls.map((args: unknown[]) => args[0]);
+        const fetchedChannelIds = mockSlack.getMessagesSince.mock.calls.map(
+          (args: unknown[]) => args[0],
+        );
         expect(fetchedChannelIds).toContain('D999');
       });
 
       it('should respect active channel cache 1hr TTL', async () => {
-        const conv = SlackTestHelper.conversation({ id: 'C1', name: 'general' });
+        const conv = SlackTestHelper.conversation({
+          id: 'C1',
+          name: 'general',
+        });
         const statePath = (service as any).statePath;
         mkdirSync(tmpDir, { recursive: true });
 
@@ -248,7 +265,10 @@ describe('SlackIngestionService', () => {
       });
 
       it('should refresh active channels when cache is older than 1hr', async () => {
-        const conv = SlackTestHelper.conversation({ id: 'C1', name: 'general' });
+        const conv = SlackTestHelper.conversation({
+          id: 'C1',
+          name: 'general',
+        });
         const statePath = (service as any).statePath;
         mkdirSync(tmpDir, { recursive: true });
 
@@ -283,7 +303,10 @@ describe('SlackIngestionService', () => {
   describe('ingest — Phase 2 (Pre-filter)', () => {
     describe('Behavior', () => {
       it('should skip pre-filter on first sync (no lastChecked)', async () => {
-        const conv = SlackTestHelper.conversation({ id: 'C1', name: 'general' });
+        const conv = SlackTestHelper.conversation({
+          id: 'C1',
+          name: 'general',
+        });
         mockSlack.getConversations.mockResolvedValue([conv]);
         mockSlack.getActiveChannelIds.mockResolvedValue(new Set(['C1']));
 
@@ -293,7 +316,10 @@ describe('SlackIngestionService', () => {
       });
 
       it('should call getChangedChannelIds on subsequent syncs', async () => {
-        const conv = SlackTestHelper.conversation({ id: 'C1', name: 'general' });
+        const conv = SlackTestHelper.conversation({
+          id: 'C1',
+          name: 'general',
+        });
         const statePath = (service as any).statePath;
         mkdirSync(tmpDir, { recursive: true });
 
@@ -326,7 +352,10 @@ describe('SlackIngestionService', () => {
       });
 
       it('should fire onProgress with phase prefilter and channelsSoFar', async () => {
-        const conv = SlackTestHelper.conversation({ id: 'C1', name: 'general' });
+        const conv = SlackTestHelper.conversation({
+          id: 'C1',
+          name: 'general',
+        });
         const statePath = (service as any).statePath;
         mkdirSync(tmpDir, { recursive: true });
 
@@ -399,8 +428,9 @@ describe('SlackIngestionService', () => {
         await service.ingest();
 
         // Both channels should be fetched since search fallback means no filtering
-        const fetchedChannelIds =
-          mockSlack.getMessagesSince.mock.calls.map((args: unknown[]) => args[0]);
+        const fetchedChannelIds = mockSlack.getMessagesSince.mock.calls.map(
+          (args: unknown[]) => args[0],
+        );
         expect(fetchedChannelIds).toContain('C1');
         expect(fetchedChannelIds).toContain('C2');
       });
@@ -451,8 +481,9 @@ describe('SlackIngestionService', () => {
         await service.ingest();
 
         // Self-DM should still be fetched despite not being in changedChannelIds
-        const fetchedChannelIds =
-          mockSlack.getMessagesSince.mock.calls.map((args: unknown[]) => args[0]);
+        const fetchedChannelIds = mockSlack.getMessagesSince.mock.calls.map(
+          (args: unknown[]) => args[0],
+        );
         expect(fetchedChannelIds).toContain('D999');
       });
     });
@@ -464,7 +495,10 @@ describe('SlackIngestionService', () => {
   describe('ingest — Phase 3 (Fetch Messages)', () => {
     describe('Behavior', () => {
       it('should fetch messages per channel and write staging JSON files', async () => {
-        const conv = SlackTestHelper.conversation({ id: 'C1', name: 'general' });
+        const conv = SlackTestHelper.conversation({
+          id: 'C1',
+          name: 'general',
+        });
         mockSlack.getConversations.mockResolvedValue([conv]);
         mockSlack.getActiveChannelIds.mockResolvedValue(new Set(['C1']));
         mockSlack.getMessagesSince.mockResolvedValue([
@@ -492,7 +526,10 @@ describe('SlackIngestionService', () => {
       });
 
       it('should advance cursor to last top-level message ts (not thread reply ts)', async () => {
-        const conv = SlackTestHelper.conversation({ id: 'C1', name: 'general' });
+        const conv = SlackTestHelper.conversation({
+          id: 'C1',
+          name: 'general',
+        });
         mockSlack.getConversations.mockResolvedValue([conv]);
         mockSlack.getActiveChannelIds.mockResolvedValue(new Set(['C1']));
         mockSlack.getMessagesSince.mockResolvedValue([
@@ -515,7 +552,10 @@ describe('SlackIngestionService', () => {
       });
 
       it('should fire onProgress with phase channel including channel, channelIndex, totalChannels, page, messageCount', async () => {
-        const conv = SlackTestHelper.conversation({ id: 'C1', name: 'general' });
+        const conv = SlackTestHelper.conversation({
+          id: 'C1',
+          name: 'general',
+        });
         mockSlack.getConversations.mockResolvedValue([conv]);
         mockSlack.getActiveChannelIds.mockResolvedValue(new Set(['C1']));
         mockSlack.getMessagesSince.mockResolvedValue([
@@ -554,9 +594,7 @@ describe('SlackIngestionService', () => {
           name: 'works',
         });
         mockSlack.getConversations.mockResolvedValue([conv1, conv2]);
-        mockSlack.getActiveChannelIds.mockResolvedValue(
-          new Set(['C1', 'C2']),
-        );
+        mockSlack.getActiveChannelIds.mockResolvedValue(new Set(['C1', 'C2']));
         mockSlack.getMessagesSince
           .mockRejectedValueOnce(new Error('channel_not_found'))
           .mockResolvedValueOnce([
@@ -573,7 +611,10 @@ describe('SlackIngestionService', () => {
 
     describe('Edge Cases', () => {
       it('should produce no staging files for empty channels', async () => {
-        const conv = SlackTestHelper.conversation({ id: 'C1', name: 'general' });
+        const conv = SlackTestHelper.conversation({
+          id: 'C1',
+          name: 'general',
+        });
         mockSlack.getConversations.mockResolvedValue([conv]);
         mockSlack.getActiveChannelIds.mockResolvedValue(new Set(['C1']));
         mockSlack.getMessagesSince.mockResolvedValue([]);
@@ -605,7 +646,10 @@ describe('SlackIngestionService', () => {
       });
 
       it('should use 30-day lookback cursor when no state exists', async () => {
-        const conv = SlackTestHelper.conversation({ id: 'C1', name: 'general' });
+        const conv = SlackTestHelper.conversation({
+          id: 'C1',
+          name: 'general',
+        });
         mockSlack.getConversations.mockResolvedValue([conv]);
         mockSlack.getActiveChannelIds.mockResolvedValue(new Set(['C1']));
 
@@ -618,10 +662,8 @@ describe('SlackIngestionService', () => {
         expect(callArgs[0]).toBe('C1');
 
         const cursorValue = parseFloat(callArgs[1]);
-        const expectedLow =
-          (beforeCall - 30 * 24 * 60 * 60 * 1000) / 1000;
-        const expectedHigh =
-          (afterCall - 30 * 24 * 60 * 60 * 1000) / 1000;
+        const expectedLow = (beforeCall - 30 * 24 * 60 * 60 * 1000) / 1000;
+        const expectedHigh = (afterCall - 30 * 24 * 60 * 60 * 1000) / 1000;
         expect(cursorValue).toBeGreaterThanOrEqual(expectedLow - 1);
         expect(cursorValue).toBeLessThanOrEqual(expectedHigh + 1);
       });
@@ -634,22 +676,26 @@ describe('SlackIngestionService', () => {
   describe('ingest — Phase 4 (Thread Sync)', () => {
     describe('Behavior', () => {
       it('should fire onProgress with phase threads before thread loop', async () => {
-        const conv = SlackTestHelper.conversation({ id: 'C1', name: 'general' });
+        const conv = SlackTestHelper.conversation({
+          id: 'C1',
+          name: 'general',
+        });
         mockSlack.getConversations.mockResolvedValue([conv]);
         mockSlack.getActiveChannelIds.mockResolvedValue(new Set(['C1']));
 
         const progressCalls: Array<Record<string, unknown>> = [];
         await service.ingest((info) => progressCalls.push(info));
 
-        const threadPhases = progressCalls.filter(
-          (p) => p.phase === 'threads',
-        );
+        const threadPhases = progressCalls.filter((p) => p.phase === 'threads');
         expect(threadPhases.length).toBeGreaterThanOrEqual(1);
       });
 
       it('should bootstrap tracked threads on first sync of a channel', async () => {
         const now = Math.floor(Date.now() / 1000);
-        const conv = SlackTestHelper.conversation({ id: 'C1', name: 'general' });
+        const conv = SlackTestHelper.conversation({
+          id: 'C1',
+          name: 'general',
+        });
         const statePath = (service as any).statePath;
         const stagingDir = (service as any).stagingDir;
         mkdirSync(stagingDir, { recursive: true });
@@ -695,13 +741,14 @@ describe('SlackIngestionService', () => {
       });
 
       it('should prune threads older than 30 days', async () => {
-        const conv = SlackTestHelper.conversation({ id: 'C1', name: 'general' });
+        const conv = SlackTestHelper.conversation({
+          id: 'C1',
+          name: 'general',
+        });
         const thirtyOneDaysAgo = String(
           (Date.now() - 31 * 24 * 60 * 60 * 1000) / 1000,
         );
-        const oneDayAgo = String(
-          (Date.now() - 1 * 24 * 60 * 60 * 1000) / 1000,
-        );
+        const oneDayAgo = String((Date.now() - 1 * 24 * 60 * 60 * 1000) / 1000);
 
         const statePath = (service as any).statePath;
         const stagingDir = (service as any).stagingDir;
@@ -747,7 +794,10 @@ describe('SlackIngestionService', () => {
         const newReplyTs = `${now - 100}.000000`;
         const cursorTs = `${now - 200}.000000`;
 
-        const conv = SlackTestHelper.conversation({ id: 'C1', name: 'general' });
+        const conv = SlackTestHelper.conversation({
+          id: 'C1',
+          name: 'general',
+        });
         const statePath = (service as any).statePath;
         const stagingDir = (service as any).stagingDir;
         mkdirSync(stagingDir, { recursive: true });
@@ -800,7 +850,10 @@ describe('SlackIngestionService', () => {
         const reply2Ts = `${now - 240}.000000`;
         const otherTs = `${now - 200}.000000`;
 
-        const conv = SlackTestHelper.conversation({ id: 'C1', name: 'general' });
+        const conv = SlackTestHelper.conversation({
+          id: 'C1',
+          name: 'general',
+        });
         mockSlack.getConversations.mockResolvedValue([conv]);
         mockSlack.getActiveChannelIds.mockResolvedValue(new Set(['C1']));
         mockSlack.getMessagesSince.mockResolvedValue([
@@ -843,7 +896,10 @@ describe('SlackIngestionService', () => {
   describe('ingest — Phase 5 (Mine)', () => {
     describe('Behavior', () => {
       it('should call mempalace mine when filesWritten > 0', async () => {
-        const conv = SlackTestHelper.conversation({ id: 'C1', name: 'general' });
+        const conv = SlackTestHelper.conversation({
+          id: 'C1',
+          name: 'general',
+        });
         mockSlack.getConversations.mockResolvedValue([conv]);
         mockSlack.getActiveChannelIds.mockResolvedValue(new Set(['C1']));
         mockSlack.getMessagesSince.mockResolvedValue([
@@ -857,7 +913,10 @@ describe('SlackIngestionService', () => {
       });
 
       it('should skip mine when no files written', async () => {
-        const conv = SlackTestHelper.conversation({ id: 'C1', name: 'general' });
+        const conv = SlackTestHelper.conversation({
+          id: 'C1',
+          name: 'general',
+        });
         mockSlack.getConversations.mockResolvedValue([conv]);
         mockSlack.getActiveChannelIds.mockResolvedValue(new Set(['C1']));
         mockSlack.getMessagesSince.mockResolvedValue([]);
@@ -868,7 +927,10 @@ describe('SlackIngestionService', () => {
       });
 
       it('should fire onProgress with phase mining', async () => {
-        const conv = SlackTestHelper.conversation({ id: 'C1', name: 'general' });
+        const conv = SlackTestHelper.conversation({
+          id: 'C1',
+          name: 'general',
+        });
         mockSlack.getConversations.mockResolvedValue([conv]);
         mockSlack.getActiveChannelIds.mockResolvedValue(new Set(['C1']));
         mockSlack.getMessagesSince.mockResolvedValue([
@@ -878,9 +940,7 @@ describe('SlackIngestionService', () => {
         const progressCalls: Array<Record<string, unknown>> = [];
         await service.ingest((info) => progressCalls.push(info));
 
-        const miningCalls = progressCalls.filter(
-          (p) => p.phase === 'mining',
-        );
+        const miningCalls = progressCalls.filter((p) => p.phase === 'mining');
         expect(miningCalls.length).toBe(1);
       });
     });
@@ -901,9 +961,7 @@ describe('SlackIngestionService', () => {
           name: 'beta',
         });
         mockSlack.getConversations.mockResolvedValue([conv1, conv2]);
-        mockSlack.getActiveChannelIds.mockResolvedValue(
-          new Set(['C1', 'C2']),
-        );
+        mockSlack.getActiveChannelIds.mockResolvedValue(new Set(['C1', 'C2']));
         mockSlack.getMessagesSince.mockResolvedValue([
           { ts: '1700000200.000000', userId: 'U1', text: 'hello' },
         ]);
@@ -911,9 +969,7 @@ describe('SlackIngestionService', () => {
         const progressCalls: Array<Record<string, unknown>> = [];
         await service.ingest((info) => progressCalls.push(info));
 
-        const channelCalls = progressCalls.filter(
-          (p) => p.phase === 'channel',
-        );
+        const channelCalls = progressCalls.filter((p) => p.phase === 'channel');
 
         for (const call of channelCalls) {
           expect(call.channel).toBeDefined();
@@ -926,7 +982,10 @@ describe('SlackIngestionService', () => {
       });
 
       it('should include page number during fetch and messageCount after completion', async () => {
-        const conv = SlackTestHelper.conversation({ id: 'C1', name: 'general' });
+        const conv = SlackTestHelper.conversation({
+          id: 'C1',
+          name: 'general',
+        });
         mockSlack.getConversations.mockResolvedValue([conv]);
         mockSlack.getActiveChannelIds.mockResolvedValue(new Set(['C1']));
         mockSlack.getMessagesSince.mockImplementation(
@@ -944,9 +1003,7 @@ describe('SlackIngestionService', () => {
         const progressCalls: Array<Record<string, unknown>> = [];
         await service.ingest((info) => progressCalls.push(info));
 
-        const channelCalls = progressCalls.filter(
-          (p) => p.phase === 'channel',
-        );
+        const channelCalls = progressCalls.filter((p) => p.phase === 'channel');
 
         // Should have page-progress calls with page number
         const pageCalls = channelCalls.filter((c) => c.page !== undefined);
@@ -959,7 +1016,10 @@ describe('SlackIngestionService', () => {
       });
 
       it('should fire phase threads between Phase 1 and Phase 2', async () => {
-        const conv = SlackTestHelper.conversation({ id: 'C1', name: 'general' });
+        const conv = SlackTestHelper.conversation({
+          id: 'C1',
+          name: 'general',
+        });
         mockSlack.getConversations.mockResolvedValue([conv]);
         mockSlack.getActiveChannelIds.mockResolvedValue(new Set(['C1']));
         mockSlack.getMessagesSince.mockResolvedValue([
@@ -1119,7 +1179,10 @@ describe('SlackIngestionService', () => {
       });
 
       it('should return empty result when aborted mid-flight', async () => {
-        const conv = SlackTestHelper.conversation({ id: 'C1', name: 'general' });
+        const conv = SlackTestHelper.conversation({
+          id: 'C1',
+          name: 'general',
+        });
         mockSlack.getConversations.mockImplementation(async () => {
           // Simulate abort during getConversations
           service.abort();
@@ -1202,7 +1265,10 @@ describe('SlackIngestionService', () => {
   describe('triggerIngest', () => {
     describe('Behavior', () => {
       it('should call ingest and return the result', async () => {
-        const conv = SlackTestHelper.conversation({ id: 'C1', name: 'general' });
+        const conv = SlackTestHelper.conversation({
+          id: 'C1',
+          name: 'general',
+        });
         mockSlack.getConversations.mockResolvedValue([conv]);
         mockSlack.getActiveChannelIds.mockResolvedValue(new Set(['C1']));
         mockSlack.getMessagesSince.mockResolvedValue([
@@ -1228,7 +1294,10 @@ describe('SlackIngestionService', () => {
 
       it('should return true during ingest and false after', async () => {
         let observedDuringIngest = false;
-        const conv = SlackTestHelper.conversation({ id: 'C1', name: 'general' });
+        const conv = SlackTestHelper.conversation({
+          id: 'C1',
+          name: 'general',
+        });
         mockSlack.getConversations.mockImplementation(async () => {
           observedDuringIngest = service.ingesting;
           return [conv];
@@ -1250,7 +1319,10 @@ describe('SlackIngestionService', () => {
   describe('onStatusChange', () => {
     describe('Behavior', () => {
       it('should fire with true at start and false at end of ingest', async () => {
-        const conv = SlackTestHelper.conversation({ id: 'C1', name: 'general' });
+        const conv = SlackTestHelper.conversation({
+          id: 'C1',
+          name: 'general',
+        });
         mockSlack.getConversations.mockResolvedValue([conv]);
         mockSlack.getActiveChannelIds.mockResolvedValue(new Set(['C1']));
         mockSlack.getMessagesSince.mockResolvedValue([]);
@@ -1271,7 +1343,10 @@ describe('SlackIngestionService', () => {
   describe('State hydration', () => {
     describe('Behavior', () => {
       it('should hydrate user name cache from persisted state', async () => {
-        const conv = SlackTestHelper.conversation({ id: 'C1', name: 'general' });
+        const conv = SlackTestHelper.conversation({
+          id: 'C1',
+          name: 'general',
+        });
         const statePath = (service as any).statePath;
         mkdirSync(tmpDir, { recursive: true });
 
@@ -1297,7 +1372,10 @@ describe('SlackIngestionService', () => {
       });
 
       it('should persist user name cache after ingestion with messages', async () => {
-        const conv = SlackTestHelper.conversation({ id: 'C1', name: 'general' });
+        const conv = SlackTestHelper.conversation({
+          id: 'C1',
+          name: 'general',
+        });
         mockSlack.getConversations.mockResolvedValue([conv]);
         mockSlack.getActiveChannelIds.mockResolvedValue(new Set(['C1']));
         mockSlack.getMessagesSince.mockResolvedValue([
@@ -1320,7 +1398,10 @@ describe('SlackIngestionService', () => {
   describe('Rate-limit wait feedback', () => {
     describe('Behavior', () => {
       it('should set shouldAbort on slackService during ingest', async () => {
-        const conv = SlackTestHelper.conversation({ id: 'C1', name: 'general' });
+        const conv = SlackTestHelper.conversation({
+          id: 'C1',
+          name: 'general',
+        });
         let capturedShouldAbort: (() => boolean) | null = null;
         mockSlack.getConversations.mockImplementation(async () => {
           capturedShouldAbort = mockSlack.shouldAbort as () => boolean;

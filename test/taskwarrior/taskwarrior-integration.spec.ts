@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 
 import { TaskwarriorTestHelper } from '../helpers/taskwarrior-test.helper';
 
@@ -67,11 +67,7 @@ describe('TaskwarriorService Integration', () => {
 
       it('should return empty array for exit code 2 with configuration error', () => {
         mockSpawnSync.mockReturnValue(
-          TaskwarriorTestHelper.spawnSyncResult(
-            '',
-            'Configuration error',
-            2,
-          ),
+          TaskwarriorTestHelper.spawnSyncResult('', 'Configuration error', 2),
         );
 
         const result = service.getTasks();
@@ -128,19 +124,13 @@ describe('TaskwarriorService Integration', () => {
         ),
       );
 
-      expect(() => service.createTask({ description: '' })).toThrow(
-        /exit 1/,
-      );
+      expect(() => service.createTask({ description: '' })).toThrow(/exit 1/);
     });
 
     // TW-V-2: Invalid due date
     it('should throw containing "Failed to update task" for invalid due date', () => {
       mockSpawnSync.mockReturnValue(
-        TaskwarriorTestHelper.spawnSyncResult(
-          '',
-          'Invalid date format',
-          1,
-        ),
+        TaskwarriorTestHelper.spawnSyncResult('', 'Invalid date format', 1),
       );
 
       expect(() =>

@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return */
 
 // Mock Bun global (tests run under Jest/Node, not Bun runtime)
 const mockSpawn = jest.fn();
@@ -123,9 +123,9 @@ describe('TerminalService Integration', () => {
       it('should throw error with "not found" when destroying a non-existent session', async () => {
         const { service } = createService();
 
-        await expect(
-          service.destroySession('nonexistent-id'),
-        ).rejects.toThrow(/not found/i);
+        await expect(service.destroySession('nonexistent-id')).rejects.toThrow(
+          /not found/i,
+        );
       });
     });
 

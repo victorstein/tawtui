@@ -22,7 +22,12 @@ export class SlackTestHelper {
   }
 
   static historyResponse(
-    messages: Array<{ text: string; ts?: string; user?: string; reply_count?: number }>,
+    messages: Array<{
+      text: string;
+      ts?: string;
+      user?: string;
+      reply_count?: number;
+    }>,
     hasMore = false,
     nextCursor = '',
   ): SlackHistoryResponse {
@@ -109,13 +114,17 @@ export class SlackTestHelper {
     return mock;
   }
 
-  static createStagingDir(
-    files: Record<string, object> = {},
-  ): { dir: string; cleanup: () => void } {
+  static createStagingDir(files: Record<string, object> = {}): {
+    dir: string;
+    cleanup: () => void;
+  } {
     const dir = mkdtempSync(join(tmpdir(), 'tawtui-test-staging-'));
     for (const [name, content] of Object.entries(files)) {
       writeFileSync(join(dir, name), JSON.stringify(content, null, 2));
     }
-    return { dir, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+    return {
+      dir,
+      cleanup: () => rmSync(dir, { recursive: true, force: true }),
+    };
   }
 }
