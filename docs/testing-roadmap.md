@@ -9,21 +9,19 @@ Coverage status for all service modules. Updated as new test suites are added.
 | slack/slack.service | Yes | Yes (via slack-integration) | RC, BC, FC, FS | Done |
 | slack/slack-ingestion.service | Yes | Yes (21 tests) | RC, BC, SM, FC, FS | Done |
 | slack/mempalace.service | Yes | Yes (via slack-integration) | BC | Done |
-| terminal.service | Yes | Yes (2 tests) | SM | Weak |
+| terminal.service | Yes | Yes (17 tests) | SM, SL, KM, CD, P, BC | Done |
 | config.service | Yes | Yes (7 tests) | BC, CC | Done |
 | taskwarrior.service | Yes | Yes (14 tests) | BC, V, FC | Done |
 | github.service | Yes | Yes (10 tests) | BC, URL, ERR | Done |
 | worktree.service | Yes | Yes (12 tests) | RC, BC, FC, OD | Done |
+| calendar.service | Yes | Yes (11 tests) | TH, BC, ERR | Done |
+| dependency.service | Yes | Yes (12 tests) | AF, PI, SD, PL | Done |
 
-## Tier 2 — Next Priority
+## Tier 2 — Complete
 
-| Module | LOC | Current Tests | Key Adversarial Scenarios |
-|---|---|---|---|
-| terminal.service | 900+ | 2 integration | Session lifecycle, concurrent creation, key escaping, persistence races, scrollback overflow |
-| calendar.service | ~200 | None | Timeout cleanup races, concurrent timeouts, malformed gog JSON, credentials disappearing |
-| dependency.service | 209 | Unit only | Platform detection, concurrent pipx install, Slack app path collision |
+All Tier 2 modules now have adversarial integration tests.
 
-## Tier 3 — Lower Priority
+## Tier 3 — Next Priority
 
 | Module | LOC | Current Tests | Key Adversarial Scenarios |
 |---|---|---|---|
@@ -55,3 +53,12 @@ Coverage status for all service modules. Updated as new test suites are added.
 | URL | URL Parsing |
 | ERR | Error Handling |
 | OD | Orphan Detection |
+| SL | Session Lifecycle |
+| KM | Key Mapping |
+| CD | Capture & Change Detection |
+| P | Persistence |
+| TH | Timeout Handling |
+| AF | Aggregate Failure Handling |
+| PI | Package Installation |
+| SD | Slack Detection |
+| PL | Platform Instructions |
