@@ -4,7 +4,8 @@ import {
   type SlackStack,
 } from '../helpers/integration.helper';
 import { SlackTestHelper } from '../helpers/slack-test.helper';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { join } from 'path';
 import type { OracleState } from '../../src/modules/slack/slack.types';
 
 /**
@@ -437,6 +438,135 @@ describe('SlackIngestionService Integration', () => {
           // channelCursors should be empty (reset clears them)
           expect(state.channelCursors).toEqual({});
         }
+      });
+    });
+  });
+
+  // ================================================================
+  // Boundary Corruption
+  // ================================================================
+  describe('Boundary Corruption', () => {
+    // BC-1: API returns wrong shape
+    describe('BC-1: API returns wrong shape', () => {
+      it('should return empty array when conversations.history response has no messages field', async () => {
+        // Given: fetch returns { ok: true } with no messages field for conversations.history
+        global.fetch = createRoutedFetch({
+          'conversations.history': () => ({ ok: true }),
+        }) as any;
+        stack = IntegrationHelper.createSlackStack();
+
+        // When: getMessagesSince is called
+        const result = await stack.slackService.getMessagesSince(
+          'C001',
+          '1700000000.000000',
+        );
+
+        // Then: returns empty array without throwing TypeError
+        expect(result).toEqual([]);
+      });
+    });
+
+    // BC-2: Empty state file (0 bytes)
+    describe('BC-2: Empty state file (0 bytes)', () => {
+      it('should treat empty state file as fresh state and proceed normally', async () => {
+        // Given: an empty (0-byte) state file
+        global.fetch = createRoutedFetch(standardRoutes()) as any;
+        stack = IntegrationHelper.createSlackStack();
+        writeFileSync(stack.statePath, '');
+
+        // When: ingest is called
+        const result = await stack.ingestionService.ingest();
+
+        // Then: treats as fresh state, ingestion proceeds normally
+        expect(result.messagesStored).toBeGreaterThan(0);
+        expect(result.channelNames).toContain('general');
+      });
+    });
+
+    // BC-3: State file has wrong schema
+    describe('BC-3: State file has wrong schema', () => {
+      it('should handle state file with channelCursors as wrong type', async () => {
+        // Given: state file has valid JSON but wrong schema for channelCursors
+        global.fetch = createRoutedFetch(standardRoutes()) as any;
+        stack = IntegrationHelper.createSlackStack();
+        writeFileSync(
+          stack.statePath,
+          JSON.stringify({
+            channelCursors: 'not-an-object',
+            lastChecked: 12345,
+          }),
+        );
+
+        // When: ingest is called
+        const result = await stack.ingestionService.ingest();
+
+        // Then: handles gracefully — resets to defaults and proceeds
+        expect(result.messagesStored).toBeGreaterThan(0);
+        expect(result.channelNames).toContain('general');
+      });
+    });
+
+    // BC-4: API returns HTML instead of JSON
+    describe('BC-4: API returns HTML instead of JSON', () => {
+      it('should throw a clear error when Slack returns HTML instead of JSON', async () => {
+        // Given: fetch returns an HTML response instead of JSON
+        global.fetch = createRoutedFetch({
+          'conversations.list': () =>
+            new Response('<html>Login</html>', {
+              status: 200,
+              headers: { 'content-type': 'text/html' },
+            }),
+        }) as any;
+        stack = IntegrationHelper.createSlackStack();
+
+        // When/Then: calling getConversations should throw a clear error
+        await expect(
+          stack.slackService.getConversations(),
+        ).rejects.toThrow(/non-JSON response/);
+      });
+    });
+
+    // BC-5: Staging file with partial content
+    describe('BC-5: Staging file with partial content', () => {
+      it('should still return results when mine fails due to corrupt staging files', async () => {
+        // Given: a stack with valid fetch routes
+        global.fetch = createRoutedFetch(standardRoutes()) as any;
+        stack = IntegrationHelper.createSlackStack();
+
+        // Write a truncated JSON file to staging dir to cause mine to fail
+        writeFileSync(
+          join(stack.stagingDir, 'corrupt-file.json'),
+          '[{"type":"message"',
+        );
+
+        // Mock Bun.spawn to fail for mempalace mine (simulating mine crashing on corrupt file)
+        (globalThis as Record<string, unknown>).Bun = {
+          spawn: jest.fn().mockReturnValue({
+            exited: Promise.resolve(1),
+            stdout: new ReadableStream(),
+            stderr: new ReadableStream({
+              start(controller) {
+                controller.enqueue(
+                  new TextEncoder().encode('JSON parse error'),
+                );
+                controller.close();
+              },
+            }),
+          }),
+          spawnSync: jest.fn().mockReturnValue({
+            exitCode: 0,
+            stdout: Buffer.from(''),
+            stderr: Buffer.from(''),
+          }),
+          hash: jest.fn().mockReturnValue(0),
+        };
+
+        // When: ingest is called (will fetch messages, write files, then mine fails)
+        const result = await stack.ingestionService.ingest();
+
+        // Then: ingestion still returns results even though mine failed
+        expect(result.messagesStored).toBeGreaterThan(0);
+        expect(result.channelNames).toContain('general');
       });
     });
   });

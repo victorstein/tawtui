@@ -165,7 +165,14 @@ export class SlackService {
         );
       }
 
-      return res.json() as Promise<T>;
+      try {
+        return (await res.json()) as T;
+      } catch {
+        const contentType = res.headers.get('content-type') ?? '';
+        throw new Error(
+          `Slack API ${method} returned non-JSON response (content-type: ${contentType})`,
+        );
+      }
     }
 
     // Unreachable — loop always returns or throws — but satisfies TypeScript
@@ -266,7 +273,7 @@ export class SlackService {
         throw new Error(`Slack conversations.history error: ${data.error}`);
       }
 
-      for (const msg of data.messages) {
+      for (const msg of data.messages ?? []) {
         if (msg.subtype || !msg.user || !msg.text) continue;
         topLevel.push({
           ts: msg.ts,

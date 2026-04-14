@@ -536,7 +536,13 @@ export class SlackIngestionService {
       // Mine all new files into mempalace (idempotent — skips already-mined)
       if (filesWritten > 0) {
         onProgress?.({ phase: 'mining' });
-        await this.mempalaceService.mine(this.stagingDir, 'slack');
+        try {
+          await this.mempalaceService.mine(this.stagingDir, 'slack');
+        } catch (err) {
+          this.logger.warn(
+            `Mining failed (messages still staged): ${(err as Error).message}`,
+          );
+        }
       }
 
       this.logger.log(
@@ -665,7 +671,18 @@ export class SlackIngestionService {
       return { lastChecked: null, channelCursors: {} };
     }
     try {
-      return JSON.parse(readFileSync(this.statePath, 'utf-8')) as OracleState;
+      const raw = JSON.parse(readFileSync(this.statePath, 'utf-8'));
+      // Validate channelCursors is a plain object (not string, array, null, etc.)
+      if (
+        !raw ||
+        typeof raw !== 'object' ||
+        typeof raw.channelCursors !== 'object' ||
+        raw.channelCursors === null ||
+        Array.isArray(raw.channelCursors)
+      ) {
+        return { lastChecked: null, channelCursors: {} };
+      }
+      return raw as OracleState;
     } catch {
       return { lastChecked: null, channelCursors: {} };
     }
