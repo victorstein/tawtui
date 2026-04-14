@@ -673,4 +673,484 @@ describe('SlackIngestionService Integration', () => {
       });
     });
   });
+
+  // ================================================================
+  // Failure Cascades
+  // ================================================================
+  describe('Failure Cascades', () => {
+    // FC-1: Mid-fetch channel failure (8 channels, channel 3 fails)
+    describe('FC-1: Mid-fetch channel failure', () => {
+      it(
+        'should skip the failed channel and complete the other 7',
+        async () => {
+          // Given: 8 channels pre-cached in state, with activeChannelIds set
+          const channels = Array.from({ length: 8 }, (_, i) =>
+            SlackTestHelper.conversation({
+              id: `C00${i + 1}`,
+              name: `channel-${i + 1}`,
+            }),
+          );
+          const channelIds = channels.map((c) => c.id);
+
+          const initialState = SlackTestHelper.oracleState({
+            conversations: channels,
+            activeChannelIds: channelIds,
+            channelsCachedAt: new Date().toISOString(),
+            activeChannelsCachedAt: new Date().toISOString(),
+          });
+
+          // Route fetch: channel 3 (C003) returns 500, others succeed
+          global.fetch = jest.fn((url: string) => {
+            if (
+              typeof url === 'string' &&
+              url.includes('conversations.history')
+            ) {
+              const channelMatch = url.match(/channel=([^&]+)/);
+              if (channelMatch?.[1] === 'C003') {
+                return Promise.resolve({
+                  status: 500,
+                  ok: false,
+                  statusText: 'Internal Server Error',
+                  headers: new Headers(),
+                  json: async () => ({ ok: false, error: 'internal_error' }),
+                });
+              }
+              return Promise.resolve({
+                status: 200,
+                ok: true,
+                headers: new Headers(),
+                json: async () =>
+                  SlackTestHelper.historyResponse([
+                    {
+                      text: `msg in ${channelMatch?.[1]}`,
+                      ts: '1700000001.000000',
+                      user: 'U100',
+                    },
+                  ]),
+              });
+            }
+            if (typeof url === 'string' && url.includes('search.messages')) {
+              return Promise.resolve({
+                status: 200,
+                ok: true,
+                headers: new Headers(),
+                json: async () => SlackTestHelper.searchResponse(channelIds),
+              });
+            }
+            if (typeof url === 'string' && url.includes('users.info')) {
+              return Promise.resolve({
+                status: 200,
+                ok: true,
+                headers: new Headers(),
+                json: async () => ({
+                  ok: true,
+                  user: {
+                    id: 'U100',
+                    name: 'testuser',
+                    profile: { display_name: 'Test User' },
+                  },
+                }),
+              });
+            }
+            return Promise.resolve({
+              status: 200,
+              ok: true,
+              headers: new Headers(),
+              json: async () => ({ ok: true }),
+            });
+          }) as any;
+
+          stack = IntegrationHelper.createSlackStack({ initialState });
+
+          // Track progress callbacks
+          const progressCalls: Array<{ phase: string; channel?: string }> = [];
+
+          // When: run ingestion
+          const result = await stack.ingestionService.ingest((info) => {
+            progressCalls.push({ phase: info.phase, channel: info.channel });
+          });
+
+          // Then: 7 channels succeeded, channel 3 was skipped
+          expect(result.messagesStored).toBe(7);
+          expect(result.channelNames).toHaveLength(7);
+          expect(result.channelNames).not.toContain('channel-3');
+
+          // 7 staging files written (not 8)
+          const { readdirSync } = await import('fs');
+          const stagingFiles = readdirSync(stack.stagingDir).filter(
+            (f: string) => f.endsWith('.json'),
+          );
+          expect(stagingFiles).toHaveLength(7);
+
+          // State file: 7 cursors, C003 absent
+          const stateRaw = readFileSync(stack.statePath, 'utf-8');
+          const state: OracleState = JSON.parse(stateRaw);
+          expect(Object.keys(state.channelCursors)).toHaveLength(7);
+          expect(state.channelCursors['C003']).toBeUndefined();
+          // Other channels have cursors
+          for (const id of channelIds.filter((cid) => cid !== 'C003')) {
+            expect(state.channelCursors[id]).toBeDefined();
+          }
+
+          // Progress callbacks fired for channel phases (including attempts for all 8)
+          const channelProgressCalls = progressCalls.filter(
+            (p) => p.phase === 'channel' && p.channel,
+          );
+          const channelsReported = new Set(
+            channelProgressCalls.map((p) => p.channel),
+          );
+          // All 8 channels should have had a progress callback (channel phase fires before fetch)
+          expect(channelsReported.size).toBe(8);
+        },
+        30000,
+      );
+    });
+
+    // FC-2: Thread bootstrap failure
+    describe('FC-2: Thread bootstrap failure', () => {
+      it(
+        'should bootstrap threads for channel B when channel A bootstrap fails',
+        async () => {
+          // Given: 2 channels with cursors but no tracked threads
+          // This triggers Phase 2 thread bootstrap
+          const channelA = SlackTestHelper.conversation({
+            id: 'C_A',
+            name: 'chan-a',
+          });
+          const channelB = SlackTestHelper.conversation({
+            id: 'C_B',
+            name: 'chan-b',
+          });
+
+          // Use a recent cursor so Phase 2 bootstrap backfill has valid time range
+          const initialCursor = String(Math.floor(Date.now() / 1000) - 3600);
+
+          const initialState = SlackTestHelper.oracleState({
+            lastChecked: new Date().toISOString(),
+            conversations: [channelA, channelB],
+            activeChannelIds: ['C_A', 'C_B'],
+            channelsCachedAt: new Date().toISOString(),
+            activeChannelsCachedAt: new Date().toISOString(),
+            // Cursors set so Phase 1 will fetch, and Phase 2 will bootstrap threads
+            channelCursors: {
+              C_A: initialCursor + '.000000',
+              C_B: initialCursor + '.000000',
+            },
+            // No trackedThreads — triggers bootstrap in Phase 2
+          });
+
+          // Use recent timestamps so threads aren't pruned (must be within 30 days)
+          const recentTs = String(Math.floor(Date.now() / 1000) - 86400); // 1 day ago
+          const cursorTs = String(Math.floor(Date.now() / 1000) - 3600); // 1 hour ago
+
+          global.fetch = jest.fn((url: string) => {
+            if (
+              typeof url === 'string' &&
+              url.includes('conversations.history')
+            ) {
+              const channelMatch = url.match(/channel=([^&]+)/);
+              const oldestMatch = url.match(/oldest=([^&]+)/);
+              const channel = channelMatch?.[1] ?? 'unknown';
+              const oldest = oldestMatch?.[1]
+                ? parseFloat(oldestMatch[1])
+                : 0;
+
+              // Phase 2 bootstrap uses a backfill cursor that's much earlier
+              // (channelCursor - 30 days in seconds). The cursor is ~now,
+              // so bootstrap oldest will be ~30 days ago. Phase 1 oldest is
+              // the cursor from initial state (1700000000). Distinguish by
+              // checking if oldest is significantly older than the cursor.
+              const cursorFloat = parseFloat(cursorTs);
+              const isBootstrap = oldest < cursorFloat - 1000000;
+
+              if (isBootstrap) {
+                if (channel === 'C_A') {
+                  // Channel A bootstrap fails
+                  return Promise.resolve({
+                    status: 500,
+                    ok: false,
+                    statusText: 'Internal Server Error',
+                    headers: new Headers(),
+                    json: async () => ({ ok: false }),
+                  });
+                }
+                // Channel B bootstrap succeeds with a threaded parent message
+                return Promise.resolve({
+                  status: 200,
+                  ok: true,
+                  headers: new Headers(),
+                  json: async () =>
+                    SlackTestHelper.historyResponse([
+                      {
+                        text: 'thread parent',
+                        ts: recentTs + '.000000',
+                        user: 'U100',
+                        reply_count: 3,
+                      },
+                    ]),
+                });
+              }
+
+              // Phase 1: both channels return simple messages (no threads)
+              return Promise.resolve({
+                status: 200,
+                ok: true,
+                headers: new Headers(),
+                json: async () =>
+                  SlackTestHelper.historyResponse([
+                    {
+                      text: 'phase1 msg',
+                      ts: cursorTs + '.000000',
+                      user: 'U100',
+                    },
+                  ]),
+              });
+            }
+            if (
+              typeof url === 'string' &&
+              url.includes('conversations.replies')
+            ) {
+              // Thread replies for the bootstrap thread parent
+              return Promise.resolve({
+                status: 200,
+                ok: true,
+                headers: new Headers(),
+                json: async () => ({
+                  ok: true,
+                  messages: [
+                    {
+                      ts: recentTs + '.000000',
+                      user: 'U100',
+                      text: 'thread parent',
+                      thread_ts: recentTs + '.000000',
+                    },
+                    {
+                      ts: recentTs + '.000001',
+                      user: 'U100',
+                      text: 'reply 1',
+                      thread_ts: recentTs + '.000000',
+                    },
+                  ],
+                  has_more: false,
+                }),
+              });
+            }
+            if (typeof url === 'string' && url.includes('search.messages')) {
+              return Promise.resolve({
+                status: 200,
+                ok: true,
+                headers: new Headers(),
+                json: async () =>
+                  SlackTestHelper.searchResponse(['C_A', 'C_B']),
+              });
+            }
+            if (typeof url === 'string' && url.includes('users.info')) {
+              return Promise.resolve({
+                status: 200,
+                ok: true,
+                headers: new Headers(),
+                json: async () => ({
+                  ok: true,
+                  user: {
+                    id: 'U100',
+                    name: 'testuser',
+                    profile: { display_name: 'Test User' },
+                  },
+                }),
+              });
+            }
+            return Promise.resolve({
+              status: 200,
+              ok: true,
+              headers: new Headers(),
+              json: async () => ({ ok: true }),
+            });
+          }) as any;
+
+          stack = IntegrationHelper.createSlackStack({ initialState });
+
+          // When: run ingestion
+          const result = await stack.ingestionService.ingest();
+
+          // Then: ingestion completes without crash
+          expect(result.messagesStored).toBeGreaterThan(0);
+
+          // Read state to verify thread bootstrap results
+          const stateRaw = readFileSync(stack.statePath, 'utf-8');
+          const state: OracleState = JSON.parse(stateRaw);
+
+          // Channel B should have tracked threads (bootstrap succeeded)
+          expect(state.trackedThreads?.['C_B']).toBeDefined();
+          expect(state.trackedThreads!['C_B'].length).toBeGreaterThan(0);
+
+          // Channel A should have no tracked threads (bootstrap failed)
+          const chanAThreads = state.trackedThreads?.['C_A'];
+          expect(!chanAThreads || chanAThreads.length === 0).toBe(true);
+        },
+        30000,
+      );
+    });
+
+    // FC-3: Mine failure after successful fetch
+    describe('FC-3: Mine failure after successful fetch', () => {
+      it('should preserve state and staging files when mine throws', async () => {
+        // Given: valid fetch routes for successful ingestion
+        global.fetch = createRoutedFetch(standardRoutes()) as any;
+        stack = IntegrationHelper.createSlackStack();
+
+        // Mock Bun.spawn to fail for mempalace mine
+        (globalThis as Record<string, unknown>).Bun = {
+          spawn: jest.fn().mockReturnValue({
+            exited: Promise.resolve(1),
+            stdout: new ReadableStream(),
+            stderr: new ReadableStream({
+              start(controller) {
+                controller.enqueue(
+                  new TextEncoder().encode('mempalace mine failed'),
+                );
+                controller.close();
+              },
+            }),
+          }),
+          spawnSync: jest.fn().mockReturnValue({
+            exitCode: 0,
+            stdout: Buffer.from(''),
+            stderr: Buffer.from(''),
+          }),
+          hash: jest.fn().mockReturnValue(0),
+        };
+
+        // When: ingest runs (fetch succeeds, mine fails)
+        const result = await stack.ingestionService.ingest();
+
+        // Then: ingestion still returns results (mine failure is caught)
+        expect(result.messagesStored).toBeGreaterThan(0);
+        expect(result.channelNames).toContain('general');
+
+        // State was saved BEFORE mine — cursors exist
+        const stateRaw = readFileSync(stack.statePath, 'utf-8');
+        const state: OracleState = JSON.parse(stateRaw);
+        expect(Object.keys(state.channelCursors).length).toBeGreaterThan(0);
+        expect(state.channelCursors['C001']).toBeDefined();
+        expect(state.lastChecked).not.toBeNull();
+
+        // Staging files exist on disk (mine didn't clean them up)
+        const { readdirSync } = await import('fs');
+        const stagingFiles = readdirSync(stack.stagingDir).filter(
+          (f: string) => f.endsWith('.json'),
+        );
+        expect(stagingFiles.length).toBeGreaterThan(0);
+      });
+    });
+
+    // FC-4: 401 mid-ingestion
+    describe('FC-4: 401 mid-ingestion', () => {
+      it(
+        'should skip the 401 channel and complete other channels',
+        async () => {
+          // Given: 8 channels pre-cached in state
+          const channels = Array.from({ length: 8 }, (_, i) =>
+            SlackTestHelper.conversation({
+              id: `C10${i + 1}`,
+              name: `auth-chan-${i + 1}`,
+            }),
+          );
+          const channelIds = channels.map((c) => c.id);
+
+          const initialState = SlackTestHelper.oracleState({
+            conversations: channels,
+            activeChannelIds: channelIds,
+            channelsCachedAt: new Date().toISOString(),
+            activeChannelsCachedAt: new Date().toISOString(),
+          });
+
+          // Route fetch: channel 5 (C105) returns 401, others succeed
+          global.fetch = jest.fn((url: string) => {
+            if (
+              typeof url === 'string' &&
+              url.includes('conversations.history')
+            ) {
+              const channelMatch = url.match(/channel=([^&]+)/);
+              if (channelMatch?.[1] === 'C105') {
+                return Promise.resolve({
+                  status: 401,
+                  ok: false,
+                  statusText: 'Unauthorized',
+                  headers: new Headers(),
+                  json: async () => ({
+                    ok: false,
+                    error: 'invalid_auth',
+                  }),
+                });
+              }
+              return Promise.resolve({
+                status: 200,
+                ok: true,
+                headers: new Headers(),
+                json: async () =>
+                  SlackTestHelper.historyResponse([
+                    {
+                      text: `msg in ${channelMatch?.[1]}`,
+                      ts: '1700000001.000000',
+                      user: 'U200',
+                    },
+                  ]),
+              });
+            }
+            if (typeof url === 'string' && url.includes('search.messages')) {
+              return Promise.resolve({
+                status: 200,
+                ok: true,
+                headers: new Headers(),
+                json: async () => SlackTestHelper.searchResponse(channelIds),
+              });
+            }
+            if (typeof url === 'string' && url.includes('users.info')) {
+              return Promise.resolve({
+                status: 200,
+                ok: true,
+                headers: new Headers(),
+                json: async () => ({
+                  ok: true,
+                  user: {
+                    id: 'U200',
+                    name: 'authuser',
+                    profile: { display_name: 'Auth User' },
+                  },
+                }),
+              });
+            }
+            return Promise.resolve({
+              status: 200,
+              ok: true,
+              headers: new Headers(),
+              json: async () => ({ ok: true }),
+            });
+          }) as any;
+
+          stack = IntegrationHelper.createSlackStack({ initialState });
+
+          // When: run ingestion
+          const result = await stack.ingestionService.ingest();
+
+          // Then: 7 channels completed, channel 5 was skipped due to 401
+          expect(result.messagesStored).toBe(7);
+          expect(result.channelNames).toHaveLength(7);
+          expect(result.channelNames).not.toContain('auth-chan-5');
+
+          // State: 7 cursors, C105 absent
+          const stateRaw = readFileSync(stack.statePath, 'utf-8');
+          const state: OracleState = JSON.parse(stateRaw);
+          expect(Object.keys(state.channelCursors)).toHaveLength(7);
+          expect(state.channelCursors['C105']).toBeUndefined();
+
+          // Other channels have cursors
+          for (const id of channelIds.filter((cid) => cid !== 'C105')) {
+            expect(state.channelCursors[id]).toBeDefined();
+          }
+        },
+        30000,
+      );
+    });
+  });
 });
