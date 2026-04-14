@@ -100,6 +100,36 @@ Never retry the same failing approach more than once. If re-delegation fails, es
 
 ---
 
+## Testing Expectations
+
+When an agent implements or modifies a service, adversarial integration tests should accompany the change if the service has an existing integration test file.
+
+### Integration test files by domain
+
+| Domain | Integration Test File |
+|---|---|
+| Slack (ingestion, API, mempalace) | `test/slack/slack-integration.spec.ts` |
+| Terminal (tmux sessions) | `test/terminal/terminal-integration.spec.ts` |
+| Taskwarrior (task CLI) | `test/taskwarrior/taskwarrior-integration.spec.ts` |
+| Config (file persistence) | `test/config/config-integration.spec.ts` |
+| GitHub (gh CLI) | `test/github/github-integration.spec.ts` |
+| Worktree (git worktrees) | `test/worktree/worktree-integration.spec.ts` |
+
+### When to add integration tests
+
+- Adding a new public method to an existing service → add adversarial scenarios
+- Fixing a bug → add a test that reproduces the bug first
+- Changing error handling or state management → add boundary corruption or failure cascade tests
+
+### Test helpers available
+
+See `test/CLAUDE.md` for the full list. Key ones:
+- `TaskwarriorTestHelper.routedSpawnSync()` — mock Bun.spawnSync with per-command routing
+- `WorktreeTestHelper.routedSpawn()` — mock async Bun.spawn with per-command routing and delays
+- `IntegrationHelper.createSlackStack()` — full Slack service stack with temp dirs
+
+---
+
 ## Delegation Examples
 
 ### New NestJS module
