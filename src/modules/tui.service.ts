@@ -306,7 +306,7 @@ export class TuiService {
         }
         onProgress({ message: 'Oracle channel installed', status: 'done' });
       },
-      resetOracleData: async () => {
+      resetOracleData: () => {
         this.slackIngestionService.resetState();
         this.mempalaceService.reset();
         const currentConfig = this.configService.getOracleConfig();

@@ -16,6 +16,20 @@ import {
 import { join } from 'path';
 import { tmpdir } from 'os';
 
+interface IngestionServicePrivate {
+  ingest(): Promise<{ messagesStored: number; channelNames: string[] }>;
+  safeIngest(): Promise<void>;
+  statePath: string;
+  stagingDir: string;
+  slackUserId: string;
+  _ingesting: boolean;
+  _generation: number;
+}
+
+function asPrivate(s: SlackIngestionService): IngestionServicePrivate {
+  return s as unknown as IngestionServicePrivate;
+}
+
 function createMockSlackService(): jest.Mocked<SlackService> {
   return {
     getConversations: jest.fn().mockResolvedValue([]),
@@ -334,11 +348,11 @@ describe('SlackIngestionService', () => {
         // Provide messages for active/mentioned channels so we can verify which were fetched
         mockSlack.getMessagesSince.mockResolvedValue([]);
 
-        await (service as any).ingest();
+        await asPrivate(service).ingest();
 
         // getMessagesSince should be called for active + mentioned, but NOT inactive
         const fetchedChannelIds = mockSlack.getMessagesSince.mock.calls.map(
-          (call: any[]) => call[0],
+          (call: [string, ...unknown[]]) => call[0],
         );
         expect(fetchedChannelIds).toContain('C-ACTIVE');
         expect(fetchedChannelIds).toContain('C-MENTIONED');
@@ -373,10 +387,10 @@ describe('SlackIngestionService', () => {
         );
 
         mockSlack.getMessagesSince.mockResolvedValue([]);
-        await (service as any).ingest();
+        await asPrivate(service).ingest();
 
         const fetchedChannelIds = mockSlack.getMessagesSince.mock.calls.map(
-          (call: any[]) => call[0],
+          (call: [string, ...unknown[]]) => call[0],
         );
         expect(fetchedChannelIds).not.toContain('C-STALE');
       });
@@ -1075,14 +1089,14 @@ describe('SlackIngestionService', () => {
         mockSlack.getConversations.mockResolvedValue([conv]);
         mockSlack.getActiveChannelIds.mockResolvedValue(new Set(['C1']));
         mockSlack.getMessagesSince.mockImplementation(
-          async (_channelId, _cursor, onPageProgress) => {
+          (_channelId, _cursor, onPageProgress) => {
             // Simulate page progress callback
             onPageProgress?.({ messagesSoFar: 5, page: 1 });
             onPageProgress?.({ messagesSoFar: 10, page: 2 });
-            return [
+            return Promise.resolve([
               { ts: '1700000200.000000', userId: 'U1', text: 'hello' },
               { ts: '1700000201.000000', userId: 'U2', text: 'world' },
-            ];
+            ]);
           },
         );
 
@@ -1183,8 +1197,8 @@ describe('SlackIngestionService', () => {
           const firstIngestCallback = jest.fn();
           service.onFirstIngestComplete = firstIngestCallback;
 
-          // Call safeIngest via (service as any) to trigger the callback path
-          await (service as any).safeIngest();
+          // Call safeIngest via asPrivate to trigger the callback path
+          await asPrivate(service).safeIngest();
 
           expect(firstIngestCallback).toHaveBeenCalledTimes(1);
           expect(service.onFirstIngestComplete).toBeNull();
@@ -1206,7 +1220,7 @@ describe('SlackIngestionService', () => {
           // Simulate _ingesting is true
           (service as any)._ingesting = true;
 
-          await (service as any).safeIngest();
+          await asPrivate(service).safeIngest();
 
           // Should not have called any Slack APIs since ingest() returns early
           expect(mockSlack.getConversations).not.toHaveBeenCalled();
@@ -1269,10 +1283,10 @@ describe('SlackIngestionService', () => {
           id: 'C1',
           name: 'general',
         });
-        mockSlack.getConversations.mockImplementation(async () => {
+        mockSlack.getConversations.mockImplementation(() => {
           // Simulate abort during getConversations
           service.abort();
-          return [conv];
+          return Promise.resolve([conv]);
         });
 
         const result = await service.ingest();
@@ -1384,9 +1398,9 @@ describe('SlackIngestionService', () => {
           id: 'C1',
           name: 'general',
         });
-        mockSlack.getConversations.mockImplementation(async () => {
+        mockSlack.getConversations.mockImplementation(() => {
           observedDuringIngest = service.ingesting;
-          return [conv];
+          return Promise.resolve([conv]);
         });
         mockSlack.getActiveChannelIds.mockResolvedValue(new Set(['C1']));
         mockSlack.getMessagesSince.mockResolvedValue([]);
@@ -1489,9 +1503,9 @@ describe('SlackIngestionService', () => {
           name: 'general',
         });
         let capturedShouldAbort: (() => boolean) | null = null;
-        mockSlack.getConversations.mockImplementation(async () => {
+        mockSlack.getConversations.mockImplementation(() => {
           capturedShouldAbort = mockSlack.shouldAbort as () => boolean;
-          return [conv];
+          return Promise.resolve([conv]);
         });
         mockSlack.getActiveChannelIds.mockResolvedValue(new Set(['C1']));
         mockSlack.getMessagesSince.mockResolvedValue([]);
@@ -1737,7 +1751,7 @@ describe('SlackIngestionService', () => {
           }),
         );
 
-        await (service as any).ingest();
+        await asPrivate(service).ingest();
 
         // Read final state
         const finalState = JSON.parse(readFileSync(statePath, 'utf-8'));
@@ -1770,7 +1784,7 @@ describe('SlackIngestionService', () => {
           }),
         );
 
-        await (service as any).ingest();
+        await asPrivate(service).ingest();
 
         const finalState = JSON.parse(readFileSync(statePath, 'utf-8'));
         expect(finalState.channelCursors).toHaveProperty('D-SELF');

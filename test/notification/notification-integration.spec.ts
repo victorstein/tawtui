@@ -6,7 +6,6 @@ const mockSpawn = jest.fn();
 };
 
 import { NotificationService } from '../../src/modules/notification.service';
-import { TerminalTestHelper } from '../helpers/terminal-test.helper';
 
 // ---------------------------------------------------------------------------
 // Helpers

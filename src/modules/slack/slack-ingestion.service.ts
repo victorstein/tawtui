@@ -747,14 +747,15 @@ export class SlackIngestionService {
       return { lastChecked: null, channelCursors: {} };
     }
     try {
-      const raw = JSON.parse(readFileSync(this.statePath, 'utf-8'));
+      const raw: unknown = JSON.parse(readFileSync(this.statePath, 'utf-8'));
       // Validate channelCursors is a plain object (not string, array, null, etc.)
       if (
         !raw ||
         typeof raw !== 'object' ||
-        typeof raw.channelCursors !== 'object' ||
-        raw.channelCursors === null ||
-        Array.isArray(raw.channelCursors)
+        !('channelCursors' in raw) ||
+        typeof (raw as OracleState).channelCursors !== 'object' ||
+        (raw as OracleState).channelCursors === null ||
+        Array.isArray((raw as OracleState).channelCursors)
       ) {
         return { lastChecked: null, channelCursors: {} };
       }

@@ -107,7 +107,7 @@ export class SlackTestHelper {
           status: 200,
           ok: true,
           headers: new Headers(),
-          json: async () => r,
+          json: () => Promise.resolve(r),
         });
       }
     }

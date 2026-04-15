@@ -70,7 +70,13 @@ describe('CalendarService Integration', () => {
         const service = createService();
 
         // 50ms timeout fires before the 500ms exited promise
-        await expect((service as any).execGog(['test'], 50)).rejects.toThrow(
+        const serviceWithPrivates = service as unknown as {
+          execGog(
+            args: string[],
+            timeoutMs?: number,
+          ): Promise<{ stdout: string; stderr: string; exitCode: number }>;
+        };
+        await expect(serviceWithPrivates.execGog(['test'], 50)).rejects.toThrow(
           /timed out after 50ms/,
         );
 

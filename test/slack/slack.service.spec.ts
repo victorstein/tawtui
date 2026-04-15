@@ -129,7 +129,10 @@ describe('SlackService', () => {
         expect(mockFetch).toHaveBeenCalledTimes(2);
 
         // Verify cursor was passed in second call
-        const secondCallUrl = mockFetch.mock.calls[1][0] as string;
+        const [secondCallUrl] = mockFetch.mock.calls[1] as [
+          string,
+          ...unknown[],
+        ];
         expect(secondCallUrl).toContain('cursor=cursor-page2');
       });
 
@@ -934,7 +937,7 @@ describe('SlackService', () => {
         expect(result).toEqual(new Set(['C111', 'C222']));
 
         // Verify query uses from:me
-        const url = mockFetch.mock.calls[0][0] as string;
+        const [url] = mockFetch.mock.calls[0] as [string, ...unknown[]];
         expect(url).toContain('search.messages');
         expect(url).toContain('from%3Ame');
       });
@@ -1025,7 +1028,7 @@ describe('SlackService', () => {
         const result = await service.getMentionedChannelIds('2026-03-15');
 
         expect(result).toEqual(new Set(['C111', 'C222']));
-        const calledUrl = mockFetch.mock.calls[0][0] as string;
+        const [calledUrl] = mockFetch.mock.calls[0] as [string, ...unknown[]];
         expect(calledUrl).toContain('search.messages');
         expect(calledUrl).toContain('to%3Ame');
         expect(calledUrl).toContain('after%3A2026-03-15');

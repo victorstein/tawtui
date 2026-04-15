@@ -1,6 +1,7 @@
 // src/modules/notification.service.ts
 
 import { Injectable, Logger } from '@nestjs/common';
+import { existsSync } from 'fs';
 import { resolve } from 'path';
 import type { NotificationPayload } from './notification.types';
 import { TERMINAL_BUNDLE_IDS, DEFAULT_BUNDLE_ID } from './notification.types';
@@ -49,7 +50,6 @@ export class NotificationService {
   }
 
   private resolveHelperPath(): string {
-    const { existsSync } = require('fs');
     const candidates = [
       // Development: __dirname is src/modules/, helper is in dist/
       resolve(__dirname, '..', '..', 'dist', NOTIFY_APP_REL_PATH),

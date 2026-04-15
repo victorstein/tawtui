@@ -7,6 +7,15 @@ import { SlackTestHelper } from '../helpers/slack-test.helper';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import type { OracleState } from '../../src/modules/slack/slack.types';
+import type { SlackIngestionService } from '../../src/modules/slack/slack-ingestion.service';
+
+interface IngestionServicePrivate {
+  safeIngest(): Promise<void>;
+}
+
+function asPrivate(s: SlackIngestionService): IngestionServicePrivate {
+  return s as unknown as IngestionServicePrivate;
+}
 
 /**
  * Build a mock fetch that responds based on URL pattern.
@@ -593,7 +602,7 @@ describe('SlackIngestionService Integration', () => {
         stack.ingestionService.onFirstIngestComplete = callback;
 
         // When: safeIngest runs to completion (via private access)
-        await (stack.ingestionService as any).safeIngest();
+        await asPrivate(stack.ingestionService).safeIngest();
 
         // Then: callback fired and hasCompletedSync is true
         expect(callback).toHaveBeenCalledTimes(1);
@@ -613,7 +622,7 @@ describe('SlackIngestionService Integration', () => {
         stack.ingestionService.onFirstIngestComplete = secondCallback;
 
         // Run another ingestion cycle
-        await (stack.ingestionService as any).safeIngest();
+        await asPrivate(stack.ingestionService).safeIngest();
 
         // Then: the new callback fires, proving re-registration works
         expect(secondCallback).toHaveBeenCalledTimes(1);
@@ -635,7 +644,7 @@ describe('SlackIngestionService Integration', () => {
         stack.ingestionService.onFirstIngestComplete = firstCallback;
 
         // Complete first ingest via safeIngest
-        await (stack.ingestionService as any).safeIngest();
+        await asPrivate(stack.ingestionService).safeIngest();
         expect(firstCallback).toHaveBeenCalledTimes(1);
         expect(stack.ingestionService.onFirstIngestComplete).toBeNull();
 
@@ -646,7 +655,7 @@ describe('SlackIngestionService Integration', () => {
         stack.ingestionService.onFirstIngestComplete = secondCallback;
 
         // Complete another ingest via safeIngest
-        await (stack.ingestionService as any).safeIngest();
+        await asPrivate(stack.ingestionService).safeIngest();
 
         // Then: the new callback fires (proving re-registration works after reset)
         expect(secondCallback).toHaveBeenCalledTimes(1);

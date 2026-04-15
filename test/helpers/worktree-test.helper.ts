@@ -8,6 +8,12 @@ import type {
   WorktreeInfo,
 } from '../../src/modules/worktree.types';
 
+interface SpawnResult {
+  stdout: ReadableStream<Uint8Array>;
+  stderr: ReadableStream<Uint8Array>;
+  exited: Promise<number>;
+}
+
 export interface WorktreeStack {
   service: WorktreeService;
   baseDir: string;
@@ -31,9 +37,14 @@ export class WorktreeTestHelper {
     const worktreesJsonPath = join(tmpDir, 'worktrees.json');
 
     const service = new WorktreeService();
-    (service as any).baseDir = baseDir;
-    (service as any).reposJsonPath = reposJsonPath;
-    (service as any).worktreesJsonPath = worktreesJsonPath;
+    const serviceWithPaths = service as typeof service & {
+      baseDir: string;
+      reposJsonPath: string;
+      worktreesJsonPath: string;
+    };
+    serviceWithPaths.baseDir = baseDir;
+    serviceWithPaths.reposJsonPath = reposJsonPath;
+    serviceWithPaths.worktreesJsonPath = worktreesJsonPath;
 
     return {
       service,
@@ -87,7 +98,7 @@ export class WorktreeTestHelper {
       }
     >,
   ): jest.Mock {
-    return jest.fn((cmd: string[]) => {
+    return jest.fn((cmd: string[]): SpawnResult => {
       const joined = cmd.join(' ');
       for (const [pattern, config] of Object.entries(routes)) {
         if (joined.includes(pattern)) {
@@ -95,7 +106,7 @@ export class WorktreeTestHelper {
             config.stdout ?? '',
             config.stderr ?? '',
             config.exitCode ?? 0,
-          )();
+          )() as SpawnResult;
           if (config.delayMs) {
             return {
               ...result,
@@ -107,7 +118,7 @@ export class WorktreeTestHelper {
           return result;
         }
       }
-      return TerminalTestHelper.mockSpawn('', '', 0)();
+      return TerminalTestHelper.mockSpawn('', '', 0)() as SpawnResult;
     });
   }
 }

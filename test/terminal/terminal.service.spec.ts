@@ -11,7 +11,7 @@ const mockBunHash = jest.fn().mockReturnValue(12345);
 
 // Mock fs functions used by persistence (prevent touching real disk)
 jest.mock('fs', () => {
-  const actual = jest.requireActual('fs');
+  const actual: Record<string, unknown> = jest.requireActual('fs');
   return {
     ...actual,
     existsSync: jest.fn().mockReturnValue(false),
@@ -22,15 +22,30 @@ jest.mock('fs', () => {
 });
 
 import { TerminalService } from '../../src/modules/terminal.service';
-import { TerminalTestHelper } from '../helpers/terminal-test.helper';
+import type { TaskwarriorService } from '../../src/modules/taskwarrior.service';
+import type { ConfigService } from '../../src/modules/config.service';
+import type { WorktreeService } from '../../src/modules/worktree.service';
 
 // ---------------------------------------------------------------------------
 // Factory helpers
 // ---------------------------------------------------------------------------
 
-function createMocks() {
-  const taskwarriorService = {} as any;
-  const configService = {
+/** Map every property of T to jest.Mock (for partial mock objects). */
+type JestMocked<T> = { [K in keyof T]?: jest.Mock };
+
+/** Typed accessor for mockSpawn.mock.calls entries. */
+type SpawnCall = [string[], Record<string, unknown>];
+const spawnCalls = () => mockSpawn.mock.calls as SpawnCall[];
+
+interface MockServices {
+  taskwarriorService: JestMocked<TaskwarriorService>;
+  configService: JestMocked<ConfigService>;
+  worktreeService: JestMocked<WorktreeService>;
+}
+
+function createMocks(): MockServices {
+  const taskwarriorService: JestMocked<TaskwarriorService> = {};
+  const configService: JestMocked<ConfigService> = {
     getAgentTypes: jest.fn().mockReturnValue([
       {
         id: 'claude-code',
@@ -43,20 +58,20 @@ function createMocks() {
       pollIntervalSeconds: 300,
       slack: { userName: 'testuser' },
     }),
-  } as any;
-  const worktreeService = {} as any;
+  };
+  const worktreeService: JestMocked<WorktreeService> = {};
 
   return { taskwarriorService, configService, worktreeService };
 }
 
 function createService(mocks = createMocks()): {
   service: TerminalService;
-  mocks: ReturnType<typeof createMocks>;
+  mocks: MockServices;
 } {
   const service = new TerminalService(
-    mocks.taskwarriorService,
-    mocks.configService,
-    mocks.worktreeService,
+    mocks.taskwarriorService as unknown as TaskwarriorService,
+    mocks.configService as unknown as ConfigService,
+    mocks.worktreeService as unknown as WorktreeService,
   );
   return { service, mocks };
 }
@@ -144,7 +159,7 @@ describe('TerminalService', () => {
         expect(session.status).toBe('running');
 
         // Verify the new-session call includes -d, -s, -c, -x 80, -y 24
-        const newSessionCall = mockSpawn.mock.calls[1];
+        const newSessionCall = spawnCalls()[1];
         const args = newSessionCall[0];
         expect(args).toContain('tmux');
         expect(args).toContain('new-session');
@@ -169,7 +184,7 @@ describe('TerminalService', () => {
         await service.createSession({ name: 'Test', cwd: '/tmp' });
 
         // Third call is set-option remain-on-exit
-        const setOptionCall = mockSpawn.mock.calls[2];
+        const setOptionCall = spawnCalls()[2];
         const args = setOptionCall[0];
         expect(args).toContain('set-option');
         expect(args).toContain('remain-on-exit');
@@ -194,7 +209,7 @@ describe('TerminalService', () => {
         });
 
         // Fifth call is send-keys for the short command
-        const sendKeysCall = mockSpawn.mock.calls[4];
+        const sendKeysCall = spawnCalls()[4];
         const args = sendKeysCall[0];
         expect(args).toContain('send-keys');
         expect(args).toContain(shortCmd);
@@ -222,15 +237,16 @@ describe('TerminalService', () => {
 
         // Bun.write should be called with the long command content
         expect(mockBunWrite).toHaveBeenCalledTimes(1);
-        const [scriptPath, content] = mockBunWrite.mock.calls[0];
+        const [scriptPath, content] = (
+          mockBunWrite.mock.calls as Array<[string, string]>
+        )[0];
         expect(scriptPath).toMatch(/tawtui-cmd-\d+\.sh$/);
         expect(content).toBe(longCmd + '\n');
 
         // send-keys should use the bash wrapper
-        const sendKeysCall = mockSpawn.mock.calls[4];
+        const sendKeysCall = spawnCalls()[4];
         const args = sendKeysCall[0];
         expect(args).toContain('send-keys');
-        const wrapper = args[args.indexOf('send-keys') + 2]; // skip -t and session name
         // The wrapper is the argument after the session name
         const wrapperArg = args.find(
           (a: string) => typeof a === 'string' && a.startsWith('bash '),
@@ -336,14 +352,16 @@ describe('TerminalService', () => {
           command: longCmd,
         });
 
-        const sendKeysCall = mockSpawn.mock.calls[4];
-        const args = sendKeysCall[0] as string[];
+        const sendKeysCall = spawnCalls()[4];
+        const args = sendKeysCall[0];
         const wrapperArg = args.find(
           (a) => typeof a === 'string' && a.includes('rm -f'),
         );
         expect(wrapperArg).toBeDefined();
         // The script path in bash and rm -f should match
-        const scriptPath = mockBunWrite.mock.calls[0][0];
+        const scriptPath = (
+          mockBunWrite.mock.calls as Array<[string, string]>
+        )[0][0];
         expect(wrapperArg).toContain(scriptPath);
       });
 
@@ -402,20 +420,22 @@ describe('TerminalService', () => {
           ['', '', 0], // send-keys (the oracle command)
         ]);
 
-        const { service, mocks } = createService();
+        const { service } = createService();
         const result = await service.createOracleSession();
 
         expect(result.sessionId).toBeDefined();
 
         // The command sent to createSession includes the channel flag
-        const sendKeysCall = mockSpawn.mock.calls[4];
-        const args = sendKeysCall[0] as string[];
+        const sendKeysCall = spawnCalls()[4];
+        const args = sendKeysCall[0];
         // Find the argument that contains the oracle-channel flag
         // It could be in the Bun.write path (long command) or in send-keys args
         // The oracle prompt is very long (>2KB) so it goes through Bun.write
         if (mockBunWrite.mock.calls.length > 0) {
           // Long command path: check Bun.write content
-          const scriptContent = mockBunWrite.mock.calls[0][1] as string;
+          const scriptContent = (
+            mockBunWrite.mock.calls as Array<[string, string]>
+          )[0][1];
           expect(scriptContent).toContain(
             '--dangerously-load-development-channels server:oracle-channel',
           );
@@ -514,7 +534,7 @@ describe('TerminalService', () => {
 
       it('should throw when claude-code agent is not configured', async () => {
         const mocks = createMocks();
-        mocks.configService.getAgentTypes.mockReturnValue([]);
+        mocks.configService.getAgentTypes!.mockReturnValue([]);
         const { service } = createService(mocks);
 
         await expect(service.createOracleSession()).rejects.toThrow(
@@ -552,8 +572,8 @@ describe('TerminalService', () => {
         await service.destroySession(session.id);
 
         // Verify kill-session was called
-        const killCall = mockSpawn.mock.calls[0];
-        const args = killCall[0] as string[];
+        const killCall = spawnCalls()[0];
+        const args = killCall[0];
         expect(args).toContain('kill-session');
         expect(args).toContain('-t');
         expect(args).toContain(session.tmuxSessionName);
@@ -604,13 +624,13 @@ describe('TerminalService', () => {
         await service.pasteText(session.id, 'hello world');
 
         // First call: set-buffer
-        const setBufferArgs = mockSpawn.mock.calls[0][0] as string[];
+        const setBufferArgs = spawnCalls()[0][0];
         expect(setBufferArgs).toContain('set-buffer');
         expect(setBufferArgs).toContain('--');
         expect(setBufferArgs).toContain('hello world');
 
         // Second call: paste-buffer with -p
-        const pasteBufferArgs = mockSpawn.mock.calls[1][0] as string[];
+        const pasteBufferArgs = spawnCalls()[1][0];
         expect(pasteBufferArgs).toContain('paste-buffer');
         expect(pasteBufferArgs).toContain('-p');
         expect(pasteBufferArgs).toContain('-t');
@@ -654,7 +674,7 @@ describe('TerminalService', () => {
 
         // Verify fallback: sendInput is called which invokes send-keys
         expect(mockSpawn).toHaveBeenCalledTimes(2);
-        const fallbackArgs = mockSpawn.mock.calls[1][0] as string[];
+        const fallbackArgs = spawnCalls()[1][0];
         expect(fallbackArgs).toContain('send-keys');
         expect(fallbackArgs).toContain('-l');
       });
@@ -696,7 +716,7 @@ describe('TerminalService', () => {
         expect(result.cursor).toEqual({ x: 5, y: 3 });
 
         // Verify capture-pane call includes -p, -e, -S flags
-        const captureArgs = mockSpawn.mock.calls[0][0] as string[];
+        const captureArgs = spawnCalls()[0][0];
         expect(captureArgs).toContain('capture-pane');
         expect(captureArgs).toContain('-p');
         expect(captureArgs).toContain('-e');

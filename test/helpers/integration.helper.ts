@@ -62,8 +62,13 @@ export class IntegrationHelper {
     );
 
     // Override private paths to use temp directories
-    (ingestionService as any).statePath = statePath;
-    (ingestionService as any).stagingDir = stagingDir;
+    const ingestionServiceWithPaths =
+      ingestionService as typeof ingestionService & {
+        statePath: string;
+        stagingDir: string;
+      };
+    ingestionServiceWithPaths.statePath = statePath;
+    ingestionServiceWithPaths.stagingDir = stagingDir;
 
     return {
       slackService,

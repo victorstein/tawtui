@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return */
-
 // Mock Bun global (tests run under Jest/Node, not Bun runtime)
 const mockSpawn = jest.fn();
 const mockBunWrite = jest.fn().mockResolvedValue(undefined);
@@ -12,26 +10,43 @@ const mockBunHash = jest.fn().mockReturnValue(12345);
 };
 
 // Mock fs functions used by persistence (prevent touching real disk)
+const mockExistsSync = jest.fn().mockReturnValue(false);
+const mockReadFileSync = jest.fn().mockReturnValue('[]');
+const mockWriteFileSync = jest.fn();
+const mockMkdirSync = jest.fn();
+
 jest.mock('fs', () => {
-  const actual = jest.requireActual('fs');
+  const actual: Record<string, unknown> = jest.requireActual('fs');
   return {
     ...actual,
-    existsSync: jest.fn().mockReturnValue(false),
-    readFileSync: jest.fn().mockReturnValue('[]'),
-    writeFileSync: jest.fn(),
-    mkdirSync: jest.fn(),
+    existsSync: mockExistsSync,
+    readFileSync: mockReadFileSync,
+    writeFileSync: mockWriteFileSync,
+    mkdirSync: mockMkdirSync,
   };
 });
 
 import { TerminalService } from '../../src/modules/terminal.service';
+import type { TaskwarriorService } from '../../src/modules/taskwarrior.service';
+import type { ConfigService } from '../../src/modules/config.service';
+import type { WorktreeService } from '../../src/modules/worktree.service';
 
 // ---------------------------------------------------------------------------
 // Factory helpers
 // ---------------------------------------------------------------------------
 
-function createMocks() {
-  const taskwarriorService = {} as any;
-  const configService = {
+/** Map every property of T to jest.Mock (for partial mock objects). */
+type JestMocked<T> = { [K in keyof T]?: jest.Mock };
+
+interface MockServices {
+  taskwarriorService: JestMocked<TaskwarriorService>;
+  configService: JestMocked<ConfigService>;
+  worktreeService: JestMocked<WorktreeService>;
+}
+
+function createMocks(): MockServices {
+  const taskwarriorService: JestMocked<TaskwarriorService> = {};
+  const configService: JestMocked<ConfigService> = {
     getAgentTypes: jest.fn().mockReturnValue([
       {
         id: 'claude-code',
@@ -44,20 +59,20 @@ function createMocks() {
       pollIntervalSeconds: 300,
       slack: { userName: 'testuser' },
     }),
-  } as any;
-  const worktreeService = {} as any;
+  };
+  const worktreeService: JestMocked<WorktreeService> = {};
 
   return { taskwarriorService, configService, worktreeService };
 }
 
 function createService(mocks = createMocks()): {
   service: TerminalService;
-  mocks: ReturnType<typeof createMocks>;
+  mocks: MockServices;
 } {
   const service = new TerminalService(
-    mocks.taskwarriorService,
-    mocks.configService,
-    mocks.worktreeService,
+    mocks.taskwarriorService as unknown as TaskwarriorService,
+    mocks.configService as unknown as ConfigService,
+    mocks.worktreeService as unknown as WorktreeService,
   );
   return { service, mocks };
 }
@@ -554,17 +569,16 @@ describe('TerminalService Integration', () => {
     // TS-P-1: persistSessions failure is silent
     describe('TS-P-1: persistSessions failure is silent', () => {
       it('should not throw when writeFileSync fails', () => {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const fs = require('fs');
-        (fs.writeFileSync as jest.Mock).mockImplementationOnce(() => {
+        mockWriteFileSync.mockImplementationOnce(() => {
           throw new Error('EPERM');
         });
 
         const { service } = createService();
 
         // When/Then: persistSessions does not throw
+        type ServiceWithPrivate = { persistSessions(): void };
         expect(() => {
-          (service as any).persistSessions();
+          (service as unknown as ServiceWithPrivate).persistSessions();
         }).not.toThrow();
       });
     });
@@ -572,31 +586,25 @@ describe('TerminalService Integration', () => {
     // TS-P-2: loadPersistedSessions with empty/corrupt file
     describe('TS-P-2: loadPersistedSessions with empty/corrupt file', () => {
       it('should return empty Map for empty or corrupt session file', () => {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const fs = require('fs');
-
         const { service } = createService();
 
-        // Case 1: empty file
-        (fs.existsSync as jest.Mock).mockReturnValueOnce(true);
-        (fs.readFileSync as jest.Mock).mockReturnValueOnce('');
+        type ServiceWithPrivate = {
+          loadPersistedSessions(): Map<string, unknown>;
+        };
+        const servicePrivate = service as unknown as ServiceWithPrivate;
 
-        const result1 = (service as any).loadPersistedSessions() as Map<
-          string,
-          unknown
-        >;
+        // Case 1: empty file
+        mockExistsSync.mockReturnValueOnce(true);
+        mockReadFileSync.mockReturnValueOnce('');
+
+        const result1 = servicePrivate.loadPersistedSessions();
         expect(result1.size).toBe(0);
 
         // Case 2: truncated JSON
-        (fs.existsSync as jest.Mock).mockReturnValueOnce(true);
-        (fs.readFileSync as jest.Mock).mockReturnValueOnce(
-          '[{"tmuxSessionName":',
-        );
+        mockExistsSync.mockReturnValueOnce(true);
+        mockReadFileSync.mockReturnValueOnce('[{"tmuxSessionName":');
 
-        const result2 = (service as any).loadPersistedSessions() as Map<
-          string,
-          unknown
-        >;
+        const result2 = servicePrivate.loadPersistedSessions();
         expect(result2.size).toBe(0);
       });
     });
@@ -609,8 +617,14 @@ describe('TerminalService Integration', () => {
         // Given: list-sessions fails (no tmux server)
         mockSpawnSequence([['', 'no server running', 1]]);
 
+        type ServiceWithPrivate = {
+          discoverExistingSessions(): Promise<void>;
+        };
+
         // When: discoverExistingSessions is called
-        await (service as any).discoverExistingSessions();
+        await (
+          service as unknown as ServiceWithPrivate
+        ).discoverExistingSessions();
 
         // Then: no sessions registered, no crash
         expect(service.listSessions()).toHaveLength(0);
@@ -652,12 +666,11 @@ describe('TerminalService Integration', () => {
         await service.pasteText(session.id, 'some text');
 
         // Then: no exception, and send-keys was called with -l as fallback
-        const sendKeysCall = mockSpawn.mock.calls.find((call) => {
-          const args = (call as [string[], unknown])[0];
-          return args.includes('send-keys');
-        });
+        const sendKeysCall = (
+          mockSpawn.mock.calls as Array<[string[], unknown]>
+        ).find((call) => call[0].includes('send-keys'));
         expect(sendKeysCall).toBeDefined();
-        const args = (sendKeysCall as [string[], unknown])[0];
+        const args = sendKeysCall![0];
         expect(args).toContain('-l');
       });
     });
