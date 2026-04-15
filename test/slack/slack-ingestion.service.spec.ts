@@ -607,7 +607,7 @@ describe('SlackIngestionService', () => {
         expect(content[0]).toMatchObject({
           type: 'message',
           user: 'Alfonso',
-          text: 'Alfonso: Ship it on Friday',
+          text: expect.stringContaining('Alfonso: Ship it on Friday'),
         });
       });
 
@@ -1502,6 +1502,38 @@ describe('SlackIngestionService', () => {
         // After ingest, shouldAbort should be restored
         expect(mockSlack.shouldAbort).toBeNull();
       });
+    });
+  });
+
+  // ----------------------------------------------------------------
+  // Message Metadata
+  // ----------------------------------------------------------------
+  describe('Message Metadata', () => {
+    it('should embed timestamp and channel name in message text', async () => {
+      const conv = SlackTestHelper.conversation({
+        id: 'C1',
+        name: 'general',
+      });
+      mockSlack.getConversations.mockResolvedValue([conv]);
+      mockSlack.getActiveChannelIds.mockResolvedValue(new Set(['C1']));
+      mockSlack.getMessagesSince.mockResolvedValue([
+        { ts: '1700000200.000000', userId: 'U1', text: 'Ship it on Friday' },
+      ]);
+      mockSlack.resolveUserName.mockResolvedValue('Alfonso');
+
+      await service.ingest();
+
+      const stagingDir = (service as any).stagingDir;
+      const files = readdirSync(stagingDir);
+      const content = JSON.parse(
+        readFileSync(join(stagingDir, files[0]), 'utf-8'),
+      );
+      // ts 1700000200 = 2023-11-14T22:16:40Z
+      expect(content[0].text).toBe(
+        '[2023-11-14 22:16 | #general] Alfonso: Ship it on Friday',
+      );
+      expect(content[0].user).toBe('Alfonso');
+      expect(content[0].ts).toBe('1700000200.000000');
     });
   });
 

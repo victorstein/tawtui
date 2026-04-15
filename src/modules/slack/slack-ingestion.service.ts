@@ -344,15 +344,27 @@ export class SlackIngestionService {
 
           if (rawMessages.length === 0) return;
 
+          const channelLabel = conversation.isDm
+            ? await this.slackService.resolveUserName(conversation.name)
+            : conversation.name;
+
           const slackExport: Array<Record<string, string>> = [];
           for (const raw of rawMessages) {
             const userName = await this.slackService.resolveUserName(
               raw.userId,
             );
+            const isReply = !!raw.threadTs && raw.threadTs !== raw.ts;
             slackExport.push({
               type: 'message',
               user: userName,
-              text: `${userName}: ${raw.text}`,
+              text: this.formatMessageText(
+                userName,
+                raw.text,
+                raw.ts,
+                channelLabel,
+                conversation.isDm,
+                isReply,
+              ),
               ts: raw.ts,
             });
           }
@@ -700,6 +712,21 @@ export class SlackIngestionService {
       .replace(/\s+/g, '-')
       .replace(/[^a-z0-9-]/g, '');
     return isDm ? `dm-${slug}` : slug;
+  }
+
+  private formatMessageText(
+    userName: string,
+    text: string,
+    ts: string,
+    channelName: string,
+    isDm: boolean,
+    isThreadReply: boolean,
+  ): string {
+    const date = new Date(parseFloat(ts) * 1000);
+    const dateStr = date.toISOString().replace('T', ' ').slice(0, 16);
+    const channelLabel = isDm ? `DM:${channelName}` : `#${channelName}`;
+    const threadLabel = isThreadReply ? ' | thread' : '';
+    return `[${dateStr} | ${channelLabel}${threadLabel}] ${userName}: ${text}`;
   }
 
   private loadState(): OracleState {
