@@ -282,7 +282,9 @@ describe('SlackIngestionService Integration', () => {
 
     // RC-3: Abort during rate-limit sleep
     describe('RC-3: Abort during rate-limit sleep', () => {
-      it('should abort quickly during rate-limit sleep and not corrupt state', async () => {
+      it(
+        'should abort quickly during rate-limit sleep and not corrupt state',
+        async () => {
         // Given: fetch returns 429 with Retry-After: 10 seconds
         let waitDetected = false;
         const rateLimitRoutes = {
@@ -321,7 +323,9 @@ describe('SlackIngestionService Integration', () => {
         const startTime = Date.now();
         const ingestPromise = stack.ingestionService.triggerIngest();
 
-        // Wait for the rate-limit wait to begin (poll every 50ms, safety limit 3s)
+        // Wait for the rate-limit wait to begin (poll every 50ms, safety limit 10s)
+        // Note: multiple search.messages calls (active + mention detection) each
+        // have a 3s throttle, so we need more time before conversations.history fires
         await new Promise<void>((resolve) => {
           let resolved = false;
           const done = () => {
@@ -334,7 +338,7 @@ describe('SlackIngestionService Integration', () => {
           const check = setInterval(() => {
             if (waitDetected) done();
           }, 50);
-          const safetyTimer = setTimeout(done, 3000);
+          const safetyTimer = setTimeout(done, 10000);
         });
 
         // Verify we actually observed the rate-limit wait before aborting
@@ -346,8 +350,10 @@ describe('SlackIngestionService Integration', () => {
         const result = await ingestPromise;
         const elapsed = Date.now() - startTime;
 
-        // Then: should return quickly (well under the 10s Retry-After)
-        expect(elapsed).toBeLessThan(5000);
+        // Then: should return quickly after abort (well under the 10s Retry-After).
+        // Total elapsed includes search.messages throttle (~6s for active + mention detection)
+        // plus the time to detect and abort the rate-limit sleep.
+        expect(elapsed).toBeLessThan(15000);
         expect(result.messagesStored).toBe(0);
         expect(result.channelNames).toEqual([]);
 
@@ -356,7 +362,9 @@ describe('SlackIngestionService Integration', () => {
           const stateRaw = readFileSync(stack.statePath, 'utf-8');
           expect(() => JSON.parse(stateRaw)).not.toThrow();
         }
-      });
+      },
+        15000,
+      );
     });
 
     // RC-4: resetState during active ingestion
@@ -577,7 +585,9 @@ describe('SlackIngestionService Integration', () => {
   describe('State Machine Violations', () => {
     // SM-1: Oracle session gating via onFirstIngestComplete
     describe('SM-1: Oracle session gating via onFirstIngestComplete', () => {
-      it('should fire onFirstIngestComplete callback after first successful safeIngest', async () => {
+      it(
+        'should fire onFirstIngestComplete callback after first successful safeIngest',
+        async () => {
         // Given: a fresh stack with hasCompletedSync = false
         global.fetch = createRoutedFetch(standardRoutes()) as any;
         stack = IntegrationHelper.createSlackStack();
@@ -617,12 +627,16 @@ describe('SlackIngestionService Integration', () => {
         expect(stack.ingestionService.onFirstIngestComplete).toBeNull();
         // Original callback was not called again
         expect(callback).toHaveBeenCalledTimes(1);
-      });
+      },
+        30000,
+      );
     });
 
     // SM-2: onFirstIngestComplete lifecycle after reset
     describe('SM-2: onFirstIngestComplete lifecycle after reset', () => {
-      it('should allow re-registering onFirstIngestComplete after resetState', async () => {
+      it(
+        'should allow re-registering onFirstIngestComplete after resetState',
+        async () => {
         // Given: a stack that completes a first ingest
         global.fetch = createRoutedFetch(standardRoutes()) as any;
         stack = IntegrationHelper.createSlackStack();
@@ -649,7 +663,9 @@ describe('SlackIngestionService Integration', () => {
         expect(stack.ingestionService.onFirstIngestComplete).toBeNull();
         // First callback was not called again
         expect(firstCallback).toHaveBeenCalledTimes(1);
-      });
+      },
+        30000,
+      );
     });
 
     // SM-3: Double startPolling

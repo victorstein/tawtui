@@ -173,6 +173,32 @@ export class SlackIngestionService {
         );
         if (this._generation !== gen)
           return { messagesStored: 0, channelNames: [] };
+
+        // Also detect channels where the user was @mentioned
+        try {
+          const mentionedChannelIds =
+            await this.slackService.getMentionedChannelIds(
+              afterDate,
+              (info) => {
+                onProgress?.({
+                  phase: 'detecting',
+                  channelsSoFar: info.matchesSoFar,
+                  page: info.page,
+                });
+              },
+              () => this._generation !== gen,
+            );
+          if (this._generation !== gen)
+            return { messagesStored: 0, channelNames: [] };
+          for (const id of mentionedChannelIds) {
+            activeChannelIds.add(id);
+          }
+        } catch (err) {
+          this.logger.warn(
+            `Mention detection failed, continuing with active-only: ${(err as Error).message}`,
+          );
+        }
+
         state.activeChannelIds = [...activeChannelIds];
         state.activeChannelsCachedAt = new Date().toISOString();
         this.saveState(state);
@@ -194,9 +220,9 @@ export class SlackIngestionService {
         }
       }
 
-      // Filter: channels the user is active in + channels we've previously synced
+      // Filter: channels the user is active in (posted or @mentioned)
       const filteredConversations = conversations.filter(
-        (c) => activeChannelIds.has(c.id) || state.channelCursors[c.id],
+        (c) => activeChannelIds.has(c.id),
       );
 
       // Pre-filter: detect which channels have new messages via search

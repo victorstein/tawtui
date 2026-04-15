@@ -20,6 +20,7 @@ function createMockSlackService(): jest.Mocked<SlackService> {
   return {
     getConversations: jest.fn().mockResolvedValue([]),
     getActiveChannelIds: jest.fn().mockResolvedValue(new Set<string>()),
+    getMentionedChannelIds: jest.fn().mockResolvedValue(new Set<string>()),
     getChangedChannelIds: jest.fn().mockResolvedValue(new Set<string>()),
     getMessagesSince: jest.fn().mockResolvedValue([]),
     getThreadReplies: jest.fn().mockResolvedValue([]),
@@ -56,6 +57,7 @@ describe('SlackIngestionService', () => {
     jest.clearAllMocks();
     // Reset default mock return values after clearAllMocks
     mockSlack.getActiveChannelIds.mockResolvedValue(new Set<string>());
+    mockSlack.getMentionedChannelIds.mockResolvedValue(new Set<string>());
     mockSlack.exportUserCache.mockReturnValue({});
     mockSlack.getMessagesSince.mockResolvedValue([]);
     mockSlack.getThreadReplies.mockResolvedValue([]);
@@ -166,7 +168,7 @@ describe('SlackIngestionService', () => {
         expect(mockSlack.getActiveChannelIds).toHaveBeenCalledTimes(1);
       });
 
-      it('should filter to active + previously synced channels', async () => {
+      it('should filter to only active channels (not previously synced)', async () => {
         const activeConv = SlackTestHelper.conversation({
           id: 'C1',
           name: 'active',
@@ -198,12 +200,12 @@ describe('SlackIngestionService', () => {
 
         await service.ingest();
 
-        // Should fetch messages for C1 (active) and C2 (previously synced), not C3
+        // Should fetch messages for C1 (active) only — C2 has a cursor but is not active
         const fetchedChannelIds = mockSlack.getMessagesSince.mock.calls.map(
           (args: unknown[]) => args[0],
         );
         expect(fetchedChannelIds).toContain('C1');
-        expect(fetchedChannelIds).toContain('C2');
+        expect(fetchedChannelIds).not.toContain('C2');
         expect(fetchedChannelIds).not.toContain('C3');
       });
     });
@@ -262,6 +264,7 @@ describe('SlackIngestionService', () => {
         await service.ingest();
 
         expect(mockSlack.getActiveChannelIds).not.toHaveBeenCalled();
+        expect(mockSlack.getMentionedChannelIds).not.toHaveBeenCalled();
       });
 
       it('should refresh active channels when cache is older than 1hr', async () => {
@@ -289,10 +292,97 @@ describe('SlackIngestionService', () => {
         );
 
         mockSlack.getActiveChannelIds.mockResolvedValue(new Set(['C1']));
+        mockSlack.getMentionedChannelIds.mockResolvedValue(new Set<string>());
 
         await service.ingest();
 
         expect(mockSlack.getActiveChannelIds).toHaveBeenCalledTimes(1);
+        expect(mockSlack.getMentionedChannelIds).toHaveBeenCalledTimes(1);
+      });
+    });
+  });
+
+  // ----------------------------------------------------------------
+  // Channel Filtering
+  // ----------------------------------------------------------------
+  describe('Channel Filtering', () => {
+    describe('Behavior', () => {
+      it('should include channels where user was mentioned but not active', async () => {
+        const mentionedChannel = SlackTestHelper.conversation({
+          id: 'C-MENTIONED',
+          name: 'mentioned-only',
+        });
+        const activeChannel = SlackTestHelper.conversation({
+          id: 'C-ACTIVE',
+          name: 'active-channel',
+        });
+        const inactiveChannel = SlackTestHelper.conversation({
+          id: 'C-INACTIVE',
+          name: 'inactive-channel',
+        });
+
+        mockSlack.getConversations.mockResolvedValue([
+          mentionedChannel,
+          activeChannel,
+          inactiveChannel,
+        ]);
+        mockSlack.getActiveChannelIds.mockResolvedValue(
+          new Set(['C-ACTIVE']),
+        );
+        mockSlack.getMentionedChannelIds.mockResolvedValue(
+          new Set(['C-MENTIONED']),
+        );
+
+        // Provide messages for active/mentioned channels so we can verify which were fetched
+        mockSlack.getMessagesSince.mockResolvedValue([]);
+
+        await (service as any).ingest();
+
+        // getMessagesSince should be called for active + mentioned, but NOT inactive
+        const fetchedChannelIds = mockSlack.getMessagesSince.mock.calls.map(
+          (call: any[]) => call[0],
+        );
+        expect(fetchedChannelIds).toContain('C-ACTIVE');
+        expect(fetchedChannelIds).toContain('C-MENTIONED');
+        expect(fetchedChannelIds).not.toContain('C-INACTIVE');
+      });
+
+      it('should NOT include channels that only have a stale cursor', async () => {
+        const activeChannel = SlackTestHelper.conversation({
+          id: 'C-ACTIVE',
+          name: 'active-channel',
+        });
+        const staleChannel = SlackTestHelper.conversation({
+          id: 'C-STALE',
+          name: 'stale-channel',
+        });
+
+        mockSlack.getConversations.mockResolvedValue([
+          activeChannel,
+          staleChannel,
+        ]);
+        mockSlack.getActiveChannelIds.mockResolvedValue(
+          new Set(['C-ACTIVE']),
+        );
+        mockSlack.getMentionedChannelIds.mockResolvedValue(new Set());
+
+        // Seed state with a cursor for the stale channel
+        const statePath = (service as any).statePath;
+        writeFileSync(
+          statePath,
+          JSON.stringify({
+            lastChecked: null,
+            channelCursors: { 'C-STALE': '1700000000.000000' },
+          }),
+        );
+
+        mockSlack.getMessagesSince.mockResolvedValue([]);
+        await (service as any).ingest();
+
+        const fetchedChannelIds = mockSlack.getMessagesSince.mock.calls.map(
+          (call: any[]) => call[0],
+        );
+        expect(fetchedChannelIds).not.toContain('C-STALE');
       });
     });
   });
