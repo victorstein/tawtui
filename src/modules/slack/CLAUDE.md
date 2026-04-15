@@ -23,7 +23,7 @@ LevelDB extraction tries WAL `.log` files first (newest), falls back to SST `.ld
 
 Five phases, abortable via `_generation` counter:
 
-1. **List & Filter** — get conversations, detect active channels (search.messages from:me, 30-day window), identify self-DM
+1. **List & Filter** — get conversations, detect active channels (search.messages `from:me` + `to:me`, 30-day window), identify self-DM. Only channels where the user posted or was @mentioned pass the filter. Stale cursors from previously-synced channels do NOT qualify a channel for inclusion.
 2. **Pre-filter** — `getChangedChannelIds()` skips unchanged channels since `lastChecked` (skipped on first sync)
 3. **Fetch Messages** — concurrent (pLimit 3), cursor-based pagination, inline thread replies, write staging JSON files
 4. **Sync Tracked Threads** — bootstrap new channels, prune threads >30 days old, fetch new replies for tracked threads
@@ -68,3 +68,4 @@ Per-method throttle + 200ms global minimum gap:
 - **Cursor advancement**: Uses top-level message ts only. Thread reply ts is tracked separately in `trackedThreads`.
 - **Thread bootstrap**: First sync of a channel seeds `trackedThreads` by backfilling 30 days and finding messages with `replyCount > 0`.
 - **Thread pruning**: Threads older than 30 days are removed each sync to prevent unbounded growth.
+- **Cursor pruning**: After each sync, cursors and tracked threads are removed for channels not in the active set (no user activity or mentions in 30 days). Re-entry triggers a fresh 30-day backfill; mempalace deduplicates.
