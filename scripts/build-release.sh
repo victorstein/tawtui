@@ -8,7 +8,7 @@ echo "==> Running quality gates..."
 cd "$ROOT_DIR"
 bun run lint
 bun run test -- --passWithNoTests
-bun run format -- --check --no-error-on-unmatched-pattern
+bun run format:check
 
 echo ""
 echo "==> Cleaning dist/"
