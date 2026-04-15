@@ -16,28 +16,23 @@ Coverage status for all service modules. Updated as new test suites are added.
 | worktree.service | Yes | Yes (12 tests) | RC, BC, FC, OD | Done |
 | calendar.service | Yes | Yes (11 tests) | TH, BC, ERR | Done |
 | dependency.service | Yes | Yes (12 tests) | AF, PI, SD, PL | Done |
+| notification.service | Yes | Yes (10 tests) | BC, CA, AB, TD | Done |
+| oracle-event.service | Yes | Yes (7 tests) | RR, PE | Done |
 
-## Tier 2 — Complete
+## All Tiers Complete
 
-All Tier 2 modules now have adversarial integration tests.
+Every service with meaningful system boundaries now has adversarial integration tests.
 
-## Tier 3 — Next Priority
+## Not Covered (low risk or out of scope)
 
-| Module | LOC | Current Tests | Key Adversarial Scenarios |
-|---|---|---|---|
-| notification.service | 135 | Unit only | Binary path race, helper hangs (no timeout), large messages, concurrent sends |
-| oracle-event.service | 75 | Unit only | postEvent retry/timeout, fire-and-forget error handling, large rejected files |
-| slack/token-extractor.service | ~150 | Minimal unit | LevelDB corruption, keychain unavailable (macOS-only) |
-| tui.service | ~300 | None | Service wiring, Oracle workspace setup, lifecycle |
-
-## Not Planned (low risk or out of scope)
-
-| Module | Reason |
-|---|---|
-| shared/plimit.ts | Utility, already tested |
-| oracle/oracle-channel.ts | Standalone MCP script, not a regular service |
-| cookie-decryptor.ts | Low-level crypto, macOS-only, stable |
-| leveldb-reader.ts | Binary format reader, macOS-only, stable |
+| Module | LOC | Reason |
+|---|---|---|
+| slack/token-extractor.service | ~150 | macOS-only (LevelDB, Keychain), low ROI |
+| tui.service | ~300 | Bridge/orchestrator, mocking all deps is high effort/low discovery |
+| shared/plimit.ts | ~50 | Utility, already unit tested |
+| oracle/oracle-channel.ts | ~100 | Standalone MCP script, not a regular service |
+| cookie-decryptor.ts | ~80 | Low-level crypto, macOS-only, stable |
+| leveldb-reader.ts | ~120 | Binary format reader, macOS-only, stable |
 
 ## Scenario Key
 
@@ -62,3 +57,8 @@ All Tier 2 modules now have adversarial integration tests.
 | PI | Package Installation |
 | SD | Slack Detection |
 | PL | Platform Instructions |
+| CA | Caching |
+| AB | Argument Building |
+| TD | Terminal Detection |
+| RR | Read Rejected Tasks |
+| PE | Post Event |
