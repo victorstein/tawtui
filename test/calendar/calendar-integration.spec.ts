@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return */
-
 // Mock Bun global (tests run under Jest/Node, not Bun runtime)
 const mockSpawn = jest.fn();
 const mockFile = jest.fn();
@@ -72,9 +70,9 @@ describe('CalendarService Integration', () => {
         const service = createService();
 
         // 50ms timeout fires before the 500ms exited promise
-        await expect(
-          (service as any).execGog(['test'], 50),
-        ).rejects.toThrow(/timed out after 50ms/);
+        await expect((service as any).execGog(['test'], 50)).rejects.toThrow(
+          /timed out after 50ms/,
+        );
 
         // Verify kill was called
         expect(killMock).toHaveBeenCalled();

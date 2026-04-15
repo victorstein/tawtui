@@ -201,11 +201,7 @@ describe('DependencyService Integration', () => {
     });
 
     it('DS-PI-3: should return error when pipx install fails', async () => {
-      const spawnMock = TerminalTestHelper.mockSpawn(
-        '',
-        'No such package',
-        1,
-      );
+      const spawnMock = TerminalTestHelper.mockSpawn('', 'No such package', 1);
       (globalThis as Record<string, unknown>).Bun = {
         spawnSync: mockSpawnSync,
         spawn: spawnMock,
