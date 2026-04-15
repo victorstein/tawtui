@@ -182,7 +182,7 @@ export class SlackIngestionService {
               (info) => {
                 onProgress?.({
                   phase: 'detecting',
-                  channelsSoFar: info.matchesSoFar,
+                  channelsSoFar: activeChannelIds.size + info.matchesSoFar,
                   page: info.page,
                 });
               },
