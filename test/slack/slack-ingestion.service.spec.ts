@@ -1596,6 +1596,95 @@ describe('SlackIngestionService', () => {
       expect(content[1].text).toContain('| thread]');
       expect(content[2].text).toContain('| thread]');
     });
+
+    it('should resolve DM channel name to display name', async () => {
+      const dmConv = SlackTestHelper.conversation({
+        id: 'D456',
+        name: 'U456',
+        isDm: true,
+        isPrivate: true,
+      });
+      mockSlack.getConversations.mockResolvedValue([dmConv]);
+      mockSlack.getActiveChannelIds.mockResolvedValue(new Set(['D456']));
+      mockSlack.getMessagesSince.mockResolvedValue([
+        { ts: '1700000200.000000', userId: 'U456', text: 'Review my PR?' },
+      ]);
+      // resolveUserName is called for both the message author and the DM channel name
+      mockSlack.resolveUserName.mockResolvedValue('Victor');
+
+      await service.ingest();
+
+      const stagingDir = (service as any).stagingDir;
+      const files = readdirSync(stagingDir);
+      const content = JSON.parse(
+        readFileSync(join(stagingDir, files[0]), 'utf-8'),
+      );
+      expect(content[0].text).toBe(
+        '[2023-11-14 22:16 | DM:Victor] Victor: Review my PR?',
+      );
+    });
+
+    it('should mark inline thread replies with thread marker in Phase 1', async () => {
+      const conv = SlackTestHelper.conversation({
+        id: 'C1',
+        name: 'dev',
+      });
+      mockSlack.getConversations.mockResolvedValue([conv]);
+      mockSlack.getActiveChannelIds.mockResolvedValue(new Set(['C1']));
+      mockSlack.getMessagesSince.mockResolvedValue([
+        { ts: '1700000100.000000', userId: 'U1', text: 'top level msg' },
+        {
+          ts: '1700000200.000000',
+          userId: 'U2',
+          text: 'a reply',
+          threadTs: '1700000100.000000',
+        },
+      ]);
+      mockSlack.resolveUserName.mockResolvedValue('TestUser');
+
+      await service.ingest();
+
+      const stagingDir = (service as any).stagingDir;
+      const files = readdirSync(stagingDir);
+      const content = JSON.parse(
+        readFileSync(join(stagingDir, files[0]), 'utf-8'),
+      );
+      // Top-level: no thread marker
+      expect(content[0].text).not.toContain('| thread');
+      expect(content[0].text).toContain('| #dev]');
+      // Reply: has thread marker
+      expect(content[1].text).toContain('| thread]');
+      expect(content[1].text).toContain('| #dev');
+    });
+
+    it('should not mark thread parent as reply when threadTs equals ts', async () => {
+      const conv = SlackTestHelper.conversation({
+        id: 'C1',
+        name: 'general',
+      });
+      mockSlack.getConversations.mockResolvedValue([conv]);
+      mockSlack.getActiveChannelIds.mockResolvedValue(new Set(['C1']));
+      // Slack sets threadTs === ts on the parent when it has replies
+      mockSlack.getMessagesSince.mockResolvedValue([
+        {
+          ts: '1700000100.000000',
+          userId: 'U1',
+          text: 'I am a parent',
+          threadTs: '1700000100.000000',
+          replyCount: 3,
+        },
+      ]);
+      mockSlack.resolveUserName.mockResolvedValue('TestUser');
+
+      await service.ingest();
+
+      const stagingDir = (service as any).stagingDir;
+      const files = readdirSync(stagingDir);
+      const content = JSON.parse(
+        readFileSync(join(stagingDir, files[0]), 'utf-8'),
+      );
+      expect(content[0].text).not.toContain('| thread');
+    });
   });
 
   // ----------------------------------------------------------------
