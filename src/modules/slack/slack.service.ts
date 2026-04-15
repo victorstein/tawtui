@@ -475,6 +475,43 @@ export class SlackService {
   }
 
   /**
+   * Find channel IDs where the current user has been @mentioned recently.
+   * Uses search.messages with `to:me` to detect channels with mentions.
+   */
+  async getMentionedChannelIds(
+    afterDate: string,
+    onPage?: (info: { page: number; matchesSoFar: number }) => void,
+    shouldAbort?: () => boolean,
+  ): Promise<Set<string>> {
+    const channelIds = new Set<string>();
+    let page = 1;
+    let totalPages = 1;
+
+    do {
+      if (shouldAbort?.()) return channelIds;
+      const data = await this.slackGet<SlackSearchResponse>('search.messages', {
+        query: `to:me after:${afterDate}`,
+        count: '100',
+        page: String(page),
+      });
+
+      if (!data.ok) {
+        throw new Error(`Slack search.messages error: ${data.error}`);
+      }
+
+      for (const match of data.messages?.matches ?? []) {
+        channelIds.add(match.channel.id);
+      }
+
+      totalPages = data.messages?.paging?.pages ?? 1;
+      onPage?.({ page, matchesSoFar: channelIds.size });
+      page++;
+    } while (page <= totalPages);
+
+    return channelIds;
+  }
+
+  /**
    * Find channels that have new messages since the given date.
    * Uses search.messages to detect activity without fetching full history.
    * Returns a set of channel IDs.

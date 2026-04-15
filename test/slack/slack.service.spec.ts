@@ -1008,6 +1008,123 @@ describe('SlackService', () => {
     });
   });
 
+  // ─── getMentionedChannelIds ──────────────────────────────────────────────
+
+  describe('getMentionedChannelIds', () => {
+    describe('Behavior', () => {
+      it('should return channel IDs from to:me search results', async () => {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          headers: new Headers(),
+          json: async () =>
+            SlackTestHelper.searchResponse(['C111', 'C222'], 1, 1),
+        });
+
+        const result = await service.getMentionedChannelIds('2026-03-15');
+
+        expect(result).toEqual(new Set(['C111', 'C222']));
+        const calledUrl = mockFetch.mock.calls[0][0] as string;
+        expect(calledUrl).toContain('search.messages');
+        expect(calledUrl).toContain('to%3Ame');
+        expect(calledUrl).toContain('after%3A2026-03-15');
+      });
+
+      it('should paginate through all results', async () => {
+        mockFetch
+          .mockResolvedValueOnce({
+            ok: true,
+            status: 200,
+            headers: new Headers(),
+            json: async () =>
+              SlackTestHelper.searchResponse(['C111'], 1, 2),
+          })
+          .mockResolvedValueOnce({
+            ok: true,
+            status: 200,
+            headers: new Headers(),
+            json: async () =>
+              SlackTestHelper.searchResponse(['C222'], 2, 2),
+          });
+
+        const result = await service.getMentionedChannelIds('2026-03-15');
+
+        expect(result).toEqual(new Set(['C111', 'C222']));
+        expect(mockFetch).toHaveBeenCalledTimes(2);
+      });
+
+      it('should fire onPage callback per page with correct { page, matchesSoFar } shape', async () => {
+        mockFetch
+          .mockResolvedValueOnce({
+            ok: true,
+            status: 200,
+            headers: new Headers(),
+            json: async () => SlackTestHelper.searchResponse(['C111'], 1, 2),
+          })
+          .mockResolvedValueOnce({
+            ok: true,
+            status: 200,
+            headers: new Headers(),
+            json: async () => SlackTestHelper.searchResponse(['C222'], 2, 2),
+          });
+
+        const onPage = jest.fn();
+        await service.getMentionedChannelIds('2026-03-15', onPage);
+
+        expect(onPage).toHaveBeenCalledTimes(2);
+        expect(onPage).toHaveBeenNthCalledWith(1, {
+          page: 1,
+          matchesSoFar: 1,
+        });
+        expect(onPage).toHaveBeenNthCalledWith(2, {
+          page: 2,
+          matchesSoFar: 2,
+        });
+      });
+    });
+
+    describe('Error Handling', () => {
+      it('should throw on Slack API error', async () => {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          headers: new Headers(),
+          json: async () => ({ ok: false, error: 'not_authed' }),
+        });
+
+        await expect(
+          service.getMentionedChannelIds('2026-03-15'),
+        ).rejects.toThrow('Slack search.messages error: not_authed');
+      });
+    });
+
+    describe('Edge Cases', () => {
+      it('should return empty set when no mentions found', async () => {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          headers: new Headers(),
+          json: async () => SlackTestHelper.searchResponse([], 1, 1),
+        });
+
+        const result = await service.getMentionedChannelIds('2026-03-15');
+
+        expect(result).toEqual(new Set());
+      });
+
+      it('should abort early when shouldAbort returns true', async () => {
+        const result = await service.getMentionedChannelIds(
+          '2026-03-15',
+          undefined,
+          () => true,
+        );
+
+        expect(result).toEqual(new Set());
+        expect(mockFetch).not.toHaveBeenCalled();
+      });
+    });
+  });
+
   // ─── resolveUserName ──────────────────────────────────────────────────
 
   describe('resolveUserName', () => {
