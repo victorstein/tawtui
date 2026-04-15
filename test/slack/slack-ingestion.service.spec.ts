@@ -1535,6 +1535,67 @@ describe('SlackIngestionService', () => {
       expect(content[0].user).toBe('Alfonso');
       expect(content[0].ts).toBe('1700000200.000000');
     });
+
+    it('should mark replies with thread marker in thread staging files (Phase 2)', async () => {
+      const now = Math.floor(Date.now() / 1000);
+      const parentTs = `${now - 300}.000000`;
+      const reply1Ts = `${now - 250}.000000`;
+      const newReplyTs = `${now - 100}.000000`;
+      const cursorTs = `${now - 200}.000000`;
+
+      const conv = SlackTestHelper.conversation({
+        id: 'C1',
+        name: 'general',
+      });
+      const statePath = (service as any).statePath;
+      const stagingDir = (service as any).stagingDir;
+      mkdirSync(stagingDir, { recursive: true });
+
+      writeFileSync(
+        statePath,
+        JSON.stringify(
+          SlackTestHelper.oracleState({
+            channelCursors: { C1: cursorTs },
+            conversations: [conv],
+            activeChannelIds: ['C1'],
+            channelsCachedAt: new Date().toISOString(),
+            activeChannelsCachedAt: new Date().toISOString(),
+            trackedThreads: {
+              C1: [{ threadTs: parentTs, lastReplyTs: reply1Ts }],
+            },
+          }),
+        ),
+        'utf-8',
+      );
+
+      mockSlack.getMessagesSince.mockResolvedValue([]);
+      mockSlack.getThreadReplies.mockResolvedValue([
+        { ts: reply1Ts, userId: 'U2', text: 'old' },
+        { ts: newReplyTs, userId: 'U3', text: 'new reply' },
+      ]);
+      mockSlack.getFullThread.mockResolvedValue([
+        { ts: parentTs, userId: 'U1', text: 'parent msg' },
+        { ts: reply1Ts, userId: 'U2', text: 'old' },
+        { ts: newReplyTs, userId: 'U3', text: 'new reply' },
+      ]);
+      mockSlack.resolveUserName.mockResolvedValue('TestUser');
+
+      await service.ingest();
+
+      const files = readdirSync(stagingDir);
+      const threadFile = files.find((f) => f.includes('thread-'));
+      expect(threadFile).toBeDefined();
+
+      const content = JSON.parse(
+        readFileSync(join(stagingDir, threadFile!), 'utf-8'),
+      );
+      // Parent (index 0): no thread marker
+      expect(content[0].text).not.toContain('| thread');
+      expect(content[0].text).toContain('| #general]');
+      // Replies (index 1+): thread marker
+      expect(content[1].text).toContain('| thread]');
+      expect(content[2].text).toContain('| thread]');
+    });
   });
 
   // ----------------------------------------------------------------

@@ -532,15 +532,28 @@ export class SlackIngestionService {
                 return;
               }
 
+              const channelLabel = conversation.isDm
+                ? await this.slackService.resolveUserName(conversation.name)
+                : conversation.name;
+
               const slackExport: Array<Record<string, string>> = [];
-              for (const msg of fullThread) {
+              for (let i = 0; i < fullThread.length; i++) {
+                const msg = fullThread[i];
                 const userName = await this.slackService.resolveUserName(
                   msg.userId,
                 );
+                const isReply = i > 0;
                 slackExport.push({
                   type: 'message',
                   user: userName,
-                  text: `${userName}: ${msg.text}`,
+                  text: this.formatMessageText(
+                    userName,
+                    msg.text,
+                    msg.ts,
+                    channelLabel,
+                    conversation.isDm,
+                    isReply,
+                  ),
                   ts: msg.ts,
                 });
               }
