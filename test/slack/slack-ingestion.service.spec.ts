@@ -1508,4 +1508,87 @@ describe('SlackIngestionService', () => {
       });
     });
   });
+
+  // ----------------------------------------------------------------
+  // Cursor Pruning
+  // ----------------------------------------------------------------
+  describe('Cursor Pruning', () => {
+    describe('Behavior', () => {
+      it('should remove cursors for channels not in active set after sync', async () => {
+        const activeChannel = SlackTestHelper.conversation({
+          id: 'C-ACTIVE',
+          name: 'active',
+        });
+        const staleChannel = SlackTestHelper.conversation({
+          id: 'C-STALE',
+          name: 'stale',
+        });
+
+        mockSlack.getConversations.mockResolvedValue([
+          activeChannel,
+          staleChannel,
+        ]);
+        mockSlack.getActiveChannelIds.mockResolvedValue(
+          new Set(['C-ACTIVE']),
+        );
+        mockSlack.getMentionedChannelIds.mockResolvedValue(new Set());
+        mockSlack.getMessagesSince.mockResolvedValue([]);
+
+        // Seed state with cursors for both channels
+        const statePath = (service as any).statePath;
+        writeFileSync(
+          statePath,
+          JSON.stringify({
+            lastChecked: null,
+            channelCursors: {
+              'C-ACTIVE': '1700000000.000000',
+              'C-STALE': '1700000000.000000',
+            },
+            trackedThreads: {
+              'C-ACTIVE': [{ threadTs: '1700000000.000000', lastReplyTs: '1700000000.000000' }],
+              'C-STALE': [{ threadTs: '1700000000.000000', lastReplyTs: '1700000000.000000' }],
+            },
+          }),
+        );
+
+        await (service as any).ingest();
+
+        // Read final state
+        const finalState = JSON.parse(readFileSync(statePath, 'utf-8'));
+        expect(finalState.channelCursors).toHaveProperty('C-ACTIVE');
+        expect(finalState.channelCursors).not.toHaveProperty('C-STALE');
+        expect(finalState.trackedThreads).not.toHaveProperty('C-STALE');
+      });
+
+      it('should preserve self-DM cursor even if not in search results', async () => {
+        const selfDm = SlackTestHelper.conversation({
+          id: 'D-SELF',
+          name: 'U123',
+          isDm: true,
+        });
+
+        mockSlack.getConversations.mockResolvedValue([selfDm]);
+        mockSlack.getActiveChannelIds.mockResolvedValue(new Set());
+        mockSlack.getMentionedChannelIds.mockResolvedValue(new Set());
+        mockSlack.getMessagesSince.mockResolvedValue([]);
+
+        // Set the slackUserId so self-DM detection works
+        (service as any).slackUserId = 'U123';
+
+        const statePath = (service as any).statePath;
+        writeFileSync(
+          statePath,
+          JSON.stringify({
+            lastChecked: null,
+            channelCursors: { 'D-SELF': '1700000000.000000' },
+          }),
+        );
+
+        await (service as any).ingest();
+
+        const finalState = JSON.parse(readFileSync(statePath, 'utf-8'));
+        expect(finalState.channelCursors).toHaveProperty('D-SELF');
+      });
+    });
+  });
 });

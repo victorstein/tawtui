@@ -556,6 +556,16 @@ export class SlackIngestionService {
 
       await Promise.allSettled(phase2Tasks);
 
+      // Prune cursors and tracked threads for channels no longer active
+      for (const channelId of Object.keys(state.channelCursors)) {
+        if (!activeChannelIds.has(channelId)) {
+          delete state.channelCursors[channelId];
+          if (state.trackedThreads?.[channelId]) {
+            delete state.trackedThreads[channelId];
+          }
+        }
+      }
+
       // Save state after Phase 2 completes
       this.saveState(state);
 
