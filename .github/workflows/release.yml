@@ -27,7 +27,7 @@ jobs:
         run: |
           bun run lint
           bun run test -- --passWithNoTests
-          bun run format -- --check --no-error-on-unmatched-pattern
+          bun run format:check
 
       - name: Build binary
         run: |
