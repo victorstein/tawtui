@@ -99,6 +99,15 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
   /** Persistent mapping of PR key (owner/repo#number) to Taskwarrior task UUID. */
   private readonly prTaskMap = new Map<string, string>();
 
+  /** Mutex: in-flight Oracle session creation promise (coalesces concurrent calls). */
+  private oracleCreationPromise: Promise<{ sessionId: string }> | null = null;
+
+  /** Mutex: in-flight PR review session creation promises keyed by owner/repo#number. */
+  private readonly prReviewCreationPromises = new Map<
+    string,
+    Promise<{ sessionId: string }>
+  >();
+
   private readonly sessionsDir = join(homedir(), '.config', 'tawtui');
   private readonly sessionsPath = join(this.sessionsDir, 'sessions.json');
   private readonly prTaskMapPath = join(this.sessionsDir, 'pr-tasks.json');
@@ -534,6 +543,44 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
     prReviewComments?: PrReviewComment[],
     projectAgentConfig?: ProjectAgentConfig,
   ): Promise<{ sessionId: string }> {
+    const prKey = `${repoOwner}/${repoName}#${prNumber}`;
+
+    // Coalesce concurrent calls for the same PR
+    const inflight = this.prReviewCreationPromises.get(prKey);
+    if (inflight) {
+      this.logger.log(
+        `Coalescing concurrent createPrReviewSession call for ${prKey}`,
+      );
+      return inflight;
+    }
+
+    const creationPromise = this.doCreatePrReviewSession(
+      prNumber,
+      repoOwner,
+      repoName,
+      prTitle,
+      prDetail,
+      prDiff,
+      prReviewComments,
+      projectAgentConfig,
+    ).finally(() => {
+      this.prReviewCreationPromises.delete(prKey);
+    });
+
+    this.prReviewCreationPromises.set(prKey, creationPromise);
+    return creationPromise;
+  }
+
+  private async doCreatePrReviewSession(
+    prNumber: number,
+    repoOwner: string,
+    repoName: string,
+    prTitle: string,
+    prDetail?: PullRequestDetail,
+    prDiff?: PrDiff,
+    prReviewComments?: PrReviewComment[],
+    projectAgentConfig?: ProjectAgentConfig,
+  ): Promise<{ sessionId: string }> {
     // Look up (or create) the Taskwarrior task via persistent PR-to-task map
     const prKey = `${repoOwner}/${repoName}#${prNumber}`;
 
@@ -832,6 +879,20 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
    * Slack-monitoring prompt). Returns the new session ID.
    */
   async createOracleSession(): Promise<{ sessionId: string }> {
+    // Coalesce concurrent calls
+    if (this.oracleCreationPromise) {
+      this.logger.log('Coalescing concurrent createOracleSession call');
+      return this.oracleCreationPromise;
+    }
+
+    this.oracleCreationPromise = this.doCreateOracleSession().finally(() => {
+      this.oracleCreationPromise = null;
+    });
+
+    return this.oracleCreationPromise;
+  }
+
+  private async doCreateOracleSession(): Promise<{ sessionId: string }> {
     const existingSession = Array.from(this.sessions.values()).find(
       (s) => s.isOracleSession && s.status === 'running',
     );

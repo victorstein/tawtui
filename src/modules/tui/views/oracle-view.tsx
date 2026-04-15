@@ -576,8 +576,8 @@ export function OracleView(props: OracleViewProps) {
       return;
     }
 
-    // [i] Enter interactive mode
-    if (key.name === 'i') {
+    // [Enter] Enter interactive mode
+    if (key.name === 'return') {
       if (oracleSessionId()) {
         setInteractive(true);
       }
@@ -755,7 +755,7 @@ export function OracleView(props: OracleViewProps) {
             <Show when={!interactive()}>
               <box height={1} width="100%" paddingX={1} flexDirection="row">
                 <text fg={ACCENT_PRIMARY} attributes={1}>
-                  {'[i]'}
+                  {'[Enter]'}
                 </text>
                 <text fg={FG_DIM}>{' Interactive'}</text>
                 <text>{'  '}</text>

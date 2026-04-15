@@ -399,9 +399,9 @@ describe('TerminalService Integration', () => {
         const { service } = createService();
 
         // When/Then: sendInput rejects with Session not found
-        await expect(
-          service.sendInput('nonexistent', 'test'),
-        ).rejects.toThrow(/Session not found/);
+        await expect(service.sendInput('nonexistent', 'test')).rejects.toThrow(
+          /Session not found/,
+        );
       });
     });
   });
@@ -491,9 +491,7 @@ describe('TerminalService Integration', () => {
         mockSpawn.mockImplementation(() => ({
           stdout: new ReadableStream({
             start(controller: ReadableStreamDefaultController) {
-              controller.enqueue(
-                new TextEncoder().encode('same content\n'),
-              );
+              controller.enqueue(new TextEncoder().encode('same content\n'));
               controller.close();
             },
           }),
@@ -689,6 +687,251 @@ describe('TerminalService Integration', () => {
 
         // Then: no spawn calls were made (early return)
         expect(mockSpawn).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  // ================================================================
+  // Concurrency
+  // ================================================================
+  describe('Concurrency', () => {
+    describe('TS-CC-1: Concurrent oracle session creation coalesces', () => {
+      it('should return the same session ID when createOracleSession is called concurrently', async () => {
+        // Given: mockSpawn returns fresh streams per call (needed for concurrent consumption)
+        let spawnCallCount = 0;
+        mockSpawn.mockImplementation(() => {
+          spawnCallCount++;
+          // Each call in the sequence returns appropriate data
+          const responses: Array<[string, string, number]> = [
+            ['tmux 3.4', '', 0], // isTmuxInstalled
+            ['', '', 0], // new-session
+            ['', '', 0], // set-option
+            ['%0', '', 0], // list-panes
+            ['', '', 0], // send-keys (oracle command)
+          ];
+          const idx = Math.min(spawnCallCount - 1, responses.length - 1);
+          const [stdout, stderr, exitCode] = responses[idx];
+          return {
+            stdout: new ReadableStream({
+              start(controller: ReadableStreamDefaultController) {
+                controller.enqueue(new TextEncoder().encode(stdout));
+                controller.close();
+              },
+            }),
+            stderr: new ReadableStream({
+              start(controller: ReadableStreamDefaultController) {
+                controller.enqueue(new TextEncoder().encode(stderr));
+                controller.close();
+              },
+            }),
+            exited: Promise.resolve(exitCode),
+          };
+        });
+
+        const { service } = createService();
+
+        // When: two concurrent calls without awaiting the first
+        const [result1, result2] = await Promise.all([
+          service.createOracleSession(),
+          service.createOracleSession(),
+        ]);
+
+        // Then: both resolve to the same session ID
+        expect(result1.sessionId).toBe(result2.sessionId);
+
+        // And: only one tmux session was created (5 spawn calls for one session, not 10)
+        expect(spawnCallCount).toBeLessThanOrEqual(5);
+      });
+    });
+
+    describe('TS-CC-2: Concurrent PR review session creation coalesces', () => {
+      it('should return the same session ID when createPrReviewSession is called concurrently for the same PR', async () => {
+        // Given: mocks for taskwarrior and worktree dependencies
+        const mocks = createMocks();
+        mocks.taskwarriorService.getTask = jest.fn().mockReturnValue(null);
+        mocks.taskwarriorService.createTask = jest.fn().mockReturnValue({
+          uuid: 'task-uuid-1',
+          description: 'Review PR #123',
+        });
+        mocks.taskwarriorService.startTask = jest.fn();
+        mocks.worktreeService.createWorktree = jest
+          .fn()
+          .mockResolvedValue({ id: 'wt-1', path: '/tmp/worktrees/repo' });
+        mocks.worktreeService.linkSession = jest.fn();
+
+        let spawnCallCount = 0;
+        mockSpawn.mockImplementation(() => {
+          spawnCallCount++;
+          const responses: Array<[string, string, number]> = [
+            ['tmux 3.4', '', 0], // isTmuxInstalled
+            ['', '', 0], // new-session
+            ['', '', 0], // set-option
+            ['%0', '', 0], // list-panes
+            ['', '', 0], // send-keys
+          ];
+          const idx = Math.min(spawnCallCount - 1, responses.length - 1);
+          const [stdout, stderr, exitCode] = responses[idx];
+          return {
+            stdout: new ReadableStream({
+              start(controller: ReadableStreamDefaultController) {
+                controller.enqueue(new TextEncoder().encode(stdout));
+                controller.close();
+              },
+            }),
+            stderr: new ReadableStream({
+              start(controller: ReadableStreamDefaultController) {
+                controller.enqueue(new TextEncoder().encode(stderr));
+                controller.close();
+              },
+            }),
+            exited: Promise.resolve(exitCode),
+          };
+        });
+
+        const { service } = createService(mocks);
+
+        // When: two concurrent calls for the same PR without awaiting the first
+        const [result1, result2] = await Promise.all([
+          service.createPrReviewSession(123, 'owner', 'repo', 'Fix bug'),
+          service.createPrReviewSession(123, 'owner', 'repo', 'Fix bug'),
+        ]);
+
+        // Then: both resolve to the same session ID
+        expect(result1.sessionId).toBe(result2.sessionId);
+
+        // And: only one tmux session was created
+        expect(spawnCallCount).toBeLessThanOrEqual(5);
+
+        // And: only one worktree was created
+        expect(mocks.worktreeService.createWorktree).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe('TS-CC-3: Oracle mutex clears after completion', () => {
+      it('should allow new oracle session after previous creation completes', async () => {
+        // Given: use Date.now mock to ensure distinct session IDs
+        const realDateNow = Date.now;
+        let tick = 2000000000000;
+        Date.now = () => tick++;
+
+        try {
+          // Given: mock for first oracle session creation
+          mockSpawnSequence([
+            ['tmux 3.4', '', 0], // isTmuxInstalled
+            ['', '', 0], // new-session
+            ['', '', 0], // set-option
+            ['%0', '', 0], // list-panes
+            ['', '', 0], // send-keys
+          ]);
+
+          const { service } = createService();
+
+          // When: create first oracle session and await it
+          const first = await service.createOracleSession();
+
+          // And: mark first session as done
+          service.updateSessionStatus(first.sessionId, 'done');
+
+          // And: set up mocks for second session creation
+          mockSpawn.mockClear();
+          mockBunWrite.mockClear();
+          mockSpawnSequence([
+            ['tmux 3.4', '', 0],
+            ['', '', 0],
+            ['', '', 0],
+            ['%1', '', 0],
+            ['', '', 0],
+          ]);
+
+          // When: create another oracle session
+          const second = await service.createOracleSession();
+
+          // Then: a new session is created with a different ID
+          expect(second.sessionId).not.toBe(first.sessionId);
+
+          // And: tmux calls were made for the new session
+          expect(mockSpawn).toHaveBeenCalled();
+        } finally {
+          Date.now = realDateNow;
+        }
+      });
+    });
+
+    describe('TS-CC-4: Different PRs create separate sessions concurrently', () => {
+      it('should allow separate PR review sessions for different PRs concurrently', async () => {
+        // Given: mocks for taskwarrior and worktree dependencies
+        const mocks = createMocks();
+        let taskCounter = 0;
+        mocks.taskwarriorService.getTask = jest.fn().mockReturnValue(null);
+        mocks.taskwarriorService.createTask = jest
+          .fn()
+          .mockImplementation(() => {
+            taskCounter++;
+            return {
+              uuid: `task-uuid-${taskCounter}`,
+              description: `Review PR`,
+            };
+          });
+        mocks.taskwarriorService.startTask = jest.fn();
+        mocks.worktreeService.linkSession = jest.fn();
+
+        let worktreeCounter = 0;
+        mocks.worktreeService.createWorktree = jest
+          .fn()
+          .mockImplementation(() => {
+            worktreeCounter++;
+            return Promise.resolve({
+              id: `wt-${worktreeCounter}`,
+              path: `/tmp/worktrees/repo-${worktreeCounter}`,
+            });
+          });
+
+        // Given: mockSpawn creates fresh streams for each call (concurrent consumption)
+        mockSpawn.mockImplementation(() => {
+          return {
+            stdout: new ReadableStream({
+              start(controller: ReadableStreamDefaultController) {
+                controller.enqueue(new TextEncoder().encode(''));
+                controller.close();
+              },
+            }),
+            stderr: new ReadableStream({
+              start(controller: ReadableStreamDefaultController) {
+                controller.enqueue(new TextEncoder().encode(''));
+                controller.close();
+              },
+            }),
+            exited: Promise.resolve(0),
+          };
+        });
+
+        // Use Date.now mock to ensure distinct session IDs
+        const realDateNow = Date.now;
+        let tick = 3000000000000;
+        Date.now = () => tick++;
+
+        try {
+          const { service } = createService(mocks);
+
+          // When: two concurrent calls for different PRs
+          const [result1, result2] = await Promise.all([
+            service.createPrReviewSession(1, 'owner', 'repo', 'PR one'),
+            service.createPrReviewSession(2, 'owner', 'repo', 'PR two'),
+          ]);
+
+          // Then: both succeed with different session IDs
+          expect(result1.sessionId).toBeDefined();
+          expect(result2.sessionId).toBeDefined();
+          expect(result1.sessionId).not.toBe(result2.sessionId);
+
+          // And: two separate worktrees were created
+          expect(mocks.worktreeService.createWorktree).toHaveBeenCalledTimes(2);
+
+          // And: two separate tasks were created
+          expect(mocks.taskwarriorService.createTask).toHaveBeenCalledTimes(2);
+        } finally {
+          Date.now = realDateNow;
+        }
       });
     });
   });
