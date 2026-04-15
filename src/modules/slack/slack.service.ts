@@ -518,8 +518,8 @@ export class SlackService {
    */
   async getChangedChannelIds(
     afterDate: string,
-    shouldAbort?: () => boolean,
     onPage?: (info: { page: number; matchesSoFar: number }) => void,
+    shouldAbort?: () => boolean,
   ): Promise<Set<string>> {
     const channelIds = new Set<string>();
     let page = 1;

@@ -242,7 +242,6 @@ export class SlackIngestionService {
           try {
             changedChannelIds = await this.slackService.getChangedChannelIds(
               searchDate,
-              () => this._generation !== gen,
               (info) => {
                 onProgress?.({
                   phase: 'prefilter',
@@ -250,6 +249,7 @@ export class SlackIngestionService {
                   page: info.page,
                 });
               },
+              () => this._generation !== gen,
             );
             if (this._generation !== gen)
               return { messagesStored: 0, channelNames: [] };

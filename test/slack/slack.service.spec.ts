@@ -836,7 +836,7 @@ describe('SlackService', () => {
           });
 
         const onPage = jest.fn();
-        await service.getChangedChannelIds('2026-04-11', undefined, onPage);
+        await service.getChangedChannelIds('2026-04-11', onPage);
 
         expect(onPage).toHaveBeenCalledTimes(2);
         expect(onPage).toHaveBeenNthCalledWith(1, {
@@ -907,6 +907,7 @@ describe('SlackService', () => {
 
         const result = await service.getChangedChannelIds(
           '2026-04-11',
+          undefined,
           shouldAbort,
         );
 
