@@ -282,9 +282,7 @@ describe('SlackIngestionService Integration', () => {
 
     // RC-3: Abort during rate-limit sleep
     describe('RC-3: Abort during rate-limit sleep', () => {
-      it(
-        'should abort quickly during rate-limit sleep and not corrupt state',
-        async () => {
+      it('should abort quickly during rate-limit sleep and not corrupt state', async () => {
         // Given: fetch returns 429 with Retry-After: 10 seconds
         let waitDetected = false;
         const rateLimitRoutes = {
@@ -362,9 +360,7 @@ describe('SlackIngestionService Integration', () => {
           const stateRaw = readFileSync(stack.statePath, 'utf-8');
           expect(() => JSON.parse(stateRaw)).not.toThrow();
         }
-      },
-        15000,
-      );
+      }, 15000);
     });
 
     // RC-4: resetState during active ingestion
@@ -585,9 +581,7 @@ describe('SlackIngestionService Integration', () => {
   describe('State Machine Violations', () => {
     // SM-1: Oracle session gating via onFirstIngestComplete
     describe('SM-1: Oracle session gating via onFirstIngestComplete', () => {
-      it(
-        'should fire onFirstIngestComplete callback after first successful safeIngest',
-        async () => {
+      it('should fire onFirstIngestComplete callback after first successful safeIngest', async () => {
         // Given: a fresh stack with hasCompletedSync = false
         global.fetch = createRoutedFetch(standardRoutes()) as any;
         stack = IntegrationHelper.createSlackStack();
@@ -627,16 +621,12 @@ describe('SlackIngestionService Integration', () => {
         expect(stack.ingestionService.onFirstIngestComplete).toBeNull();
         // Original callback was not called again
         expect(callback).toHaveBeenCalledTimes(1);
-      },
-        30000,
-      );
+      }, 30000);
     });
 
     // SM-2: onFirstIngestComplete lifecycle after reset
     describe('SM-2: onFirstIngestComplete lifecycle after reset', () => {
-      it(
-        'should allow re-registering onFirstIngestComplete after resetState',
-        async () => {
+      it('should allow re-registering onFirstIngestComplete after resetState', async () => {
         // Given: a stack that completes a first ingest
         global.fetch = createRoutedFetch(standardRoutes()) as any;
         stack = IntegrationHelper.createSlackStack();
@@ -663,9 +653,7 @@ describe('SlackIngestionService Integration', () => {
         expect(stack.ingestionService.onFirstIngestComplete).toBeNull();
         // First callback was not called again
         expect(firstCallback).toHaveBeenCalledTimes(1);
-      },
-        30000,
-      );
+      }, 30000);
     });
 
     // SM-3: Double startPolling

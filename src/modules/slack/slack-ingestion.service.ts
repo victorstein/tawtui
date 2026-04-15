@@ -221,8 +221,8 @@ export class SlackIngestionService {
       }
 
       // Filter: channels the user is active in (posted or @mentioned)
-      const filteredConversations = conversations.filter(
-        (c) => activeChannelIds.has(c.id),
+      const filteredConversations = conversations.filter((c) =>
+        activeChannelIds.has(c.id),
       );
 
       // Pre-filter: detect which channels have new messages via search

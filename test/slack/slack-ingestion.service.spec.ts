@@ -326,9 +326,7 @@ describe('SlackIngestionService', () => {
           activeChannel,
           inactiveChannel,
         ]);
-        mockSlack.getActiveChannelIds.mockResolvedValue(
-          new Set(['C-ACTIVE']),
-        );
+        mockSlack.getActiveChannelIds.mockResolvedValue(new Set(['C-ACTIVE']));
         mockSlack.getMentionedChannelIds.mockResolvedValue(
           new Set(['C-MENTIONED']),
         );
@@ -361,9 +359,7 @@ describe('SlackIngestionService', () => {
           activeChannel,
           staleChannel,
         ]);
-        mockSlack.getActiveChannelIds.mockResolvedValue(
-          new Set(['C-ACTIVE']),
-        );
+        mockSlack.getActiveChannelIds.mockResolvedValue(new Set(['C-ACTIVE']));
         mockSlack.getMentionedChannelIds.mockResolvedValue(new Set());
 
         // Seed state with a cursor for the stale channel
@@ -1528,9 +1524,7 @@ describe('SlackIngestionService', () => {
           activeChannel,
           staleChannel,
         ]);
-        mockSlack.getActiveChannelIds.mockResolvedValue(
-          new Set(['C-ACTIVE']),
-        );
+        mockSlack.getActiveChannelIds.mockResolvedValue(new Set(['C-ACTIVE']));
         mockSlack.getMentionedChannelIds.mockResolvedValue(new Set());
         mockSlack.getMessagesSince.mockResolvedValue([]);
 
@@ -1545,8 +1539,18 @@ describe('SlackIngestionService', () => {
               'C-STALE': '1700000000.000000',
             },
             trackedThreads: {
-              'C-ACTIVE': [{ threadTs: '1700000000.000000', lastReplyTs: '1700000000.000000' }],
-              'C-STALE': [{ threadTs: '1700000000.000000', lastReplyTs: '1700000000.000000' }],
+              'C-ACTIVE': [
+                {
+                  threadTs: '1700000000.000000',
+                  lastReplyTs: '1700000000.000000',
+                },
+              ],
+              'C-STALE': [
+                {
+                  threadTs: '1700000000.000000',
+                  lastReplyTs: '1700000000.000000',
+                },
+              ],
             },
           }),
         );

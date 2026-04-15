@@ -1036,15 +1036,13 @@ describe('SlackService', () => {
             ok: true,
             status: 200,
             headers: new Headers(),
-            json: async () =>
-              SlackTestHelper.searchResponse(['C111'], 1, 2),
+            json: async () => SlackTestHelper.searchResponse(['C111'], 1, 2),
           })
           .mockResolvedValueOnce({
             ok: true,
             status: 200,
             headers: new Headers(),
-            json: async () =>
-              SlackTestHelper.searchResponse(['C222'], 2, 2),
+            json: async () => SlackTestHelper.searchResponse(['C222'], 2, 2),
           });
 
         const result = await service.getMentionedChannelIds('2026-03-15');
