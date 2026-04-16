@@ -145,6 +145,17 @@ export function OracleView(props: OracleViewProps) {
       if (result.changed || capture() === null) {
         setCapture(result);
       }
+      // Detect pane death — the process inside the tmux pane has exited
+      const session = ts.listSessions().find((s) => s.id === sessionId);
+      if (session?.status === 'done') {
+        setOracleSessionId(null);
+        setCapture(null);
+        // Auto-restart with cooldown to prevent rapid cycling on repeated crashes
+        if (Date.now() - lastAutoRestartAt >= AUTO_RESTART_COOLDOWN_MS) {
+          lastAutoRestartAt = Date.now();
+          await startOracleSession();
+        }
+      }
     } catch {
       // Session may have been destroyed
       setOracleSessionId(null);
@@ -176,6 +187,8 @@ export function OracleView(props: OracleViewProps) {
 
   let pollVersion = 0;
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
+  let lastAutoRestartAt = 0;
+  const AUTO_RESTART_COOLDOWN_MS = 30_000;
 
   function getPollInterval(): number {
     if (!oracleSessionId()) return 2000;
@@ -305,6 +318,7 @@ export function OracleView(props: OracleViewProps) {
     try {
       const result = await createSession();
       setOracleSessionId(result.sessionId);
+      startIngestionIfNeeded();
     } catch {
       showError('Failed to start Oracle session');
     }
