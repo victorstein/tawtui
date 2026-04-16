@@ -8,8 +8,9 @@ import type { OracleState, SlackConversation } from './slack.types';
 import { OracleEventService } from '../oracle/oracle-event.service';
 import { pLimit } from '../../shared/plimit';
 
-const INITIAL_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-const INITIAL_LOOKBACK_S = 30 * 24 * 60 * 60; // 30 days in seconds
+const INITIAL_LOOKBACK_MS = 15 * 24 * 60 * 60 * 1000; // 15 days
+const INITIAL_LOOKBACK_S = 15 * 24 * 60 * 60; // 15 days in seconds
+const THREAD_RESCAN_WINDOW_MS = 48 * 60 * 60 * 1000; // 48h window to catch messages that gained threads after initial fetch
 
 @Injectable()
 export class SlackIngestionService {
@@ -342,6 +343,68 @@ export class SlackIngestionService {
             return;
           }
 
+          // Update trackedThreads from freshly-fetched messages
+          if (!state.trackedThreads) state.trackedThreads = {};
+          if (!state.trackedThreads[conversation.id])
+            state.trackedThreads[conversation.id] = [];
+          const channelThreads = state.trackedThreads[conversation.id];
+          for (const msg of rawMessages) {
+            if (msg.replyCount && msg.replyCount > 0) {
+              const replies = rawMessages.filter((m) => m.threadTs === msg.ts);
+              const lastReply =
+                replies.length > 0 ? replies[replies.length - 1] : undefined;
+              const existing = channelThreads.find(
+                (t) => t.threadTs === msg.ts,
+              );
+              if (existing) {
+                if (lastReply && lastReply.ts > existing.lastReplyTs) {
+                  existing.lastReplyTs = lastReply.ts;
+                }
+              } else {
+                channelThreads.push({
+                  threadTs: msg.ts,
+                  lastReplyTs: lastReply?.ts ?? msg.ts,
+                });
+              }
+            }
+          }
+
+          // Thread discovery rescan: re-fetch the last 48h to catch messages
+          // that had replyCount=0 when first synced but have since gained replies.
+          // Only runs for previously-synced channels (cursor exists).
+          if (state.channelCursors[conversation.id]) {
+            const rescanCursor = String(
+              (Date.now() - THREAD_RESCAN_WINDOW_MS) / 1000,
+            );
+            let rescanMessages: typeof rawMessages;
+            if (parseFloat(cursor) <= parseFloat(rescanCursor)) {
+              // Phase 1 fetch already covers this window — reuse rawMessages
+              rescanMessages = rawMessages.filter(
+                (m) => parseFloat(m.ts) >= parseFloat(rescanCursor),
+              );
+            } else {
+              // Cursor is within 48h — fetch the gap between rescan start and cursor
+              try {
+                rescanMessages = await this.slackService.getMessagesSince(
+                  conversation.id,
+                  rescanCursor,
+                );
+              } catch {
+                rescanMessages = [];
+              }
+            }
+            for (const msg of rescanMessages) {
+              if (!msg.replyCount || msg.replyCount === 0) continue;
+              if (msg.threadTs && msg.threadTs !== msg.ts) continue;
+              if (!channelThreads.some((t) => t.threadTs === msg.ts)) {
+                channelThreads.push({
+                  threadTs: msg.ts,
+                  lastReplyTs: msg.ts,
+                });
+              }
+            }
+          }
+
           if (rawMessages.length === 0) return;
 
           const channelLabel = conversation.isDm
@@ -397,31 +460,6 @@ export class SlackIngestionService {
           const lastTs =
             lastTopLevel?.ts ?? rawMessages[rawMessages.length - 1].ts;
           state.channelCursors[conversation.id] = lastTs;
-
-          if (!state.trackedThreads) state.trackedThreads = {};
-          if (!state.trackedThreads[conversation.id])
-            state.trackedThreads[conversation.id] = [];
-          const channelThreads = state.trackedThreads[conversation.id];
-          for (const msg of rawMessages) {
-            if (msg.replyCount && msg.replyCount > 0) {
-              const replies = rawMessages.filter((m) => m.threadTs === msg.ts);
-              const lastReply =
-                replies.length > 0 ? replies[replies.length - 1] : undefined;
-              const existing = channelThreads.find(
-                (t) => t.threadTs === msg.ts,
-              );
-              if (existing) {
-                if (lastReply && lastReply.ts > existing.lastReplyTs) {
-                  existing.lastReplyTs = lastReply.ts;
-                }
-              } else {
-                channelThreads.push({
-                  threadTs: msg.ts,
-                  lastReplyTs: lastReply?.ts ?? msg.ts,
-                });
-              }
-            }
-          }
         }),
       );
 
