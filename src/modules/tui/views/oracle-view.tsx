@@ -498,6 +498,9 @@ export function OracleView(props: OracleViewProps) {
 
     // Interactive mode: Ctrl+\ exits, all other keys forwarded to tmux
     if (interactive()) {
+      // Prevent scrollbox renderable from also handling these keys
+      key.preventDefault();
+
       if (key.sequence === '\x1c') {
         setInteractive(false);
         return;
