@@ -76,7 +76,7 @@ function AppContent() {
   });
 
   // Oracle alert detection — poll oracle session capture for [ORACLE ALERT]
-  let lastOracleAlertHash = '';
+  let lastCheckedLength = 0;
   let alertSeeded = false;
 
   onMount(() => {
@@ -95,21 +95,24 @@ function AppContent() {
         .then((capture) => {
           if (!capture.content) return;
 
-          // Check if content contains [ORACLE ALERT] that we haven't seen
-          const alertIdx = capture.content.lastIndexOf('[ORACLE ALERT]');
-          if (alertIdx === -1) return;
-
-          const alertHash = `${alertIdx}-${capture.content.length}`;
-
           // Seed on first capture so stale alerts from previous sessions are ignored
           if (!alertSeeded) {
             alertSeeded = true;
-            lastOracleAlertHash = alertHash;
+            lastCheckedLength = capture.content.length;
             return;
           }
 
-          if (alertHash === lastOracleAlertHash) return;
-          lastOracleAlertHash = alertHash;
+          // Terminal buffer was reset or hasn't grown — update baseline, skip
+          if (capture.content.length <= lastCheckedLength) {
+            lastCheckedLength = capture.content.length;
+            return;
+          }
+
+          // Only inspect content added since last check
+          const newContent = capture.content.slice(lastCheckedLength);
+          lastCheckedLength = capture.content.length;
+
+          if (!newContent.includes('[ORACLE ALERT]')) return;
 
           // On Oracle tab: user sees it live, no notification needed
           if (activeTab() === 3) return;
