@@ -74,6 +74,10 @@ interface ReviewsViewProps {
   onHintContextChange?: (ctx: ReviewsHintContext) => void;
 }
 
+// Module-level cache — survives tab switches (component unmounts on tab change)
+const prCache = new Map<string, PullRequest[]>();
+const prCacheKey = (owner: string, repo: string) => `${owner}/${repo}`;
+
 // ------------------------------------------------------------------
 // Component
 // ------------------------------------------------------------------
@@ -204,6 +208,14 @@ export default function ReviewsView(props: ReviewsViewProps) {
     }
   }
 
+  function applyPrList(cacheKey: string, prList: PullRequest[]): void {
+    prCache.set(cacheKey, prList);
+    setPrs(prList);
+    if (prIndex() >= prList.length) {
+      setPrIndex(Math.max(prList.length - 1, 0));
+    }
+  }
+
   async function loadPRs(): Promise<void> {
     const sel = selectedItem();
     if (sel.kind !== 'repo') {
@@ -219,26 +231,39 @@ export default function ReviewsView(props: ReviewsViewProps) {
     }
 
     const repo = sel.repo;
+    const cacheKey = prCacheKey(repo.owner, repo.repo);
+    const cached = prCache.get(cacheKey);
+
     const version = ++prLoadVersion;
-    setPrLoading(true);
     setPrError(null);
-    setPrs([]);
     setPrIndex(0);
 
-    try {
-      const prList = await gh.listPRs(repo.owner, repo.repo);
-      if (version !== prLoadVersion) return;
-      setPrs(prList);
-      if (prIndex() >= prList.length) {
-        setPrIndex(Math.max(prList.length - 1, 0));
+    if (cached !== undefined) {
+      setPrs(cached);
+
+      try {
+        const prList = await gh.listPRs(repo.owner, repo.repo);
+        if (version !== prLoadVersion) return;
+        applyPrList(cacheKey, prList);
+      } catch {
+        // Background refresh failed — keep showing cached data, suppress error
       }
-    } catch (err) {
-      if (version !== prLoadVersion) return;
-      setPrError(err instanceof Error ? err.message : 'Failed to load PRs');
+    } else {
+      setPrLoading(true);
       setPrs([]);
-    } finally {
-      if (version === prLoadVersion) {
-        setPrLoading(false);
+
+      try {
+        const prList = await gh.listPRs(repo.owner, repo.repo);
+        if (version !== prLoadVersion) return;
+        applyPrList(cacheKey, prList);
+      } catch (err) {
+        if (version !== prLoadVersion) return;
+        setPrError(err instanceof Error ? err.message : 'Failed to load PRs');
+        setPrs([]);
+      } finally {
+        if (version === prLoadVersion) {
+          setPrLoading(false);
+        }
       }
     }
   }
@@ -388,6 +413,7 @@ export default function ReviewsView(props: ReviewsViewProps) {
     on(
       () => props.refreshTrigger?.(),
       () => {
+        prCache.clear();
         loadRepos();
         loadAgents();
       },
@@ -445,6 +471,7 @@ export default function ReviewsView(props: ReviewsViewProps) {
           message={`Remove ${repo.owner}/${repo.repo} from your repos?`}
           onConfirm={() => {
             dialog.close();
+            prCache.delete(prCacheKey(repo.owner, repo.repo));
             config.removeRepo(repo.owner, repo.repo);
             loadRepos();
           }}
@@ -777,7 +804,7 @@ export default function ReviewsView(props: ReviewsViewProps) {
         const ts = getTerminalService();
         const sel = selectedItem();
         if (ts && sel.kind === 'agent') {
-          ts.sendInput(sel.agent.id, 'escape').catch(() => {});
+          ts.sendInput(sel.agent.id, 'escape').catch(() => { });
         }
         return;
       }
@@ -971,6 +998,7 @@ export default function ReviewsView(props: ReviewsViewProps) {
       loadAgents();
       const sel = selectedItem();
       if (sel.kind === 'repo') {
+        prCache.delete(prCacheKey(sel.repo.owner, sel.repo.repo));
         loadPRs();
       } else if (sel.kind === 'agent') {
         void refreshCapture();
