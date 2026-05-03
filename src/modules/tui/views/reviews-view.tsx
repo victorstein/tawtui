@@ -99,6 +99,8 @@ export default function ReviewsView(props: ReviewsViewProps) {
   const [prIndex, setPrIndex] = createSignal(0);
   const [prLoading, setPrLoading] = createSignal(false);
   const [prError, setPrError] = createSignal<string | null>(null);
+  const [prSyncing, setPrSyncing] = createSignal(false);
+  const [prSyncError, setPrSyncError] = createSignal(false);
   let prLoadVersion = 0;
 
   // Agent state
@@ -241,14 +243,21 @@ export default function ReviewsView(props: ReviewsViewProps) {
     if (cached !== undefined) {
       setPrs(cached);
 
+      setPrSyncing(true);
+      setPrSyncError(false);
       try {
         const prList = await gh.listPRs(repo.owner, repo.repo);
         if (version !== prLoadVersion) return;
         applyPrList(cacheKey, prList);
       } catch {
-        // Background refresh failed — keep showing cached data, suppress error
+        if (version !== prLoadVersion) return;
+        setPrSyncError(true);
+      } finally {
+        setPrSyncing(false);
       }
     } else {
+      setPrSyncing(false);
+      setPrSyncError(false);
       setPrLoading(true);
       setPrs([]);
 
@@ -998,6 +1007,7 @@ export default function ReviewsView(props: ReviewsViewProps) {
       loadAgents();
       const sel = selectedItem();
       if (sel.kind === 'repo') {
+        setPrSyncError(false);
         prCache.delete(prCacheKey(sel.repo.owner, sel.repo.repo));
         loadPRs();
       } else if (sel.kind === 'agent') {
@@ -1056,6 +1066,8 @@ export default function ReviewsView(props: ReviewsViewProps) {
               loading={prLoading()}
               error={prError()}
               agents={agents()}
+              syncing={prSyncing()}
+              syncError={prSyncError()}
             />
           </Match>
           <Match when={rightPaneMode() === 'terminal'}>

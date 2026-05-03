@@ -35,6 +35,8 @@ interface PrListProps {
   loading: boolean;
   error: string | null;
   agents?: TerminalSession[];
+  syncing?: boolean;
+  syncError?: boolean;
 }
 
 /**
@@ -191,6 +193,12 @@ export function PrList(props: PrListProps) {
           }}
         </For>
         <text fg={gradEnd()}>{RIGHT_CAP}</text>
+        <Show when={props.syncing}>
+          <text fg={FG_DIM}> {spinnerFrames[spinnerIdx()]}</text>
+        </Show>
+        <Show when={!props.syncing && props.syncError}>
+          <text fg={COLOR_WARNING}> ⚠ sync failed · r to retry</text>
+        </Show>
       </box>
 
       {/* Gradient separator below header */}
