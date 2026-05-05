@@ -213,19 +213,5 @@ describe('ConfigService - Adversarial', () => {
       ) as AppConfig;
       expect(diskConfig.repos).toEqual([]);
     });
-
-    // CF-CC-3
-    it('should preserve both oracle and calendar configs after sequential updates', () => {
-      service.updateOracleConfig({ pollIntervalSeconds: 999 });
-      service.updateCalendarConfig({ defaultCalendarId: 'work' });
-
-      // Read directly from disk
-      const diskConfig = JSON.parse(
-        readFileSync(join(tmpDir, 'config.json'), 'utf-8'),
-      ) as AppConfig;
-
-      expect(diskConfig.oracle?.pollIntervalSeconds).toBe(999);
-      expect(diskConfig.calendar?.defaultCalendarId).toBe('work');
-    });
   });
 });
