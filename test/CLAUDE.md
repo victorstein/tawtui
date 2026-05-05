@@ -36,19 +36,18 @@ Omit a category if a method has no tests for it (e.g., no validation for a gette
 
 ## Helpers
 
-- `SlackTestHelper` — mock Slack API responses, conversations, state objects
 - `TerminalTestHelper` — mock ExecResult, Bun.spawn results
-- `StateHelper` — temp state files, rejected task directories
+- `TaskwarriorTestHelper` — temp taskwarrior data directory + service factory
+- `WorktreeTestHelper` — temp worktree base, mock spawn router, repo/worktree factories
 
 ## Domain Folders
 
-Tests are organized by domain: `test/slack/`, `test/oracle/`, `test/terminal/`, etc.
+Tests are organized by domain: `test/calendar/`, `test/config/`, `test/github/`, `test/notification/`, `test/taskwarrior/`, `test/worktree/`, etc.
 
 ## Running Tests
 
 ```bash
-bun run test                              # All tests
-bun run test -- --testPathPattern=slack    # Domain-specific
-bun run test -- --testPathPattern=oracle
-bun run test -- --testPathPattern=terminal
+bun run test                                    # All tests
+bun run test -- --testPathPattern=worktree      # Domain-specific
+bun run test -- --testPathPattern=notification
 ```
