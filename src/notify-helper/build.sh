@@ -14,14 +14,20 @@ mkdir -p "$BUILD_DIR/Contents/Resources"
 cp "$SCRIPT_DIR/Info.plist" "$BUILD_DIR/Contents/Info.plist"
 cp "$SCRIPT_DIR/AppIcon.icns" "$BUILD_DIR/Contents/Resources/AppIcon.icns"
 
+# Inject version from package.json
+VERSION=$(cd "$PROJECT_ROOT" && bun -e "console.log(require('./package.json').version)")
+plutil -replace CFBundleVersion -string "$VERSION" "$BUILD_DIR/Contents/Info.plist"
+plutil -replace CFBundleShortVersionString -string "$VERSION" "$BUILD_DIR/Contents/Info.plist"
+
 # Compile Swift source
 swiftc "$SCRIPT_DIR/notify.swift" \
   -o "$BUILD_DIR/Contents/MacOS/tawtui-notify" \
+  -target arm64-apple-macos13 \
   -framework Cocoa \
   -framework UserNotifications \
   -O
 
 # Ad-hoc code sign
-codesign --force --sign - "$BUILD_DIR"
+codesign --force --deep --sign - "$BUILD_DIR"
 
 echo "Built: $BUILD_DIR"

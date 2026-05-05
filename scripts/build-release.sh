@@ -8,7 +8,7 @@ echo "==> Running quality gates..."
 cd "$ROOT_DIR"
 bun run lint
 bun run test -- --passWithNoTests
-bun run format -- --check --no-error-on-unmatched-pattern
+bun run format:check
 
 echo ""
 echo "==> Cleaning dist/"
@@ -16,6 +16,10 @@ rm -rf "$DIST_DIR"
 mkdir -p "$DIST_DIR"
 
 bun run "$ROOT_DIR/scripts/compile.ts"
+
+echo ""
+echo "==> Building notification helper..."
+bash "$ROOT_DIR/src/notify-helper/build.sh"
 
 echo ""
 echo "==> Generating checksums..."
