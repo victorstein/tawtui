@@ -96,6 +96,7 @@ export function TerminalOutput(props: TerminalOutputProps) {
           scrollRef = el;
           props.onScrollRef?.(el);
         }}
+        focusable={false}
         flexGrow={1}
         width="100%"
         stickyScroll={true}
