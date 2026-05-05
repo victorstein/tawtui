@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment */
 
 // We need to mock fs at module level so ConfigService's direct imports can be intercepted.
 // By default all mocked functions delegate to the real implementation; individual tests
@@ -16,8 +16,8 @@ const mockWriteFileSync = jest.fn(
 
 jest.mock('fs', () => ({
   ...actualFs,
-  renameSync: (...args: any[]) => mockRenameSync(...args),
-  writeFileSync: (...args: any[]) => mockWriteFileSync(...args),
+  renameSync: mockRenameSync,
+  writeFileSync: mockWriteFileSync,
 }));
 
 import { ConfigService } from '../../src/modules/config.service';

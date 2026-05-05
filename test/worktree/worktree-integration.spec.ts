@@ -1,10 +1,25 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument */
 
 // ---------------------------------------------------------------------------
 // Mock fs at module level so WorktreeService's direct imports get intercepted.
 // Jest hoists jest.mock calls, so we use jest.requireActual inside the factory.
 // Individual mock functions are declared first so tests can override them.
 // ---------------------------------------------------------------------------
+
+import type {
+  ManagedRepo,
+  WorktreeInfo,
+} from '../../src/modules/worktree.types';
+
+/** Exposes WorktreeService private members needed for white-box testing. */
+interface WorktreeServicePrivate {
+  cloneInFlight: Map<string, Promise<ManagedRepo>>;
+  repos: Map<string, ManagedRepo>;
+  worktrees: Map<string, WorktreeInfo>;
+  loadPersistedRepos(): void;
+  loadPersistedWorktrees(): void;
+  detectOrphans(): void;
+}
 
 const mockExistsSync = jest.fn();
 const mockReadFileSync = jest.fn();
@@ -92,7 +107,7 @@ describe('WorktreeService Integration', () => {
       expect(result1.clonePath).toBe(result2.clonePath);
 
       // spawn should have been called with 'repo clone' only once
-      const cloneCalls = mockSpawn.mock.calls.filter((call: any[]) =>
+      const cloneCalls = (mockSpawn.mock.calls as [string[]][]).filter((call) =>
         call[0].join(' ').includes('repo clone'),
       );
       expect(cloneCalls).toHaveLength(1);
@@ -122,7 +137,9 @@ describe('WorktreeService Integration', () => {
       expect(results[1].status).toBe('rejected');
 
       // cloneInFlight should be empty
-      expect((stack.service as any).cloneInFlight.size).toBe(0);
+      expect(
+        (stack.service as unknown as WorktreeServicePrivate).cloneInFlight.size,
+      ).toBe(0);
 
       // Change mock to succeed, retry should trigger a fresh clone
       mockSpawn.mockImplementation((cmd: string[]) => {
@@ -180,9 +197,11 @@ describe('WorktreeService Integration', () => {
 
       actualFs.writeFileSync(stack.reposJsonPath, '', 'utf-8');
 
-      (stack.service as any).loadPersistedRepos();
+      (stack.service as unknown as WorktreeServicePrivate).loadPersistedRepos();
 
-      expect((stack.service as any).repos.size).toBe(0);
+      expect(
+        (stack.service as unknown as WorktreeServicePrivate).repos.size,
+      ).toBe(0);
     });
 
     // WT-BC-2: Truncated worktrees.json
@@ -190,15 +209,15 @@ describe('WorktreeService Integration', () => {
       (globalThis as Record<string, unknown>).Bun = { spawn: jest.fn() };
       stack = WorktreeTestHelper.createStack();
 
-      actualFs.writeFileSync(
-        stack.worktreesJsonPath,
-        '[{"id":"test"',
-        'utf-8',
-      );
+      actualFs.writeFileSync(stack.worktreesJsonPath, '[{"id":"test"', 'utf-8');
 
-      (stack.service as any).loadPersistedWorktrees();
+      (
+        stack.service as unknown as WorktreeServicePrivate
+      ).loadPersistedWorktrees();
 
-      expect((stack.service as any).worktrees.size).toBe(0);
+      expect(
+        (stack.service as unknown as WorktreeServicePrivate).worktrees.size,
+      ).toBe(0);
     });
 
     // WT-BC-3: Invalid date strings in persisted data
@@ -224,22 +243,23 @@ describe('WorktreeService Integration', () => {
         'utf-8',
       );
 
-      (stack.service as any).loadPersistedRepos();
+      const privateService = stack.service as unknown as WorktreeServicePrivate;
+      privateService.loadPersistedRepos();
 
       // Repo should be loaded
-      expect((stack.service as any).repos.size).toBe(1);
+      expect(privateService.repos.size).toBe(1);
 
-      const repo = (stack.service as any).repos.get('o/r');
+      const repo = privateService.repos.get('o/r');
       expect(repo).toBeDefined();
 
       // lastFetchedAt parsed as NaN date
-      expect(repo.lastFetchedAt.getTime()).toBeNaN();
+      expect(repo?.lastFetchedAt?.getTime()).toBeNaN();
 
       // Staleness check: Date.now() - NaN < FETCH_STALE_MS => NaN < 300000 => false
       // So ensureClone should trigger a fetch
       await stack.service.ensureClone('o', 'r');
 
-      const fetchCalls = mockSpawn.mock.calls.filter((call: any[]) =>
+      const fetchCalls = (mockSpawn.mock.calls as [string[]][]).filter((call) =>
         call[0].join(' ').includes('fetch origin'),
       );
       expect(fetchCalls).toHaveLength(1);
@@ -258,11 +278,11 @@ describe('WorktreeService Integration', () => {
 
       // Make writeFileSync throw only for worktrees.json
       mockWriteFileSync.mockImplementation(
-        (path: string, ...args: any[]) => {
-          if (String(path).includes('worktrees.json')) {
+        (...args: Parameters<typeof actualFs.writeFileSync>) => {
+          if (String(args[0]).includes('worktrees.json')) {
             throw new Error('EPERM');
           }
-          return (actualFs.writeFileSync as any)(path, ...args);
+          return actualFs.writeFileSync(...args);
         },
       );
 
@@ -291,9 +311,9 @@ describe('WorktreeService Integration', () => {
 
       stack = WorktreeTestHelper.createStack();
 
-      await expect(
-        stack.service.createWorktree('o', 'r', 1),
-      ).rejects.toThrow('Failed to create worktree');
+      await expect(stack.service.createWorktree('o', 'r', 1)).rejects.toThrow(
+        'Failed to create worktree',
+      );
 
       expect(stack.service.listWorktrees()).toHaveLength(0);
     });
@@ -311,12 +331,7 @@ describe('WorktreeService Integration', () => {
       stack = WorktreeTestHelper.createStack();
 
       // The worktree path where the service will look for the setup script
-      const worktreePath = join(
-        stack.baseDir,
-        'o',
-        'r-worktrees',
-        'pr-1',
-      );
+      const worktreePath = join(stack.baseDir, 'o', 'r-worktrees', 'pr-1');
       actualFs.mkdirSync(worktreePath, { recursive: true });
       actualFs.writeFileSync(
         join(worktreePath, '.worktree-setup.sh'),
@@ -335,9 +350,9 @@ describe('WorktreeService Integration', () => {
       (globalThis as Record<string, unknown>).Bun = { spawn: jest.fn() };
       stack = WorktreeTestHelper.createStack();
 
-      await expect(
-        stack.service.removeWorktree('nonexistent'),
-      ).rejects.toThrow('Worktree not found: nonexistent');
+      await expect(stack.service.removeWorktree('nonexistent')).rejects.toThrow(
+        'Worktree not found: nonexistent',
+      );
     });
 
     // WT-FC-4: Partial cleanup on removeWorktree
@@ -363,7 +378,10 @@ describe('WorktreeService Integration', () => {
         clonePath: '/tmp/test-clone',
         status: 'active',
       });
-      (stack.service as any).worktrees.set(id, info);
+      (stack.service as unknown as WorktreeServicePrivate).worktrees.set(
+        id,
+        info,
+      );
 
       await stack.service.removeWorktree(id);
 
@@ -401,14 +419,13 @@ describe('WorktreeService Integration', () => {
         'utf-8',
       );
 
-      (stack.service as any).loadPersistedWorktrees();
-      (stack.service as any).detectOrphans();
+      const privateService = stack.service as unknown as WorktreeServicePrivate;
+      privateService.loadPersistedWorktrees();
+      privateService.detectOrphans();
 
-      const worktree = (stack.service as any).worktrees.get(
-        'owner/repo#pr-99',
-      );
+      const worktree = privateService.worktrees.get('owner/repo#pr-99');
       expect(worktree).toBeDefined();
-      expect(worktree.status).toBe('orphaned');
+      expect(worktree?.status).toBe('orphaned');
     });
   });
 });

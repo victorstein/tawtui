@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return */
-
 // Mock Bun global (tests run under Jest/Node, not Bun runtime)
 const mockSpawn = jest.fn();
 
@@ -8,7 +6,6 @@ const mockSpawn = jest.fn();
 };
 
 import { NotificationService } from '../../src/modules/notification.service';
-import { TerminalTestHelper } from '../helpers/terminal-test.helper';
 
 // ---------------------------------------------------------------------------
 // Helpers

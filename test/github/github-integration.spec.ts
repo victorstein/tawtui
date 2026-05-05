@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-return */
 
 import { TerminalTestHelper } from '../helpers/terminal-test.helper';
 
@@ -110,9 +110,7 @@ describe('GithubService Integration', () => {
 
     // GH-URL-2: HTTPS with .git suffix
     it('should parse HTTPS URL with .git suffix correctly', () => {
-      const result = service.parseRepoUrl(
-        'https://github.com/owner/repo.git',
-      );
+      const result = service.parseRepoUrl('https://github.com/owner/repo.git');
       expect(result).toEqual({
         owner: 'owner',
         repo: 'repo',
@@ -122,9 +120,7 @@ describe('GithubService Integration', () => {
 
     // GH-URL-3: SSH with ssh:// prefix
     it('should return null for SSH URL with ssh:// prefix format', () => {
-      const result = service.parseRepoUrl(
-        'ssh://git@github.com/owner/repo',
-      );
+      const result = service.parseRepoUrl('ssh://git@github.com/owner/repo');
       expect(result).toBeNull();
     });
 
@@ -170,9 +166,7 @@ describe('GithubService Integration', () => {
       expect(await service.isGhInstalled()).toBe(false);
 
       // getPrReviewComments should gracefully return []
-      expect(
-        await service.getPrReviewComments('owner', 'repo', 1),
-      ).toEqual([]);
+      expect(await service.getPrReviewComments('owner', 'repo', 1)).toEqual([]);
     });
 
     // GH-ERR-2: gh not authenticated
