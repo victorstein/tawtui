@@ -104,6 +104,12 @@ export function ReposView(props: ReposViewProps) {
       const prList = await gh.listPRs(repo.owner, repo.repo);
       // Discard stale response if user switched repos while loading
       if (version !== prLoadVersion) return;
+      prList.sort((a, b) => {
+        const aApproved = a.reviewDecision === 'APPROVED' ? 1 : 0;
+        const bApproved = b.reviewDecision === 'APPROVED' ? 1 : 0;
+        if (aApproved !== bApproved) return aApproved - bApproved;
+        return b.number - a.number;
+      });
       setPrs(prList);
       if (prIndex() >= prList.length) {
         setPrIndex(Math.max(prList.length - 1, 0));

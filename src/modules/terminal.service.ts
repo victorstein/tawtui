@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
+import { homedir, tmpdir } from 'os';
 import { TaskwarriorService } from './taskwarrior.service';
 import { ConfigService } from './config.service';
 import { WorktreeService } from './worktree.service';
@@ -97,6 +97,12 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
 
   /** Persistent mapping of PR key (owner/repo#number) to Taskwarrior task UUID. */
   private readonly prTaskMap = new Map<string, string>();
+
+  /** Mutex: in-flight PR review session creation promises keyed by owner/repo#number. */
+  private readonly prReviewCreationPromises = new Map<
+    string,
+    Promise<{ sessionId: string }>
+  >();
 
   private readonly sessionsDir = join(homedir(), '.config', 'tawtui');
   private readonly sessionsPath = join(this.sessionsDir, 'sessions.json');
@@ -207,20 +213,41 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
         ? paneResult.stdout.trim().split('\n')[0]
         : `${tmuxSessionName}:0.0`;
 
-    // If an initial command was provided, send it to the session.
+    // For long commands (e.g. multi-line review prompts), write to a temp
+    // script to avoid tmux pty buffer limits and shell quoting issues.
     if (opts.command) {
-      const sendResult = await this.execTmux([
-        'send-keys',
-        '-t',
-        tmuxSessionName,
-        opts.command,
-        'Enter',
-      ]);
+      const isLong = opts.command.length > 2048;
 
-      if (sendResult.exitCode !== 0) {
-        this.logger.warn(
-          `Failed to send initial command to session ${id}: ${sendResult.stderr.trim()}`,
-        );
+      if (isLong) {
+        const tmpScript = join(tmpdir(), `tawtui-cmd-${Date.now()}.sh`);
+        await Bun.write(tmpScript, opts.command + '\n');
+        // Send a short command that sources the script then cleans up
+        const wrapper = `bash ${tmpScript} ; rm -f ${tmpScript}`;
+        const sendResult = await this.execTmux([
+          'send-keys',
+          '-t',
+          tmuxSessionName,
+          wrapper,
+          'Enter',
+        ]);
+        if (sendResult.exitCode !== 0) {
+          this.logger.warn(
+            `Failed to send script command to session ${id}: ${sendResult.stderr.trim()}`,
+          );
+        }
+      } else {
+        const sendResult = await this.execTmux([
+          'send-keys',
+          '-t',
+          tmuxSessionName,
+          opts.command,
+          'Enter',
+        ]);
+        if (sendResult.exitCode !== 0) {
+          this.logger.warn(
+            `Failed to send initial command to session ${id}: ${sendResult.stderr.trim()}`,
+          );
+        }
       }
     }
 
@@ -503,6 +530,44 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
    * into the worktree root as `.tawtui-pr-context.md`.
    */
   async createPrReviewSession(
+    prNumber: number,
+    repoOwner: string,
+    repoName: string,
+    prTitle: string,
+    prDetail?: PullRequestDetail,
+    prDiff?: PrDiff,
+    prReviewComments?: PrReviewComment[],
+    projectAgentConfig?: ProjectAgentConfig,
+  ): Promise<{ sessionId: string }> {
+    const prKey = `${repoOwner}/${repoName}#${prNumber}`;
+
+    // Coalesce concurrent calls for the same PR
+    const inflight = this.prReviewCreationPromises.get(prKey);
+    if (inflight) {
+      this.logger.log(
+        `Coalescing concurrent createPrReviewSession call for ${prKey}`,
+      );
+      return inflight;
+    }
+
+    const creationPromise = this.doCreatePrReviewSession(
+      prNumber,
+      repoOwner,
+      repoName,
+      prTitle,
+      prDetail,
+      prDiff,
+      prReviewComments,
+      projectAgentConfig,
+    ).finally(() => {
+      this.prReviewCreationPromises.delete(prKey);
+    });
+
+    this.prReviewCreationPromises.set(prKey, creationPromise);
+    return creationPromise;
+  }
+
+  private async doCreatePrReviewSession(
     prNumber: number,
     repoOwner: string,
     repoName: string,

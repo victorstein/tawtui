@@ -210,7 +210,7 @@ export class GithubService {
 
     // Handle HTTPS URLs: https://github.com/owner/repo(.git)
     const httpsMatch = trimmed.match(
-      /^https?:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?$/,
+      /^https?:\/\/github\.com\/([^/?#]+)\/([^/?#]+?)(?:\.git)?$/,
     );
     if (httpsMatch) {
       const [, owner, repo] = httpsMatch;

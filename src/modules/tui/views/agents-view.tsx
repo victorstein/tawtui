@@ -210,10 +210,6 @@ export function AgentsView(props: AgentsViewProps) {
       clearTimeout(errorTimer);
       errorTimer = null;
     }
-    if (escTimer) {
-      clearTimeout(escTimer);
-      escTimer = null;
-    }
   });
 
   // ------------------------------------------------------------------
@@ -285,9 +281,6 @@ export function AgentsView(props: AgentsViewProps) {
   // Keyboard handling
   // ------------------------------------------------------------------
 
-  let lastEscTime = 0;
-  let escTimer: ReturnType<typeof setTimeout> | null = null;
-
   useKeyboard((key) => {
     // Alt+C: Copy selected text to clipboard
     if ((key.option && key.name === 'c') || key.sequence === 'ç') {
@@ -319,29 +312,19 @@ export function AgentsView(props: AgentsViewProps) {
       return;
     }
 
-    // When in interactive mode, forward everything to tmux except ESC
+    // When in interactive mode, forward everything to tmux except Ctrl+\
     if (interactive()) {
-      if (key.name === 'escape') {
-        const now = Date.now();
-        if (now - lastEscTime < 300) {
-          // Double-ESC: exit interactive mode
-          if (escTimer) clearTimeout(escTimer);
-          escTimer = null;
-          lastEscTime = 0;
-          setInteractive(false);
-          return;
-        }
+      if (key.sequence === '\x1c') {
+        setInteractive(false);
+        return;
+      }
 
-        lastEscTime = now;
-        // Start timer: if no second ESC within 300ms, forward ESC to tmux
-        escTimer = setTimeout(() => {
-          const ts = getTerminalService();
-          const agent = selectedAgent();
-          if (ts && agent) {
-            ts.sendInput(agent.id, 'escape').catch(() => {});
-          }
-          escTimer = null;
-        }, 300);
+      if (key.name === 'escape') {
+        const ts = getTerminalService();
+        const agent = selectedAgent();
+        if (ts && agent) {
+          ts.sendInput(agent.id, 'escape').catch(() => {});
+        }
         return;
       }
 
@@ -414,7 +397,7 @@ export function AgentsView(props: AgentsViewProps) {
     }
 
     // Enter interactive mode
-    if (key.name === 'i') {
+    if (key.name === 'return') {
       const agent = selectedAgent();
       if (agent) {
         setActivePane('terminal');
@@ -436,8 +419,8 @@ export function AgentsView(props: AgentsViewProps) {
       return;
     }
 
-    // New agent
-    if (key.name === 'n') {
+    // New agent — ignore modifier combos so Alt+N (test notification) falls through to the global handler.
+    if (key.name === 'n' && !key.meta && !key.ctrl) {
       key.stopPropagation();
       showNewAgentDialog();
       return;
