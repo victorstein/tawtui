@@ -450,8 +450,8 @@ export function TasksView(props: TasksViewProps) {
       return;
     }
 
-    // New task
-    if (key.name === 'n') {
+    // New task — ignore modifier combos so Alt+N (test notification) falls through to the global handler.
+    if (key.name === 'n' && !key.meta && !key.ctrl) {
       key.preventDefault();
       dialog.show(
         () => (

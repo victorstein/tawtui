@@ -970,8 +970,8 @@ export default function ReviewsView(props: ReviewsViewProps) {
       return;
     }
 
-    // New agent
-    if (key.name === 'n') {
+    // New agent — ignore modifier combos so Alt+N (test notification) falls through to the global handler.
+    if (key.name === 'n' && !key.meta && !key.ctrl) {
       key.stopPropagation();
       showNewAgentDialog();
       return;
