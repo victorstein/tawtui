@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call */
 
 // Mock Bun global (tests run under Jest/Node, not Bun runtime)
 const mockSpawn = jest.fn();
@@ -40,10 +40,6 @@ function createMocks() {
         autoApproveFlag: '--dangerously-skip-permissions',
       },
     ]),
-    getOracleConfig: jest.fn().mockReturnValue({
-      pollIntervalSeconds: 300,
-      slack: { userName: 'testuser' },
-    }),
   } as any;
   const worktreeService = {} as any;
 
@@ -123,9 +119,9 @@ describe('TerminalService Integration', () => {
       it('should throw error with "not found" when destroying a non-existent session', async () => {
         const { service } = createService();
 
-        await expect(
-          service.destroySession('nonexistent-id'),
-        ).rejects.toThrow(/not found/i);
+        await expect(service.destroySession('nonexistent-id')).rejects.toThrow(
+          /not found/i,
+        );
       });
     });
 
@@ -399,9 +395,9 @@ describe('TerminalService Integration', () => {
         const { service } = createService();
 
         // When/Then: sendInput rejects with Session not found
-        await expect(
-          service.sendInput('nonexistent', 'test'),
-        ).rejects.toThrow(/Session not found/);
+        await expect(service.sendInput('nonexistent', 'test')).rejects.toThrow(
+          /Session not found/,
+        );
       });
     });
   });
@@ -491,9 +487,7 @@ describe('TerminalService Integration', () => {
         mockSpawn.mockImplementation(() => ({
           stdout: new ReadableStream({
             start(controller: ReadableStreamDefaultController) {
-              controller.enqueue(
-                new TextEncoder().encode('same content\n'),
-              );
+              controller.enqueue(new TextEncoder().encode('same content\n'));
               controller.close();
             },
           }),
@@ -689,6 +683,152 @@ describe('TerminalService Integration', () => {
 
         // Then: no spawn calls were made (early return)
         expect(mockSpawn).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  // ================================================================
+  // Concurrency
+  // ================================================================
+  describe('Concurrency', () => {
+    describe('TS-CC-2: Concurrent PR review session creation coalesces', () => {
+      it('should return the same session ID when createPrReviewSession is called concurrently for the same PR', async () => {
+        // Given: mocks for taskwarrior and worktree dependencies
+        const mocks = createMocks();
+        mocks.taskwarriorService.getTask = jest.fn().mockReturnValue(null);
+        mocks.taskwarriorService.createTask = jest.fn().mockReturnValue({
+          uuid: 'task-uuid-1',
+          description: 'Review PR #123',
+        });
+        mocks.taskwarriorService.startTask = jest.fn();
+        mocks.worktreeService.createWorktree = jest
+          .fn()
+          .mockResolvedValue({ id: 'wt-1', path: '/tmp/worktrees/repo' });
+        mocks.worktreeService.linkSession = jest.fn();
+
+        let spawnCallCount = 0;
+        mockSpawn.mockImplementation(() => {
+          spawnCallCount++;
+          const responses: Array<[string, string, number]> = [
+            ['tmux 3.4', '', 0], // isTmuxInstalled
+            ['', '', 0], // new-session
+            ['', '', 0], // set-option
+            ['%0', '', 0], // list-panes
+            ['', '', 0], // send-keys
+          ];
+          const idx = Math.min(spawnCallCount - 1, responses.length - 1);
+          const [stdout, stderr, exitCode] = responses[idx];
+          return {
+            stdout: new ReadableStream({
+              start(controller: ReadableStreamDefaultController) {
+                controller.enqueue(new TextEncoder().encode(stdout));
+                controller.close();
+              },
+            }),
+            stderr: new ReadableStream({
+              start(controller: ReadableStreamDefaultController) {
+                controller.enqueue(new TextEncoder().encode(stderr));
+                controller.close();
+              },
+            }),
+            exited: Promise.resolve(exitCode),
+          };
+        });
+
+        const { service } = createService(mocks);
+
+        // When: two concurrent calls for the same PR without awaiting the first
+        const [result1, result2] = await Promise.all([
+          service.createPrReviewSession(123, 'owner', 'repo', 'Fix bug'),
+          service.createPrReviewSession(123, 'owner', 'repo', 'Fix bug'),
+        ]);
+
+        // Then: both resolve to the same session ID
+        expect(result1.sessionId).toBe(result2.sessionId);
+
+        // And: only one tmux session was created
+        expect(spawnCallCount).toBeLessThanOrEqual(5);
+
+        // And: only one worktree was created
+        expect(mocks.worktreeService.createWorktree).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe('TS-CC-4: Different PRs create separate sessions concurrently', () => {
+      it('should allow separate PR review sessions for different PRs concurrently', async () => {
+        // Given: mocks for taskwarrior and worktree dependencies
+        const mocks = createMocks();
+        let taskCounter = 0;
+        mocks.taskwarriorService.getTask = jest.fn().mockReturnValue(null);
+        mocks.taskwarriorService.createTask = jest
+          .fn()
+          .mockImplementation(() => {
+            taskCounter++;
+            return {
+              uuid: `task-uuid-${taskCounter}`,
+              description: `Review PR`,
+            };
+          });
+        mocks.taskwarriorService.startTask = jest.fn();
+        mocks.worktreeService.linkSession = jest.fn();
+
+        let worktreeCounter = 0;
+        mocks.worktreeService.createWorktree = jest
+          .fn()
+          .mockImplementation(() => {
+            worktreeCounter++;
+            return Promise.resolve({
+              id: `wt-${worktreeCounter}`,
+              path: `/tmp/worktrees/repo-${worktreeCounter}`,
+            });
+          });
+
+        // Given: mockSpawn creates fresh streams for each call (concurrent consumption)
+        mockSpawn.mockImplementation(() => {
+          return {
+            stdout: new ReadableStream({
+              start(controller: ReadableStreamDefaultController) {
+                controller.enqueue(new TextEncoder().encode(''));
+                controller.close();
+              },
+            }),
+            stderr: new ReadableStream({
+              start(controller: ReadableStreamDefaultController) {
+                controller.enqueue(new TextEncoder().encode(''));
+                controller.close();
+              },
+            }),
+            exited: Promise.resolve(0),
+          };
+        });
+
+        // Use Date.now mock to ensure distinct session IDs
+        const realDateNow = Date.now;
+        let tick = 3000000000000;
+        Date.now = () => tick++;
+
+        try {
+          const { service } = createService(mocks);
+
+          // When: two concurrent calls for different PRs
+          const [result1, result2] = await Promise.all([
+            service.createPrReviewSession(1, 'owner', 'repo', 'PR one'),
+            service.createPrReviewSession(2, 'owner', 'repo', 'PR two'),
+          ]);
+
+          // Then: both succeed with different session IDs
+          expect(result1.sessionId).toBeDefined();
+          expect(result2.sessionId).toBeDefined();
+          expect(result1.sessionId).not.toBe(result2.sessionId);
+
+          // And: two separate worktrees were created
+          expect(mocks.worktreeService.createWorktree).toHaveBeenCalledTimes(2);
+
+          // And: two separate tasks were created
+          expect(mocks.taskwarriorService.createTask).toHaveBeenCalledTimes(2);
+        } finally {
+          Date.now = realDateNow;
+        }
       });
     });
   });

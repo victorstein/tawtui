@@ -98,6 +98,12 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
   /** Persistent mapping of PR key (owner/repo#number) to Taskwarrior task UUID. */
   private readonly prTaskMap = new Map<string, string>();
 
+  /** Mutex: in-flight PR review session creation promises keyed by owner/repo#number. */
+  private readonly prReviewCreationPromises = new Map<
+    string,
+    Promise<{ sessionId: string }>
+  >();
+
   private readonly sessionsDir = join(homedir(), '.config', 'tawtui');
   private readonly sessionsPath = join(this.sessionsDir, 'sessions.json');
   private readonly prTaskMapPath = join(this.sessionsDir, 'pr-tasks.json');
@@ -524,6 +530,44 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
    * into the worktree root as `.tawtui-pr-context.md`.
    */
   async createPrReviewSession(
+    prNumber: number,
+    repoOwner: string,
+    repoName: string,
+    prTitle: string,
+    prDetail?: PullRequestDetail,
+    prDiff?: PrDiff,
+    prReviewComments?: PrReviewComment[],
+    projectAgentConfig?: ProjectAgentConfig,
+  ): Promise<{ sessionId: string }> {
+    const prKey = `${repoOwner}/${repoName}#${prNumber}`;
+
+    // Coalesce concurrent calls for the same PR
+    const inflight = this.prReviewCreationPromises.get(prKey);
+    if (inflight) {
+      this.logger.log(
+        `Coalescing concurrent createPrReviewSession call for ${prKey}`,
+      );
+      return inflight;
+    }
+
+    const creationPromise = this.doCreatePrReviewSession(
+      prNumber,
+      repoOwner,
+      repoName,
+      prTitle,
+      prDetail,
+      prDiff,
+      prReviewComments,
+      projectAgentConfig,
+    ).finally(() => {
+      this.prReviewCreationPromises.delete(prKey);
+    });
+
+    this.prReviewCreationPromises.set(prKey, creationPromise);
+    return creationPromise;
+  }
+
+  private async doCreatePrReviewSession(
     prNumber: number,
     repoOwner: string,
     repoName: string,

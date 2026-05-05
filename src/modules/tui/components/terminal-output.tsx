@@ -29,7 +29,7 @@ export function TerminalOutput(props: TerminalOutputProps) {
 
   const headerText = () => {
     if (props.isInteractive) {
-      return 'INTERACTIVE MODE - ESC to exit';
+      return 'INTERACTIVE MODE \u2014 Ctrl+\\ to exit';
     }
     if (props.agentName) {
       return `OUTPUT: ${props.agentName}`;
