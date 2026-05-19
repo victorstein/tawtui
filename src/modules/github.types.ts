@@ -59,4 +59,6 @@ export interface PrReviewComment {
   line: number | null;
   created_at: string;
   in_reply_to_id?: number;
+  isResolved?: boolean;
+  isOutdated?: boolean;
 }

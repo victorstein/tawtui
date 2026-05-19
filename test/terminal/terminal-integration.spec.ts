@@ -24,6 +24,10 @@ jest.mock('fs', () => {
 });
 
 import { TerminalService } from '../../src/modules/terminal.service';
+import type {
+  PrReviewComment,
+  PullRequestDetail,
+} from '../../src/modules/github.types';
 
 // ---------------------------------------------------------------------------
 // Factory helpers
@@ -829,6 +833,179 @@ describe('TerminalService Integration', () => {
         } finally {
           Date.now = realDateNow;
         }
+      });
+    });
+  });
+
+  // ================================================================
+  // PR Review Context File
+  // ================================================================
+  describe('createPrReviewSession context file', () => {
+    describe('Behavior', () => {
+      it('should tag inline review comments with [RESOLVED]/[OUTDATED] based on thread state in .tawtui-pr-context.md', async () => {
+        // Given: mocks for taskwarrior and worktree dependencies
+        const mocks = createMocks();
+        mocks.taskwarriorService.getTask = jest.fn().mockReturnValue(null);
+        mocks.taskwarriorService.createTask = jest.fn().mockReturnValue({
+          uuid: 'task-uuid-tags',
+          description: 'Review PR #99',
+        });
+        mocks.taskwarriorService.startTask = jest.fn();
+        mocks.worktreeService.createWorktree = jest.fn().mockResolvedValue({
+          id: 'wt-tags',
+          path: '/tmp/worktrees/repo-tags',
+        });
+        mocks.worktreeService.linkSession = jest.fn();
+
+        // Given: spawn returns tmux setup responses (version check, new-session, set-option, list-panes, send-keys)
+        let spawnCallCount = 0;
+        mockSpawn.mockImplementation(() => {
+          spawnCallCount++;
+          const responses: Array<[string, string, number]> = [
+            ['tmux 3.4', '', 0], // isTmuxInstalled
+            ['', '', 0], // new-session
+            ['', '', 0], // set-option
+            ['%0', '', 0], // list-panes
+            ['', '', 0], // send-keys
+          ];
+          const idx = Math.min(spawnCallCount - 1, responses.length - 1);
+          const [stdout, stderr, exitCode] = responses[idx];
+          return {
+            stdout: new ReadableStream({
+              start(controller: ReadableStreamDefaultController) {
+                controller.enqueue(new TextEncoder().encode(stdout));
+                controller.close();
+              },
+            }),
+            stderr: new ReadableStream({
+              start(controller: ReadableStreamDefaultController) {
+                controller.enqueue(new TextEncoder().encode(stderr));
+                controller.close();
+              },
+            }),
+            exited: Promise.resolve(exitCode),
+          };
+        });
+
+        // Given: fs.writeFileSync is mocked — capture the context file write
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const fs = require('fs');
+
+        // Given: a PR detail (the markdown context file is only written when prDetail is provided)
+        const prDetail: PullRequestDetail = {
+          number: 99,
+          title: 'Test PR',
+          url: 'https://example.com/pr/99',
+          author: { login: 'octocat' },
+          state: 'OPEN',
+          isDraft: false,
+          headRefName: 'feature',
+          baseRefName: 'main',
+          reviewDecision: null,
+          statusCheckRollup: [],
+          additions: 1,
+          deletions: 0,
+          changedFiles: 1,
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+          labels: [],
+          body: 'PR body',
+          reviews: [],
+          files: [{ path: 'src/foo.ts', additions: 1, deletions: 0 }],
+          comments: [],
+        };
+
+        // Given: review comments — resolved (with reply), outdated, open
+        const reviewComments: PrReviewComment[] = [
+          {
+            id: 1001,
+            user: { login: 'alice' },
+            body: 'This is in a resolved thread',
+            path: 'src/foo.ts',
+            line: 10,
+            created_at: '2026-01-01T00:00:00Z',
+            isResolved: true,
+          },
+          {
+            id: 1002,
+            user: { login: 'bob' },
+            body: 'Reply on resolved thread',
+            path: 'src/foo.ts',
+            line: 10,
+            created_at: '2026-01-01T00:01:00Z',
+            in_reply_to_id: 1001,
+            isResolved: true,
+          },
+          {
+            id: 2001,
+            user: { login: 'carol' },
+            body: 'This is outdated',
+            path: 'src/foo.ts',
+            line: 20,
+            created_at: '2026-01-01T00:00:00Z',
+            isOutdated: true,
+          },
+          {
+            id: 3001,
+            user: { login: 'dave' },
+            body: 'This is still open',
+            path: 'src/foo.ts',
+            line: 30,
+            created_at: '2026-01-01T00:00:00Z',
+          },
+        ];
+
+        const { service } = createService(mocks);
+
+        // When: a PR review session is created with the comments
+        await service.createPrReviewSession(
+          99,
+          'owner',
+          'repo',
+          'Test PR',
+          prDetail,
+          undefined,
+          reviewComments,
+        );
+
+        // Then: writeFileSync was called for the context file
+        const writeCall = (fs.writeFileSync as jest.Mock).mock.calls.find(
+          (call: unknown[]) =>
+            String(call[0]).endsWith('.tawtui-pr-context.md'),
+        );
+        expect(writeCall).toBeDefined();
+
+        const content = String(writeCall![1]);
+
+        // Then: each comment line is rendered with the correct tag
+        const resolvedLine = content
+          .split('\n')
+          .find((l) => l.includes('This is in a resolved thread'));
+        const outdatedLine = content
+          .split('\n')
+          .find((l) => l.includes('This is outdated'));
+        const openLine = content
+          .split('\n')
+          .find((l) => l.includes('This is still open'));
+        const replyLine = content
+          .split('\n')
+          .find((l) => l.includes('Reply on resolved thread'));
+
+        expect(resolvedLine).toBeDefined();
+        expect(resolvedLine).toContain('[RESOLVED]');
+        expect(resolvedLine).not.toContain('[OUTDATED]');
+
+        expect(outdatedLine).toBeDefined();
+        expect(outdatedLine).toContain('[OUTDATED]');
+        expect(outdatedLine).not.toContain('[RESOLVED]');
+
+        expect(openLine).toBeDefined();
+        expect(openLine).not.toContain('[RESOLVED]');
+        expect(openLine).not.toContain('[OUTDATED]');
+
+        expect(replyLine).toBeDefined();
+        expect(replyLine).toContain('[RESOLVED]');
+        expect(replyLine).not.toContain('[OUTDATED]');
       });
     });
   });
