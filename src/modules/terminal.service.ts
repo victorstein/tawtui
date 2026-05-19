@@ -729,16 +729,32 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
           for (const comment of topLevel) {
             const lineRef = comment.line != null ? `L${comment.line}` : '';
             const lineLabel = lineRef ? ` (${lineRef})` : '';
+            const statusTags = [
+              comment.isResolved ? '[RESOLVED]' : '',
+              comment.isOutdated ? '[OUTDATED]' : '',
+            ]
+              .filter(Boolean)
+              .join(' ');
+            const statusLabel = statusTags ? ` ${statusTags}` : '';
             sections.push(
-              `- **@${comment.user?.login ?? 'unknown'}**${lineLabel}: "${escapeCodeFenceContent(comment.body ?? '')}"`,
+              `- **@${comment.user?.login ?? 'unknown'}**${statusLabel}${lineLabel}: "${escapeCodeFenceContent(comment.body ?? '')}"`,
             );
 
             const replies = repliesById.get(comment.id) ?? [];
             for (const reply of replies) {
               const replyLineRef = reply.line != null ? `L${reply.line}` : '';
               const replyLineLabel = replyLineRef ? ` (${replyLineRef})` : '';
+              const replyStatusTags = [
+                reply.isResolved ? '[RESOLVED]' : '',
+                reply.isOutdated ? '[OUTDATED]' : '',
+              ]
+                .filter(Boolean)
+                .join(' ');
+              const replyStatusLabel = replyStatusTags
+                ? ` ${replyStatusTags}`
+                : '';
               sections.push(
-                `  - **@${reply.user?.login ?? 'unknown'}**${replyLineLabel}: "${escapeCodeFenceContent(reply.body ?? '')}"`,
+                `  - **@${reply.user?.login ?? 'unknown'}**${replyStatusLabel}${replyLineLabel}: "${escapeCodeFenceContent(reply.body ?? '')}"`,
               );
             }
           }
@@ -782,7 +798,7 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
         '- Use `git status --short` to identify untracked files, then read their full contents',
         '- Read the full file to understand existing patterns, control flow, and error handling',
         '- Check for existing style guides or conventions files (CONVENTIONS.md, AGENTS.md, .editorconfig, etc.)',
-        '- Read the "Inline Review Comments" section in the context file — these are comments already left by reviewers on specific lines. Do not re-raise issues that have already been addressed or acknowledged.',
+        '- Read the "Inline Review Comments" section in the context file — these are comments already left by reviewers on specific lines. Comments tagged **[RESOLVED]** have already been addressed — do NOT re-raise them. Comments tagged **[OUTDATED]** refer to code that has since changed; treat with caution and verify against the current code before flagging.',
         '',
         '## What to Look For',
         '**Bugs** — Your primary focus.',
@@ -808,7 +824,7 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
         '1. **Re-read the source.** Open the actual file and re-read the relevant code. Does the issue you identified actually exist in the code as written?',
         '2. **Check the surrounding context.** Does the surrounding code, the caller, a middleware, or the type system already handle the concern?',
         '3. **Search when uncertain.** If you think something is missing (a guard, a validation, an import), grep or search the codebase to confirm it is actually missing before flagging it.',
-        '4. **Check existing review comments.** Has this issue already been raised and addressed in the PR discussion? Do not re-raise resolved points.',
+        '4. **Check existing review comments.** Has this issue already been raised and addressed in the PR discussion? Comments tagged **[RESOLVED]** in the Inline Review Comments section have been resolved — do NOT re-raise them. Comments tagged **[OUTDATED]** target code that has since changed — verify against current code before flagging.',
         "5. **Verdict:** If the issue survives verification, keep it and note the evidence. If it doesn't, drop it silently.",
         '',
         '**Drop a finding if:**',

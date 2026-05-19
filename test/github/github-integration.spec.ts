@@ -84,17 +84,296 @@ describe('GithubService Integration', () => {
       expect(result).toEqual({});
     });
 
-    // GH-BC-4: Nested arrays from paginated slurp
-    it('should return nested arrays from paginated --slurp response without flattening', async () => {
-      const mockSpawn = TerminalTestHelper.mockSpawn(
-        '[[{"id":1}],[{"id":2}]]',
-        '',
-        0,
-      );
+    // GH-BC-4: Malformed GraphQL JSON
+    it('should return [] when GraphQL response is unparseable', async () => {
+      const mockSpawn = TerminalTestHelper.mockSpawn('{not-json', '', 0);
       setBunSpawn(mockSpawn);
 
       const result = await service.getPrReviewComments('owner', 'repo', 1);
-      expect(result).toEqual([[{ id: 1 }], [{ id: 2 }]]);
+      expect(result).toEqual([]);
+    });
+  });
+
+  // ================================================================
+  // getPrReviewComments — Behavior
+  // ================================================================
+  describe('getPrReviewComments', () => {
+    describe('Behavior', () => {
+      it('should flatten a single page of threads and stamp resolution flags', async () => {
+        const graphqlResponse = {
+          data: {
+            repository: {
+              pullRequest: {
+                reviewThreads: {
+                  pageInfo: { hasNextPage: false, endCursor: null },
+                  nodes: [
+                    {
+                      isResolved: true,
+                      isOutdated: false,
+                      comments: {
+                        nodes: [
+                          {
+                            databaseId: 101,
+                            author: { login: 'alice' },
+                            body: 'resolved finding',
+                            path: 'src/a.ts',
+                            line: 10,
+                            originalLine: 10,
+                            createdAt: '2025-01-01T00:00:00Z',
+                            replyTo: null,
+                          },
+                        ],
+                      },
+                    },
+                    {
+                      isResolved: false,
+                      isOutdated: true,
+                      comments: {
+                        nodes: [
+                          {
+                            databaseId: 102,
+                            author: { login: 'bob' },
+                            body: 'outdated finding',
+                            path: 'src/b.ts',
+                            line: null,
+                            originalLine: 42,
+                            createdAt: '2025-01-02T00:00:00Z',
+                            replyTo: null,
+                          },
+                        ],
+                      },
+                    },
+                    {
+                      isResolved: false,
+                      isOutdated: false,
+                      comments: {
+                        nodes: [
+                          {
+                            databaseId: 103,
+                            author: { login: 'carol' },
+                            body: 'active finding',
+                            path: 'src/c.ts',
+                            line: 7,
+                            originalLine: 7,
+                            createdAt: '2025-01-03T00:00:00Z',
+                            replyTo: null,
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        };
+        const mockSpawn = TerminalTestHelper.mockSpawn(
+          JSON.stringify(graphqlResponse),
+          '',
+          0,
+        );
+        setBunSpawn(mockSpawn);
+
+        const result = await service.getPrReviewComments('owner', 'repo', 1);
+
+        expect(result).toHaveLength(3);
+        expect(result[0]).toEqual({
+          id: 101,
+          user: { login: 'alice' },
+          body: 'resolved finding',
+          path: 'src/a.ts',
+          line: 10,
+          created_at: '2025-01-01T00:00:00Z',
+          isResolved: true,
+          isOutdated: false,
+        });
+        // line falls back to originalLine when line is null
+        expect(result[1].line).toBe(42);
+        expect(result[1].isResolved).toBe(false);
+        expect(result[1].isOutdated).toBe(true);
+        expect(result[2].isResolved).toBe(false);
+        expect(result[2].isOutdated).toBe(false);
+      });
+
+      it('should accumulate threads across paginated GraphQL pages', async () => {
+        const page1 = {
+          data: {
+            repository: {
+              pullRequest: {
+                reviewThreads: {
+                  pageInfo: { hasNextPage: true, endCursor: 'cursor-1' },
+                  nodes: [
+                    {
+                      isResolved: false,
+                      isOutdated: false,
+                      comments: {
+                        nodes: [
+                          {
+                            databaseId: 1,
+                            author: { login: 'alice' },
+                            body: 'page1 comment',
+                            path: 'a.ts',
+                            line: 1,
+                            originalLine: 1,
+                            createdAt: '2025-01-01T00:00:00Z',
+                            replyTo: null,
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        };
+        const page2 = {
+          data: {
+            repository: {
+              pullRequest: {
+                reviewThreads: {
+                  pageInfo: { hasNextPage: false, endCursor: null },
+                  nodes: [
+                    {
+                      isResolved: true,
+                      isOutdated: false,
+                      comments: {
+                        nodes: [
+                          {
+                            databaseId: 2,
+                            author: { login: 'bob' },
+                            body: 'page2 comment',
+                            path: 'b.ts',
+                            line: 2,
+                            originalLine: 2,
+                            createdAt: '2025-01-02T00:00:00Z',
+                            replyTo: null,
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        };
+
+        const responses = [JSON.stringify(page1), JSON.stringify(page2)];
+        const calls: string[][] = [];
+        const mockSpawn = jest.fn((cmd: string[]) => {
+          calls.push(cmd);
+          const stdout = responses.shift() ?? '';
+          return TerminalTestHelper.mockSpawn(stdout, '', 0)();
+        });
+        setBunSpawn(mockSpawn);
+
+        const result = await service.getPrReviewComments('owner', 'repo', 1);
+
+        expect(result).toHaveLength(2);
+        expect(result.map((c) => c.id)).toEqual([1, 2]);
+        expect(result[1].isResolved).toBe(true);
+
+        // Verify the second call passed a cursor
+        expect(calls).toHaveLength(2);
+        const firstCallHasCursor = calls[0].some((a) =>
+          a.startsWith('cursor='),
+        );
+        const secondCallHasCursor = calls[1].some(
+          (a) => a === 'cursor=cursor-1',
+        );
+        expect(firstCallHasCursor).toBe(false);
+        expect(secondCallHasCursor).toBe(true);
+      });
+
+      it('should flatten multi-comment threads and propagate flags + replyTo', async () => {
+        const graphqlResponse = {
+          data: {
+            repository: {
+              pullRequest: {
+                reviewThreads: {
+                  pageInfo: { hasNextPage: false, endCursor: null },
+                  nodes: [
+                    {
+                      isResolved: true,
+                      isOutdated: false,
+                      comments: {
+                        nodes: [
+                          {
+                            databaseId: 200,
+                            author: { login: 'alice' },
+                            body: 'top-level',
+                            path: 'src/a.ts',
+                            line: 5,
+                            originalLine: 5,
+                            createdAt: '2025-01-01T00:00:00Z',
+                            replyTo: null,
+                          },
+                          {
+                            databaseId: 201,
+                            author: { login: 'bob' },
+                            body: 'reply',
+                            path: 'src/a.ts',
+                            line: 5,
+                            originalLine: 5,
+                            createdAt: '2025-01-01T01:00:00Z',
+                            replyTo: { databaseId: 200 },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        };
+        const mockSpawn = TerminalTestHelper.mockSpawn(
+          JSON.stringify(graphqlResponse),
+          '',
+          0,
+        );
+        setBunSpawn(mockSpawn);
+
+        const result = await service.getPrReviewComments('owner', 'repo', 1);
+
+        expect(result).toHaveLength(2);
+        // Both comments share the thread's flags
+        expect(result[0].isResolved).toBe(true);
+        expect(result[1].isResolved).toBe(true);
+        expect(result[0].isOutdated).toBe(false);
+        expect(result[1].isOutdated).toBe(false);
+        // Top-level has no in_reply_to_id
+        expect(result[0].in_reply_to_id).toBeUndefined();
+        // Reply carries replyTo.databaseId
+        expect(result[1].in_reply_to_id).toBe(200);
+      });
+    });
+
+    describe('Error Handling', () => {
+      it('should return [] when GraphQL call exits non-zero', async () => {
+        const mockSpawn = TerminalTestHelper.mockSpawn(
+          '',
+          'rate limit exceeded',
+          1,
+        );
+        setBunSpawn(mockSpawn);
+
+        const result = await service.getPrReviewComments('owner', 'repo', 1);
+        expect(result).toEqual([]);
+      });
+
+      it('should return [] when response lacks reviewThreads shape', async () => {
+        const mockSpawn = TerminalTestHelper.mockSpawn(
+          JSON.stringify({ data: { repository: null } }),
+          '',
+          0,
+        );
+        setBunSpawn(mockSpawn);
+
+        const result = await service.getPrReviewComments('owner', 'repo', 1);
+        expect(result).toEqual([]);
+      });
     });
   });
 
