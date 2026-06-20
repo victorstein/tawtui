@@ -26,6 +26,7 @@ const DEFAULT_CONFIG: AppConfig = {
     defaultFilter: 'status:pending',
   },
   projectAgentConfigs: [],
+  projects: [],
 };
 
 const DEFAULT_AGENT_TYPES: AgentDefinition[] = [
@@ -164,6 +165,26 @@ export class ConfigService {
     config.projectAgentConfigs = (config.projectAgentConfigs ?? []).filter(
       (c) => c.projectKey !== projectKey,
     );
+    this.save(config);
+  }
+
+  getPersistedProjects(): string[] {
+    const config = this.load();
+    return config.projects ?? [];
+  }
+
+  addPersistedProject(name: string): void {
+    const config = this.load();
+    const existing = config.projects ?? [];
+    if (!existing.includes(name)) {
+      config.projects = [...existing, name];
+      this.save(config);
+    }
+  }
+
+  removePersistedProject(name: string): void {
+    const config = this.load();
+    config.projects = (config.projects ?? []).filter((p) => p !== name);
     this.save(config);
   }
 
