@@ -42,4 +42,5 @@ export interface AppConfig {
   agents?: { types: AgentDefinition[] };
   projectAgentConfigs?: ProjectAgentConfig[];
   calendar?: CalendarConfig;
+  projects?: string[];
 }

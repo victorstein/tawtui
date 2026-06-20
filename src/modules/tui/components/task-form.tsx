@@ -17,7 +17,11 @@ import {
   PROJECT_COLOR,
 } from '../theme';
 import { darkenHex, lerpHex, ALLOWED_TAGS, getTagGradient } from '../utils';
-import { getTaskwarriorService, getValidateDueDate } from '../bridge';
+import {
+  getTaskwarriorService,
+  getValidateDueDate,
+  getProjectService,
+} from '../bridge';
 
 const FORM_BUTTONS = [
   {
@@ -177,7 +181,10 @@ export function TaskForm(props: TaskFormProps) {
     const tw = getTaskwarriorService();
     if (!tw) return;
     try {
-      const projects = tw.getProjects() as string[];
+      const ps = getProjectService();
+      const projects = (
+        ps ? ps.getAllProjects() : tw.getProjects()
+      ) as string[];
       setAvailableTags([...ALLOWED_TAGS]);
       setAvailableProjects(projects);
       // Set initial project index
@@ -221,6 +228,7 @@ export function TaskForm(props: TaskFormProps) {
       if (!availableProjects().includes(val)) {
         setAvailableProjects((prev) => [...prev, val]);
       }
+      getProjectService()?.addProject(val);
       const newAll = ['', ...new Set([...availableProjects(), val])];
       setProjectIndex(newAll.indexOf(val));
     } else if (newInputMode() === 'recur') {
@@ -271,6 +279,7 @@ export function TaskForm(props: TaskFormProps) {
     const dto: CreateTaskDto = { description: desc };
     const ann = annotation().trim();
     const proj = allProjects()[projectIndex()] ?? '';
+    if (proj) getProjectService()?.addProject(proj);
     const pri = priority();
     const tagArr = [...selectedTags()];
 
@@ -459,6 +468,16 @@ export function TaskForm(props: TaskFormProps) {
         key.preventDefault();
         setNewInputMode('project');
         setNewInputValue('');
+        return;
+      }
+      if (key.name === 'x') {
+        key.preventDefault();
+        const target = allProjects()[projectIndex()];
+        if (target) {
+          getProjectService()?.removeProject(target);
+          setAvailableProjects((prev) => prev.filter((p) => p !== target));
+          setProjectIndex(0);
+        }
         return;
       }
     }
@@ -676,7 +695,7 @@ export function TaskForm(props: TaskFormProps) {
                   </text>
                 </box>
                 <box height={1} paddingX={1}>
-                  <text fg={FG_DIM}>{'[←/→] cycle  [n] new'}</text>
+                  <text fg={FG_DIM}>{'[←/→] cycle  [n] new  [x] remove'}</text>
                 </box>
               </box>
             }

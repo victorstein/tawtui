@@ -8,6 +8,7 @@ import { TerminalService } from './terminal.service';
 import { DependencyService } from './dependency.service';
 import { CalendarService } from './calendar.service';
 import { NotificationService } from './notification.service';
+import { ProjectService } from './project.service';
 import type {
   PullRequestDetail,
   PrDiff,
@@ -19,6 +20,7 @@ import type { DueDateValidation } from './taskwarrior.types';
 interface TawtuiGlobal {
   __tawtui?: {
     taskwarriorService: TaskwarriorService;
+    projectService: ProjectService;
     githubService: GithubService;
     configService: ConfigService;
     terminalService: TerminalService;
@@ -67,6 +69,7 @@ export class TuiService {
     private readonly dependencyService: DependencyService,
     private readonly calendarService: CalendarService,
     private readonly notificationService: NotificationService,
+    private readonly projectService: ProjectService,
   ) {}
 
   async launch(): Promise<void> {
@@ -77,6 +80,7 @@ export class TuiService {
     // so we expose required services on a well-known global.
     g.__tawtui = {
       taskwarriorService: this.taskwarriorService,
+      projectService: this.projectService,
       githubService: this.githubService,
       configService: this.configService,
       terminalService: this.terminalService,
