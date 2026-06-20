@@ -6,6 +6,7 @@ import { TerminalModule } from './terminal.module';
 import { DependencyModule } from './dependency.module';
 import { CalendarModule } from './calendar.module';
 import { NotificationModule } from './notification.module';
+import { ProjectModule } from './project.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { NotificationModule } from './notification.module';
     DependencyModule,
     CalendarModule,
     NotificationModule,
+    ProjectModule,
   ],
   providers: [TuiService],
   exports: [TuiService],

@@ -1,4 +1,5 @@
 import type { TaskwarriorService } from '../taskwarrior.service';
+import type { ProjectService } from '../project.service';
 import type { GithubService } from '../github.service';
 import type { ConfigService } from '../config.service';
 import type { TerminalService } from '../terminal.service';
@@ -15,6 +16,7 @@ import type { DueDateValidation } from '../taskwarrior.types';
 
 export interface TawtuiBridge {
   taskwarriorService: TaskwarriorService;
+  projectService: ProjectService;
   githubService: GithubService;
   configService: ConfigService;
   terminalService: TerminalService;
@@ -55,6 +57,10 @@ function getBridge(): TawtuiBridge | undefined {
 
 export function getTaskwarriorService(): TaskwarriorService | null {
   return getBridge()?.taskwarriorService ?? null;
+}
+
+export function getProjectService(): ProjectService | null {
+  return getBridge()?.projectService ?? null;
 }
 
 export function getGithubService(): GithubService | null {
