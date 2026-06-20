@@ -64,4 +64,16 @@ describe('ProjectService', () => {
     service.removeProject('Work');
     expect(store).toEqual(['Home']);
   });
+
+  it('addProject does not duplicate a name that is already persisted', () => {
+    const { service, store } = makeService({ persisted: ['Work'], live: [] });
+    service.addProject('Work');
+    expect(store).toEqual(['Work']);
+  });
+
+  it('removeProject is a no-op when the name is not present', () => {
+    const { service, store } = makeService({ persisted: ['Home'], live: [] });
+    service.removeProject('Work');
+    expect(store).toEqual(['Home']);
+  });
 });
