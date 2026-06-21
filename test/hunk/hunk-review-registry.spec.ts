@@ -24,6 +24,7 @@ const REC: HunkReviewRecord = {
   port: 41001,
   status: 'reviewing',
   createdAt: '2026-06-20T00:00:00.000Z',
+  chat: [],
 };
 
 describe('HunkReviewRegistry', () => {

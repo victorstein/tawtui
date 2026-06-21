@@ -47,6 +47,7 @@ describe('hunk-review.types', () => {
       sdkSessionId: 'abc-123',
       status: 'ready',
       createdAt: new Date().toISOString(),
+      chat: [],
     };
     const out: ReviewOutput = {
       body: { summary: 's', unanchoredFindings: [], unanchoredCount: 0 },

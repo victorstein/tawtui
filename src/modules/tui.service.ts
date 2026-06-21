@@ -147,6 +147,7 @@ export class TuiService {
       port: 0,
       status: 'reviewing',
       createdAt: new Date().toISOString(),
+      chat: [],
     });
 
     const diff = await this.githubService.getPrDiff(owner, repo, prNumber);

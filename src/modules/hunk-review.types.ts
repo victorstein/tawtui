@@ -60,7 +60,13 @@ export type HunkReviewStatus =
   | 'ready'
   | 'open'
   | 'error'
+  | 'interrupted'
   | 'killed';
+
+export interface ChatMessage {
+  role: 'user' | 'agent';
+  text: string;
+}
 
 export interface HunkReviewRecord {
   prKey: string;
@@ -73,6 +79,10 @@ export interface HunkReviewRecord {
   status: HunkReviewStatus;
   createdAt: string;
   error?: string;
+  body?: ReviewBody;
+  chat: ChatMessage[];
+  agentContextPath?: string;
+  patchPath?: string;
 }
 
 export interface HunkAvailability {
