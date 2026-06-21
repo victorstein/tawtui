@@ -89,7 +89,7 @@ interface TawtuiGlobal {
       port: number,
       worktreePath?: string,
     ) => Promise<string | null>;
-    askHunkChat: (message: string) => Promise<string>;
+    askHunkChat: (prKey: string, message: string) => Promise<string>;
     listHunkReviews: () => HunkReviewRecord[];
     killHunkReview: (prKey: string) => Promise<void>;
     checkHunkPrereqs: () => Promise<{
@@ -170,7 +170,7 @@ export class TuiService {
           unanchoredCount: 0,
         }
       : (
-          await this.agentReviewService.startReview({
+          await this.agentReviewService.startReview(prKey, {
             diffRaw: diff.raw,
             lineMap,
             agentContextPath,
@@ -181,14 +181,14 @@ export class TuiService {
 
     this.hunkReviewRegistry.update(prKey, {
       status: 'ready',
-      sdkSessionId: this.agentReviewService.getSessionId(),
+      sdkSessionId: this.agentReviewService.getSessionId(prKey),
     });
 
     return { prKey, agentContextPath, worktreePath: wt.path, patchPath, body };
   }
 
   async killHunkReview(prKey: string): Promise<void> {
-    this.agentReviewService.dispose();
+    this.agentReviewService.dispose(prKey);
     const record = this.hunkReviewRegistry.get(prKey);
     if (record) {
       await this.worktreeService.removeWorktree(prKey);
@@ -287,7 +287,8 @@ export class TuiService {
         }),
       resolveHunkSessionId: (port: number, worktreePath?: string) =>
         this.hunkService.resolveSessionId(port, worktreePath),
-      askHunkChat: (message: string) => this.agentReviewService.ask(message),
+      askHunkChat: (prKey: string, message: string) =>
+        this.agentReviewService.ask(prKey, message),
       listHunkReviews: () => this.hunkReviewRegistry.list(),
       killHunkReview: (prKey: string) => this.killHunkReview(prKey),
       checkHunkPrereqs: () => this.checkHunkPrereqs(),

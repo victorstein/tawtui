@@ -76,12 +76,13 @@ describe('AgentReviewService - buildReviewOutput', () => {
 
 describe('AgentReviewService - startReview / ask', () => {
   class FakeAgentReviewService extends AgentReviewService {
-    public calls: string[] = [];
+    public calls: { reviewId: string; prompt: string }[] = [];
     public reply = '';
     protected override runTurn(
+      reviewId: string,
       prompt: string,
     ): Promise<{ sessionId: string; text: string }> {
-      this.calls.push(prompt);
+      this.calls.push({ reviewId, prompt });
       return Promise.resolve({ sessionId: 'sess-1', text: this.reply });
     }
   }
@@ -92,7 +93,7 @@ describe('AgentReviewService - startReview / ask', () => {
   });
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-  it('should run one review turn and return a validated ReviewOutput', async () => {
+  it('should run one review turn and store the session under the reviewId', async () => {
     const parser = new PrDiffParser();
     const svc = new FakeAgentReviewService(parser);
     svc.reply = JSON.stringify({ summary: 'ok', findings: [] });
@@ -104,18 +105,19 @@ describe('AgentReviewService - startReview / ask', () => {
       authorLabel: 'tawtui-review',
       prTitle: 'PR',
     };
-    const out = await svc.startReview(ctx);
+    const out = await svc.startReview('o/r#pr-7-hunk', ctx);
     expect(out.body.summary).toBe('ok');
-    expect(svc.getSessionId()).toBe('sess-1');
+    expect(svc.getSessionId('o/r#pr-7-hunk')).toBe('sess-1');
   });
 
-  it('should serialize ask() turns FIFO', async () => {
+  it('should serialize ask() turns FIFO within a single review', async () => {
     const parser = new PrDiffParser();
     const svc = new FakeAgentReviewService(parser);
     svc.reply = 'answer';
-    const [a, b] = await Promise.all([svc.ask('q1'), svc.ask('q2')]);
+    const id = 'o/r#pr-7-hunk';
+    const [a, b] = await Promise.all([svc.ask(id, 'q1'), svc.ask(id, 'q2')]);
     expect(a).toBe('answer');
     expect(b).toBe('answer');
-    expect(svc.calls).toEqual(['q1', 'q2']);
+    expect(svc.calls.map((c) => c.prompt)).toEqual(['q1', 'q2']);
   });
 });

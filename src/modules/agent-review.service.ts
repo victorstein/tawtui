@@ -35,21 +35,37 @@ interface RawModelOutput {
   findings: RawModelFinding[];
 }
 
+interface ReviewSession {
+  sessionId?: string;
+  queue: Promise<unknown>;
+}
+
 @Injectable()
 export class AgentReviewService {
-  private sessionId?: string;
-  private queue: Promise<unknown> = Promise.resolve();
+  private sessions = new Map<string, ReviewSession>();
 
   constructor(private readonly diffParser: PrDiffParser) {}
 
-  getSessionId(): string | undefined {
-    return this.sessionId;
+  private sessionFor(reviewId: string): ReviewSession {
+    let s = this.sessions.get(reviewId);
+    if (!s) {
+      s = { queue: Promise.resolve() };
+      this.sessions.set(reviewId, s);
+    }
+    return s;
   }
 
-  async startReview(ctx: StartReviewContext): Promise<ReviewOutput> {
+  getSessionId(reviewId: string): string | undefined {
+    return this.sessions.get(reviewId)?.sessionId;
+  }
+
+  async startReview(
+    reviewId: string,
+    ctx: StartReviewContext,
+  ): Promise<ReviewOutput> {
     const prompt = this.buildReviewPrompt(ctx);
-    const { sessionId, text } = await this.runTurn(prompt);
-    this.sessionId = sessionId;
+    const { sessionId, text } = await this.runTurn(reviewId, prompt);
+    this.sessionFor(reviewId).sessionId = sessionId;
     return this.buildReviewOutput(
       text,
       ctx.lineMap,
@@ -58,17 +74,17 @@ export class AgentReviewService {
     );
   }
 
-  async ask(message: string): Promise<string> {
-    const turn = this.queue.then(() => this.runTurn(message));
-    this.queue = turn.catch(() => undefined);
+  async ask(reviewId: string, message: string): Promise<string> {
+    const session = this.sessionFor(reviewId);
+    const turn = session.queue.then(() => this.runTurn(reviewId, message));
+    session.queue = turn.catch(() => undefined);
     const { sessionId, text } = await turn;
-    this.sessionId = sessionId;
+    session.sessionId = sessionId;
     return text;
   }
 
-  dispose(): void {
-    this.sessionId = undefined;
-    this.queue = Promise.resolve();
+  dispose(reviewId: string): void {
+    this.sessions.delete(reviewId);
   }
 
   private buildReviewPrompt(ctx: StartReviewContext): string {
@@ -90,11 +106,13 @@ export class AgentReviewService {
   }
 
   protected async runTurn(
+    reviewId: string,
     prompt: string,
   ): Promise<{ sessionId: string; text: string }> {
-    const options = this.sessionId ? { resume: this.sessionId } : {};
+    const current = this.sessions.get(reviewId)?.sessionId;
+    const options = current ? { resume: current } : {};
     const response = query({ prompt, options });
-    let sessionId = this.sessionId ?? '';
+    let sessionId = current ?? '';
     let text = '';
     for await (const message of response as AsyncIterable<SDKMessage>) {
       if (message.type === 'result' && message.subtype === 'success') {

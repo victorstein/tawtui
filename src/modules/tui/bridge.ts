@@ -74,7 +74,7 @@ export interface TawtuiBridge {
     port: number,
     worktreePath?: string,
   ) => Promise<string | null>;
-  askHunkChat: (message: string) => Promise<string>;
+  askHunkChat: (prKey: string, message: string) => Promise<string>;
   listHunkReviews: () => HunkReviewRecord[];
   killHunkReview: (prKey: string) => Promise<void>;
   checkHunkPrereqs: () => Promise<{
