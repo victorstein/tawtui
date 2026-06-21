@@ -22,11 +22,11 @@ export interface ForegroundChild {
 export interface ForegroundHooks {
   suspend: () => void;
   resume: () => void;
-  spawn: (
+  spawn?: (
     cmd: string[],
     opts: { cwd: string; stdio: 'inherit'; env: Record<string, string> },
   ) => ForegroundChild;
-  reset: () => void;
+  reset?: () => void;
 }
 
 @Injectable()
@@ -35,10 +35,29 @@ export class HunkService {
   constructor(private readonly config: ConfigService) {}
 
   async isAvailable(): Promise<HunkAvailability> {
-    const explicit = this.config.getHunkConfig().binaryPath;
-    const candidates: string[][] = explicit
-      ? [[explicit]]
-      : [['hunk'], ['bunx', 'hunkdiff']];
+    const { binaryPath, autodetect } = this.config.getHunkConfig();
+    if (binaryPath) {
+      const candidates = [[binaryPath]];
+      for (const command of candidates) {
+        const res = await this.spawn([...command, '--version']);
+        if (res.exitCode === 0) {
+          return { available: true, command, detail: res.stdout.trim() };
+        }
+      }
+      return {
+        available: false,
+        command: [binaryPath],
+        detail: 'hunk not found on PATH and `bunx hunkdiff` failed',
+      };
+    }
+    if (!autodetect) {
+      return {
+        available: false,
+        command: ['hunk'],
+        detail: 'hunk autodetect disabled and no binaryPath configured',
+      };
+    }
+    const candidates: string[][] = [['hunk'], ['bunx', 'hunkdiff']];
     for (const command of candidates) {
       const res = await this.spawn([...command, '--version']);
       if (res.exitCode === 0) {
@@ -79,6 +98,13 @@ export class HunkService {
     params: LaunchForegroundParams,
     hooks: ForegroundHooks,
   ): Promise<void> {
+    const spawn =
+      hooks.spawn ??
+      ((
+        cmd: string[],
+        opts: { cwd: string; stdio: 'inherit'; env: Record<string, string> },
+      ) => HunkService.defaultSpawn(cmd, opts));
+    const reset = hooks.reset ?? (() => HunkService.defaultReset());
     const command = await this.resolveCommand();
     const cmd = [
       ...command,
@@ -93,7 +119,7 @@ export class HunkService {
     let exitCode = 0;
     try {
       // HUNK_MCP_PORT isolates this review's session daemon so concurrent reviews don't collide.
-      const child = hooks.spawn(cmd, {
+      const child = spawn(cmd, {
         cwd: params.worktreePath,
         stdio: 'inherit',
         env: { ...process.env, HUNK_MCP_PORT: String(params.port) } as Record<
@@ -107,7 +133,7 @@ export class HunkService {
       exitCode = 1;
     } finally {
       if (exitCode !== 0) {
-        hooks.reset();
+        reset();
       }
       hooks.resume();
     }

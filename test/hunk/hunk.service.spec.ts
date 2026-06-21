@@ -69,6 +69,24 @@ describe('HunkService', () => {
       const result = await svc.isAvailable();
       expect(result.available).toBe(false);
     });
+
+    it('should return available:false without attempting bunx when autodetect is false and no binaryPath is set', async () => {
+      const spawnMock = jest.fn();
+      setBunSpawn(spawnMock);
+      const configSvc = new ConfigService();
+      jest.spyOn(configSvc, 'getHunkConfig').mockReturnValue({
+        autodetect: false,
+        agentAuthorLabel: 'test',
+        maxDiffBytes: 1_500_000,
+      });
+      const svcNoDetect = new HunkService(configSvc);
+
+      const result = await svcNoDetect.isAvailable();
+
+      expect(result.available).toBe(false);
+      expect(result.detail).toContain('autodetect disabled');
+      expect(spawnMock).not.toHaveBeenCalled();
+    });
   });
 
   describe('resolveSessionId', () => {
@@ -109,6 +127,43 @@ describe('HunkService', () => {
     function fakeChild(exitCode: number) {
       return { exited: Promise.resolve(exitCode) };
     }
+
+    it('should use defaultSpawn/defaultReset when caller omits spawn and reset', async () => {
+      const spawnSpy = jest
+        .spyOn(HunkService, 'defaultSpawn')
+        .mockReturnValue(
+          fakeChild(0) as ReturnType<typeof HunkService.defaultSpawn>,
+        );
+      const resetSpy = jest
+        .spyOn(HunkService, 'defaultReset')
+        .mockReturnValue(undefined);
+
+      const order: string[] = [];
+      const svc2 = new HunkService(new ConfigService());
+      (
+        svc2 as unknown as { resolveCommand: () => Promise<string[]> }
+      ).resolveCommand = () => Promise.resolve(['hunk']);
+
+      await svc2.launchForeground(
+        {
+          worktreePath: '/wt',
+          patchPath: '/wt/pr.diff',
+          agentContextPath: '/cfg/findings.json',
+          port: 41005,
+        },
+        {
+          suspend: () => order.push('suspend'),
+          resume: () => order.push('resume'),
+        },
+      );
+
+      expect(order).toEqual(['suspend', 'resume']);
+      expect(spawnSpy).toHaveBeenCalledTimes(1);
+      expect(resetSpy).not.toHaveBeenCalled();
+
+      spawnSpy.mockRestore();
+      resetSpy.mockRestore();
+    });
 
     it('should suspend, spawn hunk with the confirmed flags inheriting stdio, then resume', async () => {
       const order: string[] = [];

@@ -83,7 +83,7 @@ interface TawtuiGlobal {
     }>;
     runHunkForeground: (
       params: LaunchForegroundParams,
-      hooks: ForegroundHooks,
+      hooks: Pick<ForegroundHooks, 'suspend' | 'resume'>,
     ) => Promise<void>;
     resolveHunkSessionId: (
       port: number,
@@ -278,8 +278,13 @@ export class TuiService {
       ) => this.startHunkReview(owner, repo, prNumber, prTitle),
       runHunkForeground: (
         params: LaunchForegroundParams,
-        hooks: ForegroundHooks,
-      ) => this.hunkService.launchForeground(params, hooks),
+        hooks: Pick<ForegroundHooks, 'suspend' | 'resume'>,
+      ) =>
+        this.hunkService.launchForeground(params, {
+          ...hooks,
+          spawn: (cmd, opts) => HunkService.defaultSpawn(cmd, opts),
+          reset: () => HunkService.defaultReset(),
+        }),
       resolveHunkSessionId: (port: number, worktreePath?: string) =>
         this.hunkService.resolveSessionId(port, worktreePath),
       askHunkChat: (message: string) => this.agentReviewService.ask(message),
