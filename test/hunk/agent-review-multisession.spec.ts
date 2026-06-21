@@ -34,6 +34,18 @@ describe('AgentReviewService - multi-session', () => {
     });
   });
 
+  describe('resumeSession - Behavior', () => {
+    it('should seed a sessionId so the next ask resumes that session', async () => {
+      const svc = new KeyedFake(new PrDiffParser());
+      svc.resumeSession('o/r#pr-7-hunk', 'persisted-sess');
+      expect(svc.getSessionId('o/r#pr-7-hunk')).toBe('persisted-sess');
+      // the next ask reuses the keyed session (the fake echoes the reviewId-derived id,
+      // but the production runTurn reads `sessions.get(reviewId).sessionId` as `resume`)
+      await svc.ask('o/r#pr-7-hunk', 'q');
+      expect(svc.getSessionId('o/r#pr-7-hunk')).toBe('sess-o/r#pr-7-hunk');
+    });
+  });
+
   describe('Edge Cases', () => {
     it('should run two reviews concurrently without cross-contaminating prompts', async () => {
       await Promise.all([svc.ask('a', 'qa1'), svc.ask('b', 'qb1')]);

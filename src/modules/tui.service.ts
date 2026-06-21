@@ -233,6 +233,12 @@ export class TuiService {
   }
 
   async askHunkChat(prKey: string, message: string): Promise<string> {
+    if (this.agentReviewService.getSessionId(prKey) === undefined) {
+      const record = this.hunkReviewRegistry.get(prKey);
+      if (record?.sdkSessionId) {
+        this.agentReviewService.resumeSession(prKey, record.sdkSessionId);
+      }
+    }
     this.hunkReviewRegistry.appendChat(prKey, { role: 'user', text: message });
     const reply = await this.agentReviewService.ask(prKey, message);
     this.hunkReviewRegistry.appendChat(prKey, { role: 'agent', text: reply });

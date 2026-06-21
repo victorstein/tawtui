@@ -183,7 +183,10 @@ describe('TuiService.askHunkChat', () => {
   });
 
   it('should route to the keyed ask and append both turns', async () => {
-    const agentReview = { ask: jest.fn().mockResolvedValue('reply') };
+    const agentReview = {
+      ask: jest.fn().mockResolvedValue('reply'),
+      getSessionId: jest.fn().mockReturnValue('warm-sess'),
+    };
     const registry = { appendChat: jest.fn() };
     const svc = makeSvc({
       agentReviewService: agentReview,
@@ -200,6 +203,38 @@ describe('TuiService.askHunkChat', () => {
       role: 'agent',
       text: 'reply',
     });
+  });
+});
+
+describe('TuiService.askHunkChat - after restart', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('should seed the persisted sdkSessionId before the first post-restart ask', async () => {
+    const agentReview = {
+      resumeSession: jest.fn(),
+      getSessionId: jest.fn().mockReturnValue(undefined),
+      ask: jest.fn().mockResolvedValue('reply'),
+    };
+    const registry = {
+      appendChat: jest.fn(),
+      get: jest.fn().mockReturnValue({
+        prKey: 'o/r#pr-7-hunk',
+        sdkSessionId: 'persisted-sess',
+        chat: [],
+      }),
+    };
+    const svc = makeSvc({
+      agentReviewService: agentReview,
+      hunkReviewRegistry: registry,
+    });
+    await svc.askHunkChat('o/r#pr-7-hunk', 'q');
+    expect(agentReview.resumeSession).toHaveBeenCalledWith(
+      'o/r#pr-7-hunk',
+      'persisted-sess',
+    );
+    expect(agentReview.ask).toHaveBeenCalledWith('o/r#pr-7-hunk', 'q');
   });
 });
 

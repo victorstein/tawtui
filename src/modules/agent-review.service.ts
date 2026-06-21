@@ -59,6 +59,10 @@ export class AgentReviewService {
     return this.sessions.get(reviewId)?.sessionId;
   }
 
+  resumeSession(reviewId: string, sessionId: string): void {
+    this.sessionFor(reviewId).sessionId = sessionId;
+  }
+
   async startReview(
     reviewId: string,
     ctx: StartReviewContext,
