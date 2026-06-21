@@ -8,6 +8,8 @@ export type ReviewsHintContext =
   | { mode: 'terminal-right' }
   | { mode: 'hunk-review' }
   | { mode: 'interactive' }
+  | { mode: 'reviews-list' }
+  | { mode: 'review-panel' }
   | { mode: 'empty' };
 
 interface StatusBarProps {
@@ -41,8 +43,12 @@ function getReviewsHint(ctx: ReviewsHintContext): string {
       return `${base} | o open hunk | H re-review | h/l panes | j/k navigate | r refresh | q quit`;
     case 'terminal-right':
       return `${base} | h/l panes | C-d/C-u scroll | enter interactive | Alt+C copy | Alt+V paste | K kill | r refresh | q quit`;
+    case 'reviews-list':
+      return `${base} | h/l panes | j/k navigate | o open hunk | K remove | Shift+H start review | q quit`;
+    case 'review-panel':
+      return `${base} | h/l panes | o open hunk | Esc back | K remove | q quit`;
     case 'empty':
-      return `${base} | a add repo | n new agent | q quit`;
+      return `${base} | a add repo | q quit`;
   }
 }
 

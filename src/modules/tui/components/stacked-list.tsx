@@ -1,6 +1,5 @@
 import { For, Show } from 'solid-js';
 import type { RepoConfig } from '../../../shared/types';
-import type { TerminalSession } from '../../terminal.types';
 import type { HunkReviewRecord, HunkReviewStatus } from '../../hunk-review.types';
 import {
   BG_SELECTED,
@@ -59,10 +58,8 @@ export function formatReviewLabel(r: HunkReviewRecord): string {
 
 interface StackedListProps {
   repos: RepoConfig[];
-  /** @deprecated Transitional — will be removed in Task 7 when reviews-view drops agents. */
-  agents?: TerminalSession[];
-  reviews?: HunkReviewRecord[];
-  spinnerFrame?: number;
+  reviews: HunkReviewRecord[];
+  spinnerFrame: number;
   /** Flat cursor position: 0..repos.length-1 = repos, repos.length..total-1 = reviews */
   cursorIndex: number;
   /** Whether this pane is the active pane */
@@ -227,7 +224,7 @@ export default function StackedList(props: StackedListProps) {
 
       {/* ── REVIEWS section ────────────────────────────────── */}
       <GradientHeader
-        label={` REVIEWS (${(props.reviews ?? []).length}) `}
+        label={` REVIEWS (${props.reviews.length}) `}
         gradStart={AGENT_GRAD[0]}
         gradEnd={AGENT_GRAD[1]}
         innerWidth={innerWidth()}
@@ -235,20 +232,20 @@ export default function StackedList(props: StackedListProps) {
       />
 
       <Show
-        when={(props.reviews ?? []).length > 0}
+        when={props.reviews.length > 0}
         fallback={
           <box paddingX={1} paddingY={1}>
             <text fg={FG_DIM}>No reviews running</text>
           </box>
         }
       >
-        <For each={props.reviews ?? []}>
+        <For each={props.reviews}>
           {(review, index) => {
             const isSelected = () =>
               props.isActivePane &&
               props.cursorIndex === props.repos.length + index();
             const glyph = () =>
-              reviewStatusGlyph(review.status, props.spinnerFrame ?? 0);
+              reviewStatusGlyph(review.status, props.spinnerFrame);
 
             return (
               <box

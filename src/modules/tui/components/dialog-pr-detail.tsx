@@ -30,7 +30,7 @@ const markdownStyle = SyntaxStyle.fromStyles({
 
 interface DialogPrDetailProps {
   pr: PullRequestDetail;
-  onSendToAgent: () => void;
+  onSendToAgent?: () => void;
   onGoToAgent?: () => void;
   hasActiveAgent?: boolean;
   onClose: () => void;
@@ -98,7 +98,7 @@ export function DialogPrDetail(props: DialogPrDetailProps) {
     if (key.name === 's') {
       if (props.hasActiveAgent && props.onGoToAgent) {
         props.onGoToAgent();
-      } else {
+      } else if (props.onSendToAgent) {
         props.onSendToAgent();
       }
       return;
