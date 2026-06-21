@@ -1,6 +1,7 @@
 import { For, Show } from 'solid-js';
 import type { RepoConfig } from '../../../shared/types';
 import type { TerminalSession } from '../../terminal.types';
+import type { HunkReviewRecord, HunkReviewStatus } from '../../hunk-review.types';
 import {
   BG_SELECTED,
   FG_PRIMARY,
@@ -32,10 +33,37 @@ const STATUS_COLORS: Record<string, string> = {
 /** Status dot character. */
 const STATUS_DOT = '\u25CF';
 
+const SPINNER_FRAMES = ['\u280B', '\u2819', '\u2839', '\u2838', '\u283C', '\u2834', '\u2826', '\u2827', '\u2807', '\u280F'];
+
+export function reviewStatusGlyph(
+  status: HunkReviewStatus,
+  spinnerFrame: number,
+): string {
+  switch (status) {
+    case 'creating':
+    case 'reviewing':
+      return SPINNER_FRAMES[spinnerFrame % SPINNER_FRAMES.length];
+    case 'ready':
+    case 'open':
+      return '\u2713';
+    case 'error':
+    case 'interrupted':
+    case 'killed':
+      return '\u2717';
+  }
+}
+
+export function formatReviewLabel(r: HunkReviewRecord): string {
+  return `PR #${r.prNumber} \u00B7 ${r.repoName}`;
+}
+
 interface StackedListProps {
   repos: RepoConfig[];
-  agents: TerminalSession[];
-  /** Flat cursor position: 0..repos.length-1 = repos, repos.length..total-1 = agents */
+  /** @deprecated Transitional — will be removed in Task 7 when reviews-view drops agents. */
+  agents?: TerminalSession[];
+  reviews?: HunkReviewRecord[];
+  spinnerFrame?: number;
+  /** Flat cursor position: 0..repos.length-1 = repos, repos.length..total-1 = reviews */
   cursorIndex: number;
   /** Whether this pane is the active pane */
   isActivePane: boolean;
@@ -197,9 +225,9 @@ export default function StackedList(props: StackedListProps) {
         </For>
       </Show>
 
-      {/* ── AGENTS section ─────────────────────────────────── */}
+      {/* ── REVIEWS section ────────────────────────────────── */}
       <GradientHeader
-        label={` AGENTS (${props.agents.length}) `}
+        label={` REVIEWS (${(props.reviews ?? []).length}) `}
         gradStart={AGENT_GRAD[0]}
         gradEnd={AGENT_GRAD[1]}
         innerWidth={innerWidth()}
@@ -207,24 +235,20 @@ export default function StackedList(props: StackedListProps) {
       />
 
       <Show
-        when={props.agents.length > 0}
+        when={(props.reviews ?? []).length > 0}
         fallback={
           <box paddingX={1} paddingY={1}>
-            <text fg={FG_DIM}>No agents running</text>
+            <text fg={FG_DIM}>No reviews running</text>
           </box>
         }
       >
-        <For each={props.agents}>
-          {(agent, index) => {
+        <For each={props.reviews ?? []}>
+          {(review, index) => {
             const isSelected = () =>
               props.isActivePane &&
               props.cursorIndex === props.repos.length + index();
-            const statusColor = () => STATUS_COLORS[agent.status] ?? FG_DIM;
-
-            /** Build the metadata line (branch name or task association). */
-            const metaText = () => {
-              return agent.branchName || null;
-            };
+            const glyph = () =>
+              reviewStatusGlyph(review.status, props.spinnerFrame ?? 0);
 
             return (
               <box
@@ -234,35 +258,16 @@ export default function StackedList(props: StackedListProps) {
                 paddingX={1}
                 paddingBottom={1}
               >
-                {/* Line 1: status dot + session name */}
                 <box height={1} width="100%" flexDirection="row">
-                  <text fg={statusColor()}>{STATUS_DOT} </text>
+                  <text fg={FG_DIM}>{glyph()} </text>
                   <text
                     fg={isSelected() ? FG_PRIMARY : FG_NORMAL}
                     attributes={isSelected() ? 1 : 0}
                     truncate
                   >
-                    {agent.name}
+                    {formatReviewLabel(review)}
                   </text>
                 </box>
-
-                {/* Line 2: metadata (PR / task) if present */}
-                <Show when={metaText()}>
-                  <box height={1} width="100%" paddingX={0}>
-                    <text fg={FG_DIM} truncate>
-                      {`  ${metaText()}`}
-                    </text>
-                  </box>
-                </Show>
-
-                {/* Line 3: worktree path if present */}
-                <Show when={agent.worktreePath}>
-                  <box height={1} width="100%" paddingX={0}>
-                    <text fg={FG_DIM} truncate>
-                      {`  ${abbreviateWorktreePath(agent.worktreePath!)}`}
-                    </text>
-                  </box>
-                </Show>
               </box>
             );
           }}
