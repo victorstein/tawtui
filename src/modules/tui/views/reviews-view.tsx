@@ -25,6 +25,8 @@ import type { TerminalService } from '../../terminal.service';
 import type { DependencyService } from '../../dependency.service';
 import type { DependencyStatus } from '../../dependency.types';
 import type { ReviewsHintContext } from '../components/status-bar';
+import type { ReviewBody } from '../../hunk-review.types';
+import { HunkReviewPanel } from '../components/hunk-review-panel';
 import StackedList from '../components/stacked-list';
 import { PrList } from '../components/pr-list';
 import { TerminalOutput } from '../components/terminal-output';
@@ -115,6 +117,18 @@ export default function ReviewsView(props: ReviewsViewProps) {
 
   // Interactive mode state
   const [interactive, setInteractive] = createSignal(false);
+
+  // Hunk review state
+  const [hunkReview, setHunkReview] = createSignal<{
+    prKey: string;
+    agentContextPath: string;
+    worktreePath: string;
+    patchPath: string;
+    body: ReviewBody;
+    port: number;
+  } | null>(null);
+  const [chat, setChat] = createSignal<{ role: 'user' | 'agent'; text: string }[]>([]);
+  const [chatInput, setChatInput] = createSignal('');
 
   // Error display state
   const [error, setError] = createSignal<string | null>(null);
@@ -769,6 +783,84 @@ export default function ReviewsView(props: ReviewsViewProps) {
     }
   }
 
+  // ── Hunk review actions ─────────────────────────────────────────
+
+  async function startHunkReviewFlow(): Promise<void> {
+    const sel = selectedItem();
+    if (sel.kind !== 'repo') return;
+    const pr = prs()[prIndex()];
+    if (!pr) return;
+    const bridge = (globalThis as Record<string, any>).__tawtui;
+    if (!bridge?.startHunkReview || !bridge?.checkHunkPrereqs) return;
+
+    const prereqs = await bridge.checkHunkPrereqs();
+    if (!prereqs.hunk.available) {
+      showError(`hunk not available: ${prereqs.hunk.detail}`);
+      return;
+    }
+    if (!prereqs.claudeAuth) {
+      showError('Claude auth missing — run `claude login`');
+      return;
+    }
+
+    dialog.show(
+      () => (
+        <box flexDirection="column" paddingX={1} paddingY={1}>
+          <text fg={FG_DIM}>Running hunk review for PR #{pr.number}…</text>
+        </box>
+      ),
+      { size: 'medium' },
+    );
+
+    try {
+      const result = await bridge.startHunkReview(
+        sel.repo.owner,
+        sel.repo.repo,
+        pr.number,
+        pr.title,
+      );
+      dialog.close();
+      setHunkReview({ ...result, port: 0 });
+      setChat([{ role: 'agent', text: result.body.summary }]);
+    } catch {
+      dialog.close();
+      showError('Hunk review failed');
+    }
+  }
+
+  async function openHunkForeground(): Promise<void> {
+    const review = hunkReview();
+    const bridge = (globalThis as Record<string, any>).__tawtui;
+    if (!review || !bridge?.runHunkForeground) return;
+    await bridge.runHunkForeground(
+      {
+        worktreePath: review.worktreePath,
+        patchPath: review.patchPath,
+        agentContextPath: review.agentContextPath,
+        port: review.port,
+      },
+      {
+        suspend: () => renderer.suspend(),
+        resume: () => renderer.resume(),
+      },
+    );
+  }
+
+  async function sendChat(): Promise<void> {
+    const msg = chatInput().trim();
+    const bridge = (globalThis as Record<string, any>).__tawtui;
+    const review = hunkReview();
+    if (!msg || !review || !bridge?.askHunkChat) return;
+    setChat((c) => [...c, { role: 'user', text: msg }]);
+    setChatInput('');
+    try {
+      const reply = await bridge.askHunkChat(msg);
+      setChat((c) => [...c, { role: 'agent', text: reply }]);
+    } catch {
+      setChat((c) => [...c, { role: 'agent', text: '⚠ chat failed' }]);
+    }
+  }
+
   // ── Keyboard handling ───────────────────────────────────────────
 
   useKeyboard((key) => {
@@ -1016,6 +1108,18 @@ export default function ReviewsView(props: ReviewsViewProps) {
       return;
     }
 
+    // Hunk review: H → start, o → open foreground (PR pane only)
+    if (rightPaneMode() === 'prs') {
+      if (key.name === 'H' || (key.shift && key.name === 'h')) {
+        void startHunkReviewFlow();
+        return;
+      }
+      if (key.name === 'o' && hunkReview()) {
+        void openHunkForeground();
+        return;
+      }
+    }
+
   });
 
   usePaste((event) => {
@@ -1056,6 +1160,19 @@ export default function ReviewsView(props: ReviewsViewProps) {
           width={leftPaneWidth()}
         />
         <Switch>
+          <Match when={rightPaneMode() === 'prs' && hunkReview() !== null}>
+            <HunkReviewPanel
+              summary={hunkReview()!.body.summary}
+              unanchored={hunkReview()!.body.unanchoredFindings}
+              unanchoredCount={hunkReview()!.body.unanchoredCount}
+              chat={chat()}
+              status="ready"
+              chatInput={chatInput()}
+              onChatInput={setChatInput}
+              onSend={() => void sendChat()}
+              onOpenHunk={() => void openHunkForeground()}
+            />
+          </Match>
           <Match when={rightPaneMode() === 'prs'}>
             <PrList
               prs={prs()}
