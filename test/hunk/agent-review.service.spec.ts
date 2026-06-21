@@ -1,7 +1,12 @@
+jest.mock('@anthropic-ai/claude-agent-sdk', () => ({
+  query: jest.fn(),
+}));
+
 import {
   AgentReviewService,
   AgentReviewError,
 } from '../../src/modules/agent-review.service';
+import type { StartReviewContext } from '../../src/modules/agent-review.service';
 import { PrDiffParser } from '../../src/modules/pr-diff-parser.service';
 import type { AgentContext } from '../../src/modules/hunk-review.types';
 import { mkdtempSync, readFileSync, rmSync } from 'fs';
@@ -66,5 +71,51 @@ describe('AgentReviewService - buildReviewOutput', () => {
         'tawtui-review',
       ),
     ).toThrow(AgentReviewError);
+  });
+});
+
+describe('AgentReviewService - startReview / ask', () => {
+  class FakeAgentReviewService extends AgentReviewService {
+    public calls: string[] = [];
+    public reply = '';
+    protected override runTurn(
+      prompt: string,
+    ): Promise<{ sessionId: string; text: string }> {
+      this.calls.push(prompt);
+      return Promise.resolve({ sessionId: 'sess-1', text: this.reply });
+    }
+  }
+
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'tawtui-agentrev-sdk-'));
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  it('should run one review turn and return a validated ReviewOutput', async () => {
+    const parser = new PrDiffParser();
+    const svc = new FakeAgentReviewService(parser);
+    svc.reply = JSON.stringify({ summary: 'ok', findings: [] });
+    const map = parser.parse(SIMPLE);
+    const ctx: StartReviewContext = {
+      diffRaw: SIMPLE,
+      lineMap: map,
+      agentContextPath: join(dir, 'f.json'),
+      authorLabel: 'tawtui-review',
+      prTitle: 'PR',
+    };
+    const out = await svc.startReview(ctx);
+    expect(out.body.summary).toBe('ok');
+    expect(svc.getSessionId()).toBe('sess-1');
+  });
+
+  it('should serialize ask() turns FIFO', async () => {
+    const parser = new PrDiffParser();
+    const svc = new FakeAgentReviewService(parser);
+    svc.reply = 'answer';
+    const [a, b] = await Promise.all([svc.ask('q1'), svc.ask('q2')]);
+    expect(a).toBe('answer');
+    expect(b).toBe('answer');
+    expect(svc.calls).toEqual(['q1', 'q2']);
   });
 });
