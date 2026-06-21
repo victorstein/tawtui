@@ -129,6 +129,16 @@ export default function ReviewsView(props: ReviewsViewProps) {
   } | null>(null);
   const [chat, setChat] = createSignal<{ role: 'user' | 'agent'; text: string }[]>([]);
   const [chatInput, setChatInput] = createSignal('');
+  const [reviewingPr, setReviewingPr] = createSignal<number | null>(null);
+  const [spinnerFrame, setSpinnerFrame] = createSignal(0);
+
+  const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+  createEffect(() => {
+    if (reviewingPr() === null) return;
+    const id = setInterval(() => setSpinnerFrame((f) => (f + 1) % SPINNER_FRAMES.length), 120);
+    onCleanup(() => clearInterval(id));
+  });
+  const spinnerChar = () => SPINNER_FRAMES[spinnerFrame()];
 
   // Error display state
   const [error, setError] = createSignal<string | null>(null);
@@ -805,29 +815,28 @@ export default function ReviewsView(props: ReviewsViewProps) {
       return;
     }
 
-    dialog.show(
-      () => (
-        <box flexDirection="column" paddingX={1} paddingY={1}>
-          <text fg={FG_DIM}>Running hunk review for PR #{pr.number}…</text>
-        </box>
-      ),
-      { size: 'medium' },
-    );
-
-    try {
-      const result = await bridge.startHunkReview(
-        sel.repo.owner,
-        sel.repo.repo,
-        pr.number,
-        pr.title,
-      );
-      dialog.close();
-      setHunkReview({ ...result, port: 0 });
-      setChat([{ role: 'agent', text: result.body.summary }]);
-    } catch {
-      dialog.close();
-      showError('Hunk review failed');
+    if (reviewingPr() !== null) {
+      showError('A hunk review is already running — wait for it to finish.');
+      return;
     }
+
+    setReviewingPr(pr.number);
+    bridge
+      .startHunkReview(sel.repo.owner, sel.repo.repo, pr.number, pr.title)
+      .then(
+        (result: {
+          prKey: string;
+          agentContextPath: string;
+          worktreePath: string;
+          patchPath: string;
+          body: ReviewBody;
+        }) => {
+          setHunkReview({ ...result, port: 0 });
+          setChat([{ role: 'agent', text: result.body.summary }]);
+        },
+      )
+      .catch(() => showError('Hunk review failed'))
+      .finally(() => setReviewingPr(null));
   }
 
   async function openHunkForeground(): Promise<void> {
@@ -1110,8 +1119,12 @@ export default function ReviewsView(props: ReviewsViewProps) {
       return;
     }
 
-    // Hunk review: H → start, o → open foreground (PR pane only)
+    // Hunk review: H → start, o → open foreground, Escape → dismiss panel (PR pane only)
     if (rightPaneMode() === 'prs') {
+      if (key.name === 'escape' && hunkReview() !== null) {
+        setHunkReview(null);
+        return;
+      }
       if (key.name === 'H' || (key.shift && key.name === 'h')) {
         void startHunkReviewFlow();
         return;
@@ -1176,18 +1189,25 @@ export default function ReviewsView(props: ReviewsViewProps) {
             />
           </Match>
           <Match when={rightPaneMode() === 'prs'}>
-            <PrList
-              prs={prs()}
-              selectedIndex={prIndex()}
-              isActivePane={activePane() === 'right'}
-              width={rightPaneWidth()}
-              repoLabel={selectedRepoLabel()}
-              loading={prLoading()}
-              error={prError()}
-              agents={agents()}
-              syncing={prSyncing()}
-              syncError={prSyncError()}
-            />
+            <box flexDirection="column" flexGrow={1}>
+              <Show when={reviewingPr() !== null}>
+                <box paddingX={1}>
+                  <text fg={ACCENT_PRIMARY}>{`${spinnerChar()} Reviewing PR #${reviewingPr()}… (running in the background — keep working; the panel opens when ready)`}</text>
+                </box>
+              </Show>
+              <PrList
+                prs={prs()}
+                selectedIndex={prIndex()}
+                isActivePane={activePane() === 'right'}
+                width={rightPaneWidth()}
+                repoLabel={selectedRepoLabel()}
+                loading={prLoading()}
+                error={prError()}
+                agents={agents()}
+                syncing={prSyncing()}
+                syncError={prSyncError()}
+              />
+            </box>
           </Match>
           <Match when={rightPaneMode() === 'terminal'}>
             <TerminalOutput
