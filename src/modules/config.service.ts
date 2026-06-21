@@ -201,6 +201,10 @@ export class ConfigService {
     this.save(config);
   }
 
+  configDirPublic(): string {
+    return this.configDir;
+  }
+
   getHunkConfig(): HunkConfig {
     const config = this.load();
     return { ...DEFAULT_HUNK_CONFIG, ...config.hunk };

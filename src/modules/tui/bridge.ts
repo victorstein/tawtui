@@ -13,6 +13,13 @@ import type {
 } from '../github.types';
 import type { ProjectAgentConfig } from '../config.types';
 import type { DueDateValidation } from '../taskwarrior.types';
+import type {
+  ReviewBody,
+  HunkAvailability,
+  LaunchForegroundParams,
+  HunkReviewRecord,
+} from '../hunk-review.types';
+import type { ForegroundHooks } from '../hunk.service';
 
 export interface TawtuiBridge {
   taskwarriorService: TaskwarriorService;
@@ -47,6 +54,33 @@ export interface TawtuiBridge {
     cleanupWorktree: boolean,
   ) => Promise<void>;
   validateDueDate: (value: string) => DueDateValidation;
+  startHunkReview: (
+    owner: string,
+    repo: string,
+    prNumber: number,
+    prTitle: string,
+  ) => Promise<{
+    prKey: string;
+    agentContextPath: string;
+    worktreePath: string;
+    patchPath: string;
+    body: ReviewBody;
+  }>;
+  runHunkForeground: (
+    params: LaunchForegroundParams,
+    hooks: ForegroundHooks,
+  ) => Promise<void>;
+  resolveHunkSessionId: (
+    port: number,
+    worktreePath?: string,
+  ) => Promise<string | null>;
+  askHunkChat: (message: string) => Promise<string>;
+  listHunkReviews: () => HunkReviewRecord[];
+  killHunkReview: (prKey: string) => Promise<void>;
+  checkHunkPrereqs: () => Promise<{
+    hunk: HunkAvailability;
+    claudeAuth: boolean;
+  }>;
 }
 
 function getBridge(): TawtuiBridge | undefined {
@@ -106,4 +140,36 @@ export function getNotificationService(): NotificationService | null {
 export function getTuiExit(): (() => void) | null {
   const exit = (globalThis as Record<string, unknown>).__tuiExit;
   return typeof exit === 'function' ? (exit as () => void) : null;
+}
+
+export function getStartHunkReview(): TawtuiBridge['startHunkReview'] | null {
+  return getBridge()?.startHunkReview ?? null;
+}
+
+export function getRunHunkForeground():
+  | TawtuiBridge['runHunkForeground']
+  | null {
+  return getBridge()?.runHunkForeground ?? null;
+}
+
+export function getResolveHunkSessionId():
+  | TawtuiBridge['resolveHunkSessionId']
+  | null {
+  return getBridge()?.resolveHunkSessionId ?? null;
+}
+
+export function getAskHunkChat(): TawtuiBridge['askHunkChat'] | null {
+  return getBridge()?.askHunkChat ?? null;
+}
+
+export function getListHunkReviews(): TawtuiBridge['listHunkReviews'] | null {
+  return getBridge()?.listHunkReviews ?? null;
+}
+
+export function getKillHunkReview(): TawtuiBridge['killHunkReview'] | null {
+  return getBridge()?.killHunkReview ?? null;
+}
+
+export function getCheckHunkPrereqs(): TawtuiBridge['checkHunkPrereqs'] | null {
+  return getBridge()?.checkHunkPrereqs ?? null;
 }

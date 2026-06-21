@@ -57,7 +57,8 @@
     "moduleFileExtensions": [
       "js",
       "json",
-      "ts"
+      "ts",
+      "tsx"
     ],
     "rootDir": ".",
     "testRegex": "test/.*\\.spec\\.ts$",
@@ -65,9 +66,16 @@
       "/node_modules/"
     ],
     "transform": {
-      "^.+\\.(t|j)s$": ["ts-jest", {
+      "^.+\\.(t|j)sx?$": ["ts-jest", {
         "tsconfig": "tsconfig.jest.json"
       }]
+    },
+    "moduleNameMapper": {
+      "^@opentui/solid$": "<rootDir>/test/__mocks__/opentui-solid.ts",
+      "^@opentui/core$": "<rootDir>/test/__mocks__/empty-module.ts",
+      "^solid-js$": "<rootDir>/test/__mocks__/solid-js.ts",
+      "^solid-js/(.*)$": "<rootDir>/test/__mocks__/solid-js.ts",
+      "\\.\/tui\\/app$": "<rootDir>/test/__mocks__/empty-module.ts"
     },
     "collectCoverageFrom": [
       "src/**/*.(t|j)s"

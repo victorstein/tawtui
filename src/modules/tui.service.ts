@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { writeFileSync } from 'fs';
+import { join } from 'path';
 import { render } from '@opentui/solid';
 import { App } from './tui/app';
 import { TaskwarriorService } from './taskwarrior.service';
@@ -9,6 +11,11 @@ import { DependencyService } from './dependency.service';
 import { CalendarService } from './calendar.service';
 import { NotificationService } from './notification.service';
 import { ProjectService } from './project.service';
+import { WorktreeService } from './worktree.service';
+import { PrDiffParser } from './pr-diff-parser.service';
+import { AgentReviewService } from './agent-review.service';
+import { HunkService } from './hunk.service';
+import { HunkReviewRegistry } from './hunk-review-registry.service';
 import type {
   PullRequestDetail,
   PrDiff,
@@ -16,6 +23,13 @@ import type {
 } from './github.types';
 import type { ProjectAgentConfig } from './config.types';
 import type { DueDateValidation } from './taskwarrior.types';
+import type {
+  ReviewBody,
+  HunkAvailability,
+  LaunchForegroundParams,
+  HunkReviewRecord,
+} from './hunk-review.types';
+import type { ForegroundHooks } from './hunk.service';
 
 interface TawtuiGlobal {
   __tawtui?: {
@@ -55,6 +69,33 @@ interface TawtuiGlobal {
       cleanupWorktree: boolean,
     ) => Promise<void>;
     validateDueDate: (value: string) => DueDateValidation;
+    startHunkReview: (
+      owner: string,
+      repo: string,
+      prNumber: number,
+      prTitle: string,
+    ) => Promise<{
+      prKey: string;
+      agentContextPath: string;
+      worktreePath: string;
+      patchPath: string;
+      body: ReviewBody;
+    }>;
+    runHunkForeground: (
+      params: LaunchForegroundParams,
+      hooks: ForegroundHooks,
+    ) => Promise<void>;
+    resolveHunkSessionId: (
+      port: number,
+      worktreePath?: string,
+    ) => Promise<string | null>;
+    askHunkChat: (message: string) => Promise<string>;
+    listHunkReviews: () => HunkReviewRecord[];
+    killHunkReview: (prKey: string) => Promise<void>;
+    checkHunkPrereqs: () => Promise<{
+      hunk: HunkAvailability;
+      claudeAuth: boolean;
+    }>;
   };
   __tuiExit?: () => void;
 }
@@ -70,7 +111,109 @@ export class TuiService {
     private readonly calendarService: CalendarService,
     private readonly notificationService: NotificationService,
     private readonly projectService: ProjectService,
+    private readonly worktreeService: WorktreeService,
+    private readonly prDiffParser: PrDiffParser,
+    private readonly agentReviewService: AgentReviewService,
+    private readonly hunkService: HunkService,
+    private readonly hunkReviewRegistry: HunkReviewRegistry,
   ) {}
+
+  async startHunkReview(
+    owner: string,
+    repo: string,
+    prNumber: number,
+    prTitle: string,
+  ): Promise<{
+    prKey: string;
+    agentContextPath: string;
+    worktreePath: string;
+    patchPath: string;
+    body: ReviewBody;
+  }> {
+    const wt = await this.worktreeService.createWorktree(
+      owner,
+      repo,
+      prNumber,
+      undefined,
+      'hunk',
+    );
+    const prKey = wt.id;
+    this.hunkReviewRegistry.add({
+      prKey,
+      repoOwner: owner,
+      repoName: repo,
+      prNumber,
+      worktreePath: wt.path,
+      port: 0,
+      status: 'reviewing',
+      createdAt: new Date().toISOString(),
+    });
+
+    const diff = await this.githubService.getPrDiff(owner, repo, prNumber);
+    const patchPath = join(wt.path, 'pr.diff');
+    writeFileSync(patchPath, diff.raw, 'utf-8');
+
+    const hunkCfg = this.configService.getHunkConfig();
+    const lineMap = this.prDiffParser.parse(diff.raw);
+    const agentContextPath = join(
+      this.configService.configDirPublic(),
+      `hunk-findings-${prNumber}.json`,
+    );
+
+    const body = this.prDiffParser.isOverThreshold(
+      diff.raw,
+      hunkCfg.maxDiffBytes,
+    )
+      ? {
+          summary: 'Diff exceeds size threshold; review-body-only.',
+          unanchoredFindings: [],
+          unanchoredCount: 0,
+        }
+      : (
+          await this.agentReviewService.startReview({
+            diffRaw: diff.raw,
+            lineMap,
+            agentContextPath,
+            authorLabel: hunkCfg.agentAuthorLabel,
+            prTitle,
+          })
+        ).body;
+
+    this.hunkReviewRegistry.update(prKey, {
+      status: 'ready',
+      sdkSessionId: this.agentReviewService.getSessionId(),
+    });
+
+    return { prKey, agentContextPath, worktreePath: wt.path, patchPath, body };
+  }
+
+  async killHunkReview(prKey: string): Promise<void> {
+    this.agentReviewService.dispose();
+    const record = this.hunkReviewRegistry.get(prKey);
+    if (record) {
+      await this.worktreeService.removeWorktree(prKey);
+    }
+    this.hunkReviewRegistry.remove(prKey);
+  }
+
+  async checkHunkPrereqs(): Promise<{
+    hunk: HunkAvailability;
+    claudeAuth: boolean;
+  }> {
+    const hunk = await this.hunkService.isAvailable();
+    let claudeAuth = false;
+    try {
+      const proc = Bun.spawn(['claude', '--version'], {
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+      const exitCode = await proc.exited;
+      claudeAuth = exitCode === 0;
+    } catch {
+      claudeAuth = false;
+    }
+    return { hunk, claudeAuth };
+  }
 
   async launch(): Promise<void> {
     const g = globalThis as unknown as TawtuiGlobal;
@@ -127,6 +270,22 @@ export class TuiService {
         ),
       validateDueDate: (value: string) =>
         this.taskwarriorService.validateDueDate(value),
+      startHunkReview: (
+        owner: string,
+        repo: string,
+        prNumber: number,
+        prTitle: string,
+      ) => this.startHunkReview(owner, repo, prNumber, prTitle),
+      runHunkForeground: (
+        params: LaunchForegroundParams,
+        hooks: ForegroundHooks,
+      ) => this.hunkService.launchForeground(params, hooks),
+      resolveHunkSessionId: (port: number, worktreePath?: string) =>
+        this.hunkService.resolveSessionId(port, worktreePath),
+      askHunkChat: (message: string) => this.agentReviewService.ask(message),
+      listHunkReviews: () => this.hunkReviewRegistry.list(),
+      killHunkReview: (prKey: string) => this.killHunkReview(prKey),
+      checkHunkPrereqs: () => this.checkHunkPrereqs(),
     };
 
     // Set up the exit promise before rendering so the App component

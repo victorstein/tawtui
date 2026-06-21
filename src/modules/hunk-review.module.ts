@@ -15,6 +15,12 @@ import { HunkReviewRegistry } from './hunk-review-registry.service';
     HunkService,
     HunkReviewRegistry,
   ],
-  exports: [PrDiffParser, AgentReviewService, HunkService, HunkReviewRegistry],
+  exports: [
+    PrDiffParser,
+    AgentReviewService,
+    HunkService,
+    HunkReviewRegistry,
+    WorktreeModule,
+  ],
 })
 export class HunkReviewModule {}
