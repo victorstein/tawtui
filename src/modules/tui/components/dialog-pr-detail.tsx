@@ -234,7 +234,7 @@ export function DialogPrDetail(props: DialogPrDetailProps) {
           </text>
           <Show
             when={props.hasActiveAgent}
-            fallback={<text fg={FG_DIM}>{' Send to Agent  '}</text>}
+            fallback={<text fg={FG_DIM}>{' Review with hunk  '}</text>}
           >
             <text fg={COLOR_SUCCESS}>{' Go to Agent  '}</text>
           </Show>

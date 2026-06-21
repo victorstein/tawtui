@@ -413,6 +413,10 @@ export default function ReviewsView(props: ReviewsViewProps) {
           () => (
             <DialogPrDetail
               pr={detail}
+              onSendToAgent={() => {
+                dialog.close();
+                void startHunkReviewFlow();
+              }}
               onClose={() => dialog.close()}
             />
           ),
