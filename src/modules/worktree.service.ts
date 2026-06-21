@@ -388,14 +388,23 @@ export class WorktreeService implements OnModuleInit {
    * Execute a git command via Bun.spawn.
    */
   private async execGit(args: string[], cwd: string): Promise<ExecResult> {
-    const cmd = ['git', ...args];
-    this.logger.debug(`Executing: ${cmd.join(' ')} (cwd: ${cwd})`);
+    const cmd = [
+      'git',
+      '-c',
+      'credential.helper=',
+      '-c',
+      'credential.helper=!gh auth git-credential',
+      ...args,
+    ];
+    this.logger.debug(`Executing: git ${args.join(' ')} (cwd: ${cwd})`);
 
     try {
       const proc = Bun.spawn(cmd, {
         cwd,
+        stdin: 'ignore',
         stdout: 'pipe',
         stderr: 'pipe',
+        env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
       });
 
       const [stdout, stderr, exitCode] = await Promise.all([
@@ -464,8 +473,10 @@ export class WorktreeService implements OnModuleInit {
     try {
       const proc = Bun.spawn(cmd, {
         cwd,
+        stdin: 'ignore',
         stdout: 'pipe',
         stderr: 'pipe',
+        env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
       });
 
       const [stdout, stderr, exitCode] = await Promise.all([

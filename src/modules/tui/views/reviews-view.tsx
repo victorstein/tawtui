@@ -468,8 +468,8 @@ export default function ReviewsView(props: ReviewsViewProps) {
       loadReviews();
       const idx = reviews().findIndex((r) => r.prKey === prKey);
       if (idx >= 0) setCursorIndex(repos().length + idx);
-    } catch {
-      showError('Hunk review failed to start');
+    } catch (err) {
+      showError(`Hunk review failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
