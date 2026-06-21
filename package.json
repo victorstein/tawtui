@@ -75,6 +75,7 @@
       "^@opentui/core$": "<rootDir>/test/__mocks__/empty-module.ts",
       "^solid-js$": "<rootDir>/test/__mocks__/solid-js.ts",
       "^solid-js/(.*)$": "<rootDir>/test/__mocks__/solid-js.ts",
+      "^react/jsx-runtime$": "<rootDir>/test/__mocks__/react-jsx-runtime.ts",
       "\\.\/tui\\/app$": "<rootDir>/test/__mocks__/empty-module.ts"
     },
     "collectCoverageFrom": [
