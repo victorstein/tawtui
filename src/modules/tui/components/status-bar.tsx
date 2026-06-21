@@ -6,6 +6,7 @@ export type ReviewsHintContext =
   | { mode: 'prs-right' }
   | { mode: 'reviews-list' }
   | { mode: 'review-panel' }
+  | { mode: 'review-chat' }
   | { mode: 'empty' };
 
 interface StatusBarProps {
@@ -34,7 +35,9 @@ function getReviewsHint(ctx: ReviewsHintContext): string {
     case 'reviews-list':
       return `${base} | j/k navigate | enter open panel | o open hunk | K remove | r refresh | q quit`;
     case 'review-panel':
-      return `${base} | o open hunk | type + enter chat | esc back | r refresh | q quit`;
+      return `${base} | i chat | o open hunk | esc back | K remove | r refresh | q quit`;
+    case 'review-chat':
+      return 'typing chat message | enter send | backspace delete | esc cancel';
     case 'empty':
       return `${base} | a add repo | Shift+H review a PR | q quit`;
   }

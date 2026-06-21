@@ -103,6 +103,9 @@ export default function ReviewsView(props: ReviewsViewProps) {
   // Chat input state
   const [chatInput, setChatInput] = createSignal('');
 
+  // Chat focus state — when true, keystrokes go to chat input instead of global commands
+  const [chatFocused, setChatFocused] = createSignal(false);
+
   // Error display state
   const [error, setError] = createSignal<string | null>(null);
   let errorTimer: ReturnType<typeof setTimeout> | null = null;
@@ -165,7 +168,9 @@ export default function ReviewsView(props: ReviewsViewProps) {
     const pane = activePane();
 
     let ctx: ReviewsHintContext;
-    if (pane === 'right') {
+    if (pane === 'right' && rightPaneMode() === 'review' && chatFocused()) {
+      ctx = { mode: 'review-chat' };
+    } else if (pane === 'right') {
       ctx =
         rightPaneMode() === 'review'
           ? { mode: 'review-panel' }
@@ -178,6 +183,14 @@ export default function ReviewsView(props: ReviewsViewProps) {
       ctx = { mode: 'empty' };
     }
     props.onHintContextChange?.(ctx);
+  });
+
+  // Safety-net: when leaving the review panel, always exit chat focus
+  createEffect(() => {
+    if (rightPaneMode() !== 'review') {
+      setChatFocused(false);
+      props.onInputCapturedChange?.(false);
+    }
   });
 
   // ── Data loading ────────────────────────────────────────────────
@@ -545,6 +558,33 @@ export default function ReviewsView(props: ReviewsViewProps) {
 
     const pane = activePane();
 
+    // Chat input capture — MUST run before any generic command handlers so that
+    // typing 'q', 'x', 'o', etc. inserts text rather than triggering actions.
+    if (pane === 'right' && rightPaneMode() === 'review' && chatFocused()) {
+      if (key.name === 'escape') {
+        setChatFocused(false);
+        props.onInputCapturedChange?.(false);
+        return;
+      }
+      if (key.name === 'return') {
+        const sel = selectedItem();
+        if (sel.kind === 'review') {
+          void sendChat(sel.review.prKey);
+        }
+        return;
+      }
+      if (key.name === 'backspace' || key.name === 'delete') {
+        setChatInput((s) => s.slice(0, -1));
+        return;
+      }
+      if (key.sequence && key.sequence.length === 1 && !key.ctrl && !key.meta) {
+        setChatInput((s) => s + key.sequence);
+        return;
+      }
+      // Swallow all other keys while in chat mode
+      return;
+    }
+
     // Pane switching: h/l or Left/Right (let Shift+H fall through to the hunk-review handler)
     if ((key.name === 'h' && !key.shift) || key.name === 'left') {
       setActivePane('left');
@@ -652,6 +692,13 @@ export default function ReviewsView(props: ReviewsViewProps) {
       if (sel.kind === 'review') {
         void openHunkForeground(sel.review);
       }
+      return;
+    }
+
+    // Enter chat mode when in the review panel
+    if (key.name === 'i' && pane === 'right' && rightPaneMode() === 'review') {
+      setChatFocused(true);
+      props.onInputCapturedChange?.(true);
       return;
     }
   });

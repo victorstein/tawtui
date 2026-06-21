@@ -6,8 +6,6 @@ import {
   FG_PRIMARY,
   FG_NORMAL,
   FG_DIM,
-  COLOR_SUCCESS,
-  COLOR_ERROR,
   BORDER_DIM,
   REPO_GRAD,
   AGENT_GRAD,
@@ -21,16 +19,6 @@ function abbreviateWorktreePath(fullPath: string): string {
   const parts = fullPath.split('/');
   return parts.length > 2 ? parts.slice(-2).join('/') : fullPath;
 }
-
-/** Status indicator color mapping. */
-const STATUS_COLORS: Record<string, string> = {
-  running: COLOR_SUCCESS,
-  done: FG_DIM,
-  failed: COLOR_ERROR,
-};
-
-/** Status dot character. */
-const STATUS_DOT = '\u25CF';
 
 const SPINNER_FRAMES = ['\u280B', '\u2819', '\u2839', '\u2838', '\u283C', '\u2834', '\u2826', '\u2827', '\u2807', '\u280F'];
 
