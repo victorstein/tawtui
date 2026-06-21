@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import type { DiffLineMap, DiffFileEntry } from './hunk-review.types';
+import type {
+  DiffLineMap,
+  DiffFileEntry,
+  ReviewFinding,
+} from './hunk-review.types';
 
 const HUNK_HEADER = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
 
@@ -67,5 +71,32 @@ export class PrDiffParser {
     }
 
     return { files };
+  }
+
+  validateAnchors(
+    findings: ReviewFinding[],
+    map: DiffLineMap,
+  ): { anchored: ReviewFinding[]; unanchored: ReviewFinding[] } {
+    const byPath = new Map(map.files.map((f) => [f.path, f]));
+    const anchored: ReviewFinding[] = [];
+    const unanchored: ReviewFinding[] = [];
+    for (const finding of findings) {
+      const file = byPath.get(finding.file);
+      if (
+        file &&
+        !file.binary &&
+        finding.line !== null &&
+        file.newLines.has(finding.line)
+      ) {
+        anchored.push(finding);
+      } else {
+        unanchored.push(finding);
+      }
+    }
+    return { anchored, unanchored };
+  }
+
+  isOverThreshold(raw: string, maxBytes: number): boolean {
+    return Buffer.byteLength(raw, 'utf-8') > maxBytes;
   }
 }
