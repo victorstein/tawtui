@@ -1,3 +1,5 @@
+import { readFileSync } from 'fs';
+import { dirname, join } from 'path';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from './config.service';
 import type {
@@ -37,27 +39,35 @@ export class HunkService {
   async isAvailable(): Promise<HunkAvailability> {
     const { binaryPath, autodetect } = this.config.getHunkConfig();
     if (binaryPath) {
-      const candidates = [[binaryPath]];
-      for (const command of candidates) {
-        const res = await this.spawn([...command, '--version']);
-        if (res.exitCode === 0) {
-          return { available: true, command, detail: res.stdout.trim() };
-        }
+      const res = await this.spawn([binaryPath, '--version']);
+      if (res.exitCode === 0) {
+        return {
+          available: true,
+          command: [binaryPath],
+          detail: res.stdout.trim(),
+        };
       }
       return {
         available: false,
         command: [binaryPath],
-        detail: 'hunk not found on PATH and `bunx hunkdiff` failed',
+        detail: 'hunk binary not found at configured binaryPath',
       };
     }
-    if (!autodetect) {
+
+    const bundled = this.bundledCommand();
+    if (!bundled && !autodetect) {
       return {
         available: false,
         command: ['hunk'],
         detail: 'hunk autodetect disabled and no binaryPath configured',
       };
     }
-    const candidates: string[][] = [['hunk'], ['bunx', 'hunkdiff']];
+
+    const candidates: string[][] = [
+      ...(bundled ? [bundled] : []),
+      ...(autodetect ? [['hunk'], ['bunx', 'hunkdiff']] : []),
+    ];
+
     for (const command of candidates) {
       const res = await this.spawn([...command, '--version']);
       if (res.exitCode === 0) {
@@ -66,9 +76,28 @@ export class HunkService {
     }
     return {
       available: false,
-      command: candidates[0],
+      command: candidates[0] ?? ['hunk'],
       detail: 'hunk not found on PATH and `bunx hunkdiff` failed',
     };
+  }
+
+  protected resolveBundledBinPath(): string | null {
+    try {
+      const pkgPath = Bun.resolveSync('hunkdiff/package.json', __dirname);
+      const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as {
+        bin?: string | Record<string, string>;
+      };
+      const binRel = typeof pkg.bin === 'string' ? pkg.bin : pkg.bin?.['hunk'];
+      if (!binRel) return null;
+      return join(dirname(pkgPath), binRel);
+    } catch {
+      return null;
+    }
+  }
+
+  private bundledCommand(): string[] | null {
+    const binPath = this.resolveBundledBinPath();
+    return binPath ? ['bun', binPath] : null;
   }
 
   async resolveSessionId(

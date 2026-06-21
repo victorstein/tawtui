@@ -9,6 +9,19 @@ function setBunSpawn(fn: jest.Mock) {
   (globalThis as Record<string, unknown>).Bun = { spawn: fn };
 }
 
+class HunkServiceWithBundled extends HunkService {
+  constructor(
+    config: ConfigService,
+    private readonly fakeBinPath: string | null,
+  ) {
+    super(config);
+  }
+
+  protected override resolveBundledBinPath(): string | null {
+    return this.fakeBinPath;
+  }
+}
+
 function routed(
   routes: Record<
     string,
@@ -86,6 +99,152 @@ describe('HunkService', () => {
       expect(result.available).toBe(false);
       expect(result.detail).toContain('autodetect disabled');
       expect(spawnMock).not.toHaveBeenCalled();
+    });
+
+    describe('bundled binary', () => {
+      const FAKE_BIN_PATH = '/fake/node_modules/hunkdiff/bin/hunk.cjs';
+
+      it('should prefer the bundled binary over PATH hunk when the package resolves', async () => {
+        const spawnMock = routed({
+          [`bun ${FAKE_BIN_PATH} --version`]: {
+            stdout: 'hunk 0.16.0',
+            exitCode: 0,
+          },
+        });
+        setBunSpawn(spawnMock);
+        const svcBundled = new HunkServiceWithBundled(
+          new ConfigService(),
+          FAKE_BIN_PATH,
+        );
+
+        const result = await svcBundled.isAvailable();
+
+        expect(result.available).toBe(true);
+        expect(result.command).toEqual(['bun', FAKE_BIN_PATH]);
+      });
+
+      it('should not probe PATH hunk at all when the bundled binary is available', async () => {
+        const spawnMock = routed({
+          [`bun ${FAKE_BIN_PATH} --version`]: {
+            stdout: 'hunk 0.16.0',
+            exitCode: 0,
+          },
+        });
+        setBunSpawn(spawnMock);
+        const svcBundled = new HunkServiceWithBundled(
+          new ConfigService(),
+          FAKE_BIN_PATH,
+        );
+
+        await svcBundled.isAvailable();
+
+        const pathHunkCalls = (spawnMock.mock.calls as [string[]][]).filter(
+          ([cmd]) => cmd[0] === 'hunk',
+        );
+        expect(pathHunkCalls).toHaveLength(0);
+      });
+
+      it('should fall back to PATH hunk when bundled resolution returns null', async () => {
+        const spawnMock = routed({
+          'hunk --version': { stdout: 'hunk 0.16.0', exitCode: 0 },
+        });
+        setBunSpawn(spawnMock);
+        const svcNoBundled = new HunkServiceWithBundled(
+          new ConfigService(),
+          null,
+        );
+
+        const result = await svcNoBundled.isAvailable();
+
+        expect(result.available).toBe(true);
+        expect(result.command).toEqual(['hunk']);
+      });
+
+      it('should report unavailable when bundled resolution returns null and autodetect is false', async () => {
+        const spawnMock = jest.fn();
+        setBunSpawn(spawnMock);
+        const configSvc = new ConfigService();
+        jest.spyOn(configSvc, 'getHunkConfig').mockReturnValue({
+          autodetect: false,
+          agentAuthorLabel: 'test',
+          maxDiffBytes: 1_500_000,
+        });
+        const svcNoBundled = new HunkServiceWithBundled(configSvc, null);
+
+        const result = await svcNoBundled.isAvailable();
+
+        expect(result.available).toBe(false);
+        expect(spawnMock).not.toHaveBeenCalled();
+      });
+
+      it('should use binaryPath and skip bundled resolution when binaryPath is set', async () => {
+        const spawnMock = routed({
+          '/custom/hunk --version': { stdout: 'hunk 0.16.0', exitCode: 0 },
+        });
+        setBunSpawn(spawnMock);
+        const configSvc = new ConfigService();
+        jest.spyOn(configSvc, 'getHunkConfig').mockReturnValue({
+          binaryPath: '/custom/hunk',
+          autodetect: true,
+          agentAuthorLabel: 'test',
+          maxDiffBytes: 1_500_000,
+        });
+        const resolveBundledBinPathSpy = jest.spyOn(
+          HunkServiceWithBundled.prototype,
+          'resolveBundledBinPath' as never,
+        );
+        const svcCustom = new HunkServiceWithBundled(configSvc, FAKE_BIN_PATH);
+
+        const result = await svcCustom.isAvailable();
+
+        expect(result.available).toBe(true);
+        expect(result.command).toEqual(['/custom/hunk']);
+        expect(resolveBundledBinPathSpy).not.toHaveBeenCalled();
+        resolveBundledBinPathSpy.mockRestore();
+      });
+
+      it('should build the foreground command using the bundled binary', async () => {
+        const spawnMock = routed({
+          [`bun ${FAKE_BIN_PATH} --version`]: {
+            stdout: 'hunk 0.16.0',
+            exitCode: 0,
+          },
+        });
+        setBunSpawn(spawnMock);
+        const svcBundled = new HunkServiceWithBundled(
+          new ConfigService(),
+          FAKE_BIN_PATH,
+        );
+
+        const spawned: string[][] = [];
+        await svcBundled.launchForeground(
+          {
+            worktreePath: '/wt',
+            patchPath: '/wt/pr.diff',
+            agentContextPath: '/cfg/findings.json',
+            port: 41005,
+          },
+          {
+            suspend: jest.fn(),
+            resume: jest.fn(),
+            spawn: (cmd) => {
+              spawned.push(cmd);
+              return { exited: Promise.resolve(0) };
+            },
+          },
+        );
+
+        expect(spawned[0]).toEqual([
+          'bun',
+          FAKE_BIN_PATH,
+          'patch',
+          '/wt/pr.diff',
+          '--agent-context',
+          '/cfg/findings.json',
+          '--agent-notes',
+          '--wrap',
+        ]);
+      });
     });
   });
 
