@@ -187,6 +187,8 @@ export default function ReviewsView(props: ReviewsViewProps) {
     let ctx: ReviewsHintContext;
     if (isInteractive) {
       ctx = { mode: 'interactive' };
+    } else if (hunkReview() !== null && rightPaneMode() === 'prs') {
+      ctx = { mode: 'hunk-review' };
     } else if (pane === 'right') {
       ctx =
         rightPaneMode() === 'terminal'
@@ -961,8 +963,8 @@ export default function ReviewsView(props: ReviewsViewProps) {
 
     const pane = activePane();
 
-    // Pane switching: h/l or Left/Right
-    if (key.name === 'h' || key.name === 'left') {
+    // Pane switching: h/l or Left/Right (let Shift+H fall through to the hunk-review handler)
+    if ((key.name === 'h' && !key.shift) || key.name === 'left') {
       setActivePane('left');
       return;
     }

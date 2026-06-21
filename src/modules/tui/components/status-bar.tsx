@@ -6,6 +6,7 @@ export type ReviewsHintContext =
   | { mode: 'agent-left' }
   | { mode: 'prs-right' }
   | { mode: 'terminal-right' }
+  | { mode: 'hunk-review' }
   | { mode: 'interactive' }
   | { mode: 'empty' };
 
@@ -31,11 +32,13 @@ function getReviewsHint(ctx: ReviewsHintContext): string {
     case 'interactive':
       return 'Ctrl+\\ exit | Alt+C copy | Alt+V paste | keys forwarded to agent';
     case 'repo-left':
-      return `${base} | h/l panes | j/k navigate | enter PRs | a add repo | x remove | n new agent | r refresh | q quit`;
+      return `${base} | h/l panes | j/k navigate | enter PRs | H hunk review | a add repo | x remove | n new agent | r refresh | q quit`;
     case 'agent-left':
       return `${base} | h/l panes | j/k navigate | enter interactive | K kill | n new agent | r refresh | q quit`;
     case 'prs-right':
-      return `${base} | h/l panes | j/k navigate | enter detail/spawn | r refresh | q quit`;
+      return `${base} | h/l panes | j/k navigate | enter detail/spawn | H hunk review | r refresh | q quit`;
+    case 'hunk-review':
+      return `${base} | o open hunk | H re-review | h/l panes | j/k navigate | r refresh | q quit`;
     case 'terminal-right':
       return `${base} | h/l panes | C-d/C-u scroll | enter interactive | Alt+C copy | Alt+V paste | K kill | r refresh | q quit`;
     case 'empty':
