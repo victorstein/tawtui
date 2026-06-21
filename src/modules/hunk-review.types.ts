@@ -54,7 +54,13 @@ export interface ReviewOutput {
   agentContextPath: string;
 }
 
-export type HunkReviewStatus = 'creating' | 'reviewing' | 'ready' | 'open' | 'error' | 'killed';
+export type HunkReviewStatus =
+  | 'creating'
+  | 'reviewing'
+  | 'ready'
+  | 'open'
+  | 'error'
+  | 'killed';
 
 export interface HunkReviewRecord {
   prKey: string;
