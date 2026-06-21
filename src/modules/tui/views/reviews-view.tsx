@@ -823,18 +823,10 @@ export default function ReviewsView(props: ReviewsViewProps) {
     setReviewingPr(pr.number);
     bridge
       .startHunkReview(sel.repo.owner, sel.repo.repo, pr.number, pr.title)
-      .then(
-        (result: {
-          prKey: string;
-          agentContextPath: string;
-          worktreePath: string;
-          patchPath: string;
-          body: ReviewBody;
-        }) => {
-          setHunkReview({ ...result, port: 0 });
-          setChat([{ role: 'agent', text: result.body.summary }]);
-        },
-      )
+      .then((result: { prKey: string; existing: boolean }) => {
+        void result;
+        setHunkReview(null);
+      })
       .catch(() => showError('Hunk review failed'))
       .finally(() => setReviewingPr(null));
   }
@@ -865,7 +857,7 @@ export default function ReviewsView(props: ReviewsViewProps) {
     setChat((c) => [...c, { role: 'user', text: msg }]);
     setChatInput('');
     try {
-      const reply = await bridge.askHunkChat(msg);
+      const reply = await bridge.askHunkChat(review.prKey, msg);
       setChat((c) => [...c, { role: 'agent', text: reply }]);
     } catch {
       setChat((c) => [...c, { role: 'agent', text: '⚠ chat failed' }]);

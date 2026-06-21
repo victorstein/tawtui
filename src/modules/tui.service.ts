@@ -24,8 +24,8 @@ import type {
 import type { ProjectAgentConfig } from './config.types';
 import type { DueDateValidation } from './taskwarrior.types';
 import type {
-  ReviewBody,
   HunkAvailability,
+  HunkReviewStatus,
   LaunchForegroundParams,
   HunkReviewRecord,
 } from './hunk-review.types';
@@ -74,13 +74,7 @@ interface TawtuiGlobal {
       repo: string,
       prNumber: number,
       prTitle: string,
-    ) => Promise<{
-      prKey: string;
-      agentContextPath: string;
-      worktreePath: string;
-      patchPath: string;
-      body: ReviewBody;
-    }>;
+    ) => Promise<{ prKey: string; existing: boolean }>;
     runHunkForeground: (
       params: LaunchForegroundParams,
       hooks: Pick<ForegroundHooks, 'suspend' | 'resume'>,
@@ -102,6 +96,8 @@ interface TawtuiGlobal {
 
 @Injectable()
 export class TuiService {
+  private backgroundRuns = new Map<string, Promise<void>>();
+
   constructor(
     private readonly taskwarriorService: TaskwarriorService,
     private readonly githubService: GithubService,
@@ -118,18 +114,34 @@ export class TuiService {
     private readonly hunkReviewRegistry: HunkReviewRegistry,
   ) {}
 
+  private get bgRuns(): Map<string, Promise<void>> {
+    if (!this.backgroundRuns) this.backgroundRuns = new Map();
+    return this.backgroundRuns;
+  }
+
+  awaitBackgroundForTest(prKey: string): Promise<void> {
+    return this.bgRuns.get(prKey) ?? Promise.resolve();
+  }
+
   async startHunkReview(
     owner: string,
     repo: string,
     prNumber: number,
     prTitle: string,
-  ): Promise<{
-    prKey: string;
-    agentContextPath: string;
-    worktreePath: string;
-    patchPath: string;
-    body: ReviewBody;
-  }> {
+  ): Promise<{ prKey: string; existing: boolean }> {
+    const prKey = `${owner}/${repo}#pr-${prNumber}-hunk`;
+    const existing = this.hunkReviewRegistry.get(prKey);
+    // Re-fire (replace) a terminal-but-incomplete review: `interrupted` (process
+    // died mid-review) OR `error` (review failed). Only live/usable statuses dedup
+    // to the existing entry. (I3)
+    const REFIREABLE: ReadonlySet<HunkReviewStatus> = new Set([
+      'interrupted',
+      'error',
+    ]);
+    if (existing && !REFIREABLE.has(existing.status)) {
+      return { prKey, existing: true };
+    }
+
     const wt = await this.worktreeService.createWorktree(
       owner,
       repo,
@@ -137,9 +149,8 @@ export class TuiService {
       undefined,
       'hunk',
     );
-    const prKey = wt.id;
     this.hunkReviewRegistry.add({
-      prKey,
+      prKey: wt.id,
       repoOwner: owner,
       repoName: repo,
       prNumber,
@@ -150,42 +161,82 @@ export class TuiService {
       chat: [],
     });
 
-    const diff = await this.githubService.getPrDiff(owner, repo, prNumber);
-    const patchPath = join(wt.path, 'pr.diff');
-    writeFileSync(patchPath, diff.raw, 'utf-8');
-
-    const hunkCfg = this.configService.getHunkConfig();
-    const lineMap = this.prDiffParser.parse(diff.raw);
-    const agentContextPath = join(
-      this.configService.configDirPublic(),
-      `hunk-findings-${prNumber}.json`,
+    const run = this.runReviewInBackground(
+      wt.id,
+      owner,
+      repo,
+      prNumber,
+      prTitle,
+      wt.path,
     );
+    this.bgRuns.set(wt.id, run);
+    void run.finally(() => this.bgRuns.delete(wt.id));
+    return { prKey: wt.id, existing: false };
+  }
 
-    const body = this.prDiffParser.isOverThreshold(
-      diff.raw,
-      hunkCfg.maxDiffBytes,
-    )
-      ? {
-          summary: 'Diff exceeds size threshold; review-body-only.',
-          unanchoredFindings: [],
-          unanchoredCount: 0,
-        }
-      : (
-          await this.agentReviewService.startReview(prKey, {
-            diffRaw: diff.raw,
-            lineMap,
-            agentContextPath,
-            authorLabel: hunkCfg.agentAuthorLabel,
-            prTitle,
-          })
-        ).body;
+  private async runReviewInBackground(
+    prKey: string,
+    owner: string,
+    repo: string,
+    prNumber: number,
+    prTitle: string,
+    worktreePath: string,
+  ): Promise<void> {
+    try {
+      const diff = await this.githubService.getPrDiff(owner, repo, prNumber);
+      const patchPath = join(worktreePath, 'pr.diff');
+      writeFileSync(patchPath, diff.raw, 'utf-8');
 
-    this.hunkReviewRegistry.update(prKey, {
-      status: 'ready',
-      sdkSessionId: this.agentReviewService.getSessionId(prKey),
-    });
+      const hunkCfg = this.configService.getHunkConfig();
+      const lineMap = this.prDiffParser.parse(diff.raw);
+      const agentContextPath = join(
+        this.configService.configDirPublic(),
+        `hunk-findings-${prNumber}.json`,
+      );
 
-    return { prKey, agentContextPath, worktreePath: wt.path, patchPath, body };
+      const body = this.prDiffParser.isOverThreshold(
+        diff.raw,
+        hunkCfg.maxDiffBytes,
+      )
+        ? {
+            summary: 'Diff exceeds size threshold; review-body-only.',
+            unanchoredFindings: [],
+            unanchoredCount: 0,
+          }
+        : (
+            await this.agentReviewService.startReview(prKey, {
+              diffRaw: diff.raw,
+              lineMap,
+              agentContextPath,
+              authorLabel: hunkCfg.agentAuthorLabel,
+              prTitle,
+            })
+          ).body;
+
+      this.hunkReviewRegistry.update(prKey, {
+        status: 'ready',
+        body,
+        agentContextPath,
+        patchPath,
+        sdkSessionId: this.agentReviewService.getSessionId(prKey),
+      });
+      this.hunkReviewRegistry.appendChat(prKey, {
+        role: 'agent',
+        text: body.summary,
+      });
+    } catch (err) {
+      this.hunkReviewRegistry.update(prKey, {
+        status: 'error',
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  async askHunkChat(prKey: string, message: string): Promise<string> {
+    this.hunkReviewRegistry.appendChat(prKey, { role: 'user', text: message });
+    const reply = await this.agentReviewService.ask(prKey, message);
+    this.hunkReviewRegistry.appendChat(prKey, { role: 'agent', text: reply });
+    return reply;
   }
 
   async killHunkReview(prKey: string): Promise<void> {
@@ -289,7 +340,7 @@ export class TuiService {
       resolveHunkSessionId: (port: number, worktreePath?: string) =>
         this.hunkService.resolveSessionId(port, worktreePath),
       askHunkChat: (prKey: string, message: string) =>
-        this.agentReviewService.ask(prKey, message),
+        this.askHunkChat(prKey, message),
       listHunkReviews: () => this.hunkReviewRegistry.list(),
       killHunkReview: (prKey: string) => this.killHunkReview(prKey),
       checkHunkPrereqs: () => this.checkHunkPrereqs(),

@@ -14,7 +14,6 @@ import type {
 import type { ProjectAgentConfig } from '../config.types';
 import type { DueDateValidation } from '../taskwarrior.types';
 import type {
-  ReviewBody,
   HunkAvailability,
   LaunchForegroundParams,
   HunkReviewRecord,
@@ -59,13 +58,7 @@ export interface TawtuiBridge {
     repo: string,
     prNumber: number,
     prTitle: string,
-  ) => Promise<{
-    prKey: string;
-    agentContextPath: string;
-    worktreePath: string;
-    patchPath: string;
-    body: ReviewBody;
-  }>;
+  ) => Promise<{ prKey: string; existing: boolean }>;
   runHunkForeground: (
     params: LaunchForegroundParams,
     hooks: ForegroundHooks,
