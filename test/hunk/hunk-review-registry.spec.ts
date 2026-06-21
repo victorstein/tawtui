@@ -1,5 +1,5 @@
 import { HunkReviewRegistry } from '../../src/modules/hunk-review-registry.service';
-import { mkdtempSync, rmSync } from 'fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import type { HunkReviewRecord } from '../../src/modules/hunk-review.types';
@@ -61,5 +61,99 @@ describe('HunkReviewRegistry', () => {
     const reloaded = freshRegistry(dir);
     reloaded.rediscover();
     expect(reloaded.get('octo/repo#pr-7')?.prNumber).toBe(7);
+  });
+
+  describe('appendChat', () => {
+    describe('Behavior', () => {
+      it('should append a chat message and persist it', () => {
+        const reg = freshRegistry(dir);
+        reg.add({ ...REC, chat: [] });
+        reg.appendChat('octo/repo#pr-7', { role: 'user', text: 'hello' });
+        reg.appendChat('octo/repo#pr-7', { role: 'agent', text: 'hi' });
+        expect(reg.get('octo/repo#pr-7')?.chat).toEqual([
+          { role: 'user', text: 'hello' },
+          { role: 'agent', text: 'hi' },
+        ]);
+        // round-trips from disk
+        const reloaded = freshRegistry(dir);
+        reloaded.rediscover();
+        expect(reloaded.get('octo/repo#pr-7')?.chat).toHaveLength(2);
+      });
+
+      it('should no-op when the review does not exist', () => {
+        const reg = freshRegistry(dir);
+        expect(() =>
+          reg.appendChat('missing', { role: 'user', text: 'x' }),
+        ).not.toThrow();
+      });
+    });
+  });
+
+  describe('rediscover', () => {
+    describe('stale-marking', () => {
+      it('should mark creating/reviewing records interrupted on reload', () => {
+        const seed = freshRegistry(dir);
+        seed.add({ ...REC, prKey: 'a', status: 'reviewing', chat: [] });
+        seed.add({ ...REC, prKey: 'b', status: 'creating', chat: [] });
+        seed.add({ ...REC, prKey: 'c', status: 'ready', chat: [] });
+        const reloaded = freshRegistry(dir);
+        reloaded.rediscover();
+        expect(reloaded.get('a')?.status).toBe('interrupted');
+        expect(reloaded.get('b')?.status).toBe('interrupted');
+        expect(reloaded.get('c')?.status).toBe('ready');
+      });
+    });
+
+    describe('legacy backfill', () => {
+      it('should backfill chat to [] for a record persisted before the chat field existed', () => {
+        const legacy = {
+          prKey: 'octo/repo#pr-7',
+          repoOwner: 'octo',
+          repoName: 'repo',
+          prNumber: 7,
+          worktreePath: '/wt',
+          port: 0,
+          status: 'ready',
+          createdAt: 'x',
+        };
+        writeFileSync(
+          join(dir, 'hunk-reviews.json'),
+          JSON.stringify([legacy]),
+          'utf-8',
+        );
+
+        const reg = freshRegistry(dir);
+        reg.rediscover();
+        const r = reg.get('octo/repo#pr-7');
+        expect(r?.chat).toEqual([]); // backfilled, NOT undefined
+        expect(() =>
+          reg.appendChat('octo/repo#pr-7', { role: 'user', text: 'hi' }),
+        ).not.toThrow();
+        expect(reg.get('octo/repo#pr-7')?.chat).toEqual([
+          { role: 'user', text: 'hi' },
+        ]);
+      });
+    });
+  });
+
+  describe('round-trip', () => {
+    describe('body/paths', () => {
+      it('should persist and reload body, agentContextPath, patchPath', () => {
+        const seed = freshRegistry(dir);
+        seed.add({
+          ...REC,
+          chat: [],
+          body: { summary: 's', unanchoredFindings: [], unanchoredCount: 0 },
+          agentContextPath: '/cfg/findings.json',
+          patchPath: '/wt/pr.diff',
+        });
+        const reloaded = freshRegistry(dir);
+        reloaded.rediscover();
+        const r = reloaded.get('octo/repo#pr-7');
+        expect(r?.body?.summary).toBe('s');
+        expect(r?.agentContextPath).toBe('/cfg/findings.json');
+        expect(r?.patchPath).toBe('/wt/pr.diff');
+      });
+    });
   });
 });

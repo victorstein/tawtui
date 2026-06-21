@@ -8,7 +8,7 @@ import {
 } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
-import type { HunkReviewRecord } from './hunk-review.types';
+import type { ChatMessage, HunkReviewRecord } from './hunk-review.types';
 
 @Injectable()
 export class HunkReviewRegistry implements OnModuleInit {
@@ -46,14 +46,33 @@ export class HunkReviewRegistry implements OnModuleInit {
     this.persist();
   }
 
+  appendChat(prKey: string, msg: ChatMessage): void {
+    const existing = this.reviews.get(prKey);
+    if (!existing) return;
+    this.reviews.set(prKey, { ...existing, chat: [...existing.chat, msg] });
+    this.persist();
+  }
+
   rediscover(): void {
     try {
       if (!existsSync(this.storePath)) return;
-      const data = JSON.parse(
-        readFileSync(this.storePath, 'utf-8'),
-      ) as HunkReviewRecord[];
-      this.reviews = new Map(data.map((r) => [r.prKey, r]));
+      // Loaded JSON may predate newly-required fields → treat as partial, then backfill.
+      const data = JSON.parse(readFileSync(this.storePath, 'utf-8')) as Array<
+        Partial<HunkReviewRecord> & { prKey: string }
+      >;
+      let changed = false;
+      const next: HunkReviewRecord[] = data.map((raw) => {
+        const r = { ...raw, chat: raw.chat ?? [] } as HunkReviewRecord;
+        if (raw.chat === undefined) changed = true;
+        if (r.status === 'creating' || r.status === 'reviewing') {
+          changed = true;
+          return { ...r, status: 'interrupted' as const };
+        }
+        return r;
+      });
+      this.reviews = new Map(next.map((r) => [r.prKey, r]));
       this.logger.log(`Rediscovered ${this.reviews.size} hunk review(s)`);
+      if (changed) this.persist();
     } catch {
       this.logger.warn('Failed to load hunk-reviews.json');
     }
