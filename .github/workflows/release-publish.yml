@@ -1,0 +1,84 @@
+name: release-publish
+
+# Builds the release artifacts and publishes them AFTER release-please has cut
+# the tag + GitHub Release. Fired by stein-infra's tofu-managed release-please
+# workflow via `gh workflow run release-publish.yml` (the downstream-publish
+# chain) — release-please owns the tag/release/changelog; this only builds the
+# binary + notify helper, uploads them to that release, and updates the Homebrew
+# tap. Replaces the old tag-triggered release.yml (manual tagging is gone —
+# release-please cuts tags now).
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: macos-15 # ARM64 guaranteed
+    steps:
+      - name: Resolve latest release tag
+        id: tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # release-please created the release just before this workflow was
+          # fired, so the latest release is the one to publish artifacts for.
+          TAG=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)
+          if [ -z "$TAG" ]; then
+            echo "::error::No release found to publish artifacts for."
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout the released tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build binary
+        run: |
+          mkdir -p dist
+          bun run scripts/compile.ts
+
+      - name: Build notification helper
+        run: bash src/notify-helper/build.sh
+
+      - name: Package notification helper
+        run: |
+          cd dist
+          tar -czf tawtui-notify-darwin-arm64.tar.gz "TaWTUI Notify.app"
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          shasum -a 256 tawtui-darwin-arm64 > tawtui-darwin-arm64.sha256
+          shasum -a 256 tawtui-notify-darwin-arm64.tar.gz > tawtui-notify-darwin-arm64.tar.gz.sha256
+
+      - name: Upload artifacts to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          gh release upload "$TAG" \
+            dist/tawtui-darwin-arm64 \
+            dist/tawtui-darwin-arm64.sha256 \
+            dist/tawtui-notify-darwin-arm64.tar.gz \
+            dist/tawtui-notify-darwin-arm64.tar.gz.sha256 \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
+      - name: Update Homebrew tap
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.TAP_GITHUB_TOKEN }}
+          repository: victorstein/homebrew-tap
+          event-type: update-formula
+          client-payload: '{"tag": "${{ steps.tag.outputs.tag }}"}'
