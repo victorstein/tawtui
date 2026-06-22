@@ -1,4 +1,5 @@
-import { For, Show } from 'solid-js';
+import { createEffect, For, Show } from 'solid-js';
+import type { ScrollBoxRenderable } from '@opentui/core';
 import type { ReviewFinding } from '../../hunk-review.types';
 import {
   ACCENT_PRIMARY,
@@ -10,6 +11,8 @@ import {
   BORDER_ACTIVE,
   SEPARATOR_COLOR,
 } from '../theme';
+
+const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
 export function formatUnanchoredHeader(count: number): string {
   return `Un-anchored findings (${count})`;
@@ -30,12 +33,23 @@ interface HunkReviewPanelProps {
   chatInput: string;
   isActivePane: boolean;
   chatFocused: boolean;
+  pending: boolean;
+  pendingMessage: string;
+  spinnerFrame: number;
   onChatInput: (v: string) => void;
   onSend: () => void;
   onOpenHunk: () => void;
 }
 
 export function HunkReviewPanel(props: HunkReviewPanelProps) {
+  let chatScrollRef: ScrollBoxRenderable | undefined;
+
+  createEffect(() => {
+    void props.chat.length;
+    void props.pending;
+    if (chatScrollRef) chatScrollRef.scrollTo(chatScrollRef.scrollHeight);
+  });
+
   return (
     <box
       flexDirection="column"
@@ -58,7 +72,14 @@ export function HunkReviewPanel(props: HunkReviewPanelProps) {
         </text>
       </box>
 
-      <scrollbox flexGrow={1} width="100%" focusable={false}>
+      <scrollbox
+        ref={(el: ScrollBoxRenderable) => {
+          chatScrollRef = el;
+        }}
+        flexGrow={1}
+        width="100%"
+        focusable={false}
+      >
         <box flexDirection="column" flexGrow={1} width="100%" paddingX={1}>
           {/* Summary */}
           <box paddingY={1}>
@@ -108,7 +129,7 @@ export function HunkReviewPanel(props: HunkReviewPanelProps) {
           </box>
 
           <Show
-            when={props.chat.length > 0}
+            when={props.chat.length > 0 || props.pending}
             fallback={
               <box paddingY={1}>
                 <text fg={FG_DIM}>No messages yet.</text>
@@ -126,7 +147,7 @@ export function HunkReviewPanel(props: HunkReviewPanelProps) {
                       {msg.role === 'user' ? 'You' : 'Agent'}
                     </text>
                   </box>
-                  <box>
+                  <box paddingLeft={2}>
                     <text fg={msg.role === 'user' ? FG_NORMAL : FG_DIM}>
                       {msg.text}
                     </text>
@@ -134,6 +155,21 @@ export function HunkReviewPanel(props: HunkReviewPanelProps) {
                 </box>
               )}
             </For>
+            <Show when={props.pending}>
+              <box flexDirection="column" paddingY={1}>
+                <box height={1}>
+                  <text fg={FG_PRIMARY} attributes={1}>
+                    You
+                  </text>
+                </box>
+                <box paddingLeft={2}>
+                  <text fg={FG_NORMAL}>{props.pendingMessage}</text>
+                </box>
+                <box height={1} paddingTop={1}>
+                  <text fg={ACCENT_PRIMARY}>{`${SPINNER_FRAMES[props.spinnerFrame % SPINNER_FRAMES.length]} Agent is thinking…`}</text>
+                </box>
+              </box>
+            </Show>
           </Show>
 
           {/* Separator */}

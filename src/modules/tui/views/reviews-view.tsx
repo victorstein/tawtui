@@ -102,6 +102,9 @@ export default function ReviewsView(props: ReviewsViewProps) {
 
   // Chat input state
   const [chatInput, setChatInput] = createSignal('');
+  const [chatPending, setChatPending] = createSignal(false);
+  const [pendingMsg, setPendingMsg] = createSignal('');
+  const [chatSpinner, setChatSpinner] = createSignal(0);
 
   // Chat focus state — when true, keystrokes go to chat input instead of global commands
   const [chatFocused, setChatFocused] = createSignal(false);
@@ -159,6 +162,12 @@ export default function ReviewsView(props: ReviewsViewProps) {
       setSpinnerFrame((f) => (f + 1) % SPINNER_FRAMES.length);
       loadReviews();
     }, 200);
+    onCleanup(() => clearInterval(id));
+  });
+
+  createEffect(() => {
+    if (!chatPending()) return;
+    const id = setInterval(() => setChatSpinner((f) => (f + 1) % SPINNER_FRAMES.length), 120);
     onCleanup(() => clearInterval(id));
   });
 
@@ -505,12 +514,16 @@ export default function ReviewsView(props: ReviewsViewProps) {
     const bridge = (globalThis as Record<string, any>).__tawtui;
     if (!msg || !bridge?.askHunkChat) return;
     setChatInput('');
+    setPendingMsg(msg);
+    setChatPending(true);
     try {
       await bridge.askHunkChat(prKey, msg);
     } catch {
       showError('Chat failed');
     } finally {
       loadReviews();
+      setChatPending(false);
+      setPendingMsg('');
     }
   }
 
@@ -773,6 +786,9 @@ export default function ReviewsView(props: ReviewsViewProps) {
                   chatInput={chatInput()}
                   isActivePane={activePane() === 'right'}
                   chatFocused={chatFocused()}
+                  pending={chatPending()}
+                  pendingMessage={pendingMsg()}
+                  spinnerFrame={chatSpinner()}
                   onChatInput={setChatInput}
                   onSend={() => void sendChat(r.prKey)}
                   onOpenHunk={() => void openHunkForeground(r)}
