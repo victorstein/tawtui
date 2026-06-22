@@ -639,11 +639,16 @@ export default function ReviewsView(props: ReviewsViewProps) {
       return;
     }
 
-    // Enter / l on left pane: navigate right; Enter on right pane + PRs: open detail
+    // Enter: drill into the right pane. On a review, Enter focuses the panel AND
+    // starts chatting (same as `i`); on a repo it just focuses the PR list.
     if (key.name === 'return') {
       if (pane === 'left') {
         const sel = selectedItem();
-        if (sel.kind === 'repo' || sel.kind === 'review') {
+        if (sel.kind === 'review') {
+          setActivePane('right');
+          setChatFocused(true);
+          props.onInputCapturedChange?.(true);
+        } else if (sel.kind === 'repo') {
           setActivePane('right');
         }
         return;
@@ -651,6 +656,9 @@ export default function ReviewsView(props: ReviewsViewProps) {
       if (pane === 'right') {
         if (rightPaneMode() === 'prs') {
           openPrDetailDialog();
+        } else if (rightPaneMode() === 'review') {
+          setChatFocused(true);
+          props.onInputCapturedChange?.(true);
         }
       }
       return;
@@ -764,6 +772,7 @@ export default function ReviewsView(props: ReviewsViewProps) {
                   error={r.error}
                   chatInput={chatInput()}
                   isActivePane={activePane() === 'right'}
+                  chatFocused={chatFocused()}
                   onChatInput={setChatInput}
                   onSend={() => void sendChat(r.prKey)}
                   onOpenHunk={() => void openHunkForeground(r)}

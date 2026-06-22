@@ -29,6 +29,7 @@ interface HunkReviewPanelProps {
   error?: string;
   chatInput: string;
   isActivePane: boolean;
+  chatFocused: boolean;
   onChatInput: (v: string) => void;
   onSend: () => void;
   onOpenHunk: () => void;
@@ -157,17 +158,13 @@ export function HunkReviewPanel(props: HunkReviewPanelProps) {
             )}
           </Show>
 
-          {/* Chat input */}
-          <box
-            height={1}
-            flexDirection="row"
-            borderStyle="single"
-            borderColor={BORDER_ACTIVE}
-            paddingX={1}
-          >
-            <text fg={FG_DIM}>{'> '}</text>
+          {/* Chat input (borderless — a 1-row bordered box collapses into the text) */}
+          <box height={1} flexDirection="row" paddingX={1}>
+            <text fg={props.chatFocused ? ACCENT_PRIMARY : FG_DIM}>{'> '}</text>
             <text fg={FG_NORMAL}>{props.chatInput}</text>
-            <text fg={FG_DIM}>{' [Enter] send'}</text>
+            <text fg={props.chatFocused ? ACCENT_PRIMARY : FG_DIM}>
+              {props.chatFocused ? '▏' : ' (i / Enter to chat)'}
+            </text>
           </box>
 
           {/* Open in hunk affordance */}
