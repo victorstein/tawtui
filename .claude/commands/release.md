@@ -1,47 +1,48 @@
 ---
 allowed-tools: Bash(git:*), Bash(gh:*)
-argument-hint: "[version]"
+argument-hint: ""
 ---
 
-# /release — Create a New Release
+# /release — How releases work
 
-Merge the current branch to main, tag, and trigger the CI release workflow.
+Releases are **fully automated** via release-please, managed centrally by
+`victorstein/stein-infra`. **You do not tag manually.**
 
-## Prerequisites
+## How to cut a release
 
-- All changes committed (clean working tree)
-- Branch pushed to remote with a merged or mergeable PR
+1. Merge PRs to `main` with **conventional-commit titles** (we squash-merge, so the
+   PR title becomes the commit subject):
+   - `feat: …` → minor bump
+   - `fix: …` → patch bump
+   - `feat!: …` or a `BREAKING CHANGE:` footer → major bump
+   - `chore:`/`docs:`/`ci:`/`refactor:`/`test:` → no release on their own
+2. release-please maintains a long-lived **Release PR** (`chore(main): release X.Y.Z`)
+   that accumulates the changelog. The workflow **self-merges** that PR, then **cuts
+   the tag + GitHub Release**.
+3. That release fires **`.github/workflows/release-publish.yml`**, which builds the
+   `tawtui-darwin-arm64` binary + the notify helper, uploads them to the release,
+   and dispatches the Homebrew tap update to `victorstein/homebrew-tap`.
 
-## Steps
+There is **no manual `git tag` / `git push <tag>`** — that flow is retired.
 
-1. Run `git status` to verify clean working tree
-2. Determine the version:
-   - If a version argument is provided (e.g., `v0.1.4`), use it
-   - Otherwise, fetch the latest tag with `git tag --sort=-v:refname | head -1` and bump the patch version
-3. Check for an open PR on the current branch with `gh pr list --head <branch>`
-   - If no PR exists, create one with `gh pr create`
-4. Merge the PR with `gh pr merge --merge`
-5. Fetch main, tag the merge commit, and push the tag:
-   ```
-   git fetch origin main
-   git tag <version> origin/main
-   git push origin <version>
-   ```
-6. Verify the release workflow started with `gh run list --limit 1`
-7. Report the PR URL, tag, and workflow status
+## Checking a release
 
-## Release Workflow (automated by CI)
+```
+gh run list -R victorstein/tawtui --workflow release-please.yml --limit 3
+gh run list -R victorstein/tawtui --workflow release-publish.yml --limit 3
+gh release list -R victorstein/tawtui
+```
 
-Pushing a `v*` tag triggers `.github/workflows/release.yml` which:
-- Builds the `tawtui-darwin-arm64` binary via `bun run scripts/compile.ts`
-- Generates a SHA-256 checksum
-- Creates a GitHub Release with auto-generated notes
-- Dispatches a Homebrew tap update to `victorstein/homebrew-tap`
+## Forcing / fixing a release
 
-## Version Format
+- No release after a `feat:`/`fix:` merge? Check the release-please run log for
+  "could not be parsed" / "No user facing commits" (a squash-commit-body parser
+  snag); open a follow-up PR with a `Release-As: X.Y.Z` footer to force it.
+- `release-please.yml`, `release-please-config.json`, `.release-please-manifest.json`,
+  and `version.txt` are **tofu-managed by stein-infra** — don't hand-edit them here;
+  they're overwritten on the next stein-infra apply.
 
-Semver: `v{major}.{minor}.{patch}` (e.g., `v0.1.3`)
+## Version format
 
-- **patch**: Bug fixes, small features
-- **minor**: Significant features, new views/modules
-- **major**: Breaking changes
+Semver `vMAJOR.MINOR.PATCH` (e.g. `v0.2.13`), driven by the conventional-commit
+types above. `version.txt` + `.release-please-manifest.json` are the source of truth.
