@@ -208,7 +208,24 @@ export default function ReviewsView(props: ReviewsViewProps) {
   function loadReviews(): void {
     const bridge = (globalThis as Record<string, any>).__tawtui;
     const list: HunkReviewRecord[] = bridge?.listHunkReviews?.() ?? [];
-    setReviews(list);
+    // Only update the signal when meaningful data changed, so the ~200ms poll
+    // doesn't needlessly re-render the right-pane panel (which flickers its
+    // scrollbar). The left-pane spinner animates off the separate spinnerFrame.
+    const cur = reviews();
+    const changed =
+      cur.length !== list.length ||
+      list.some((r, i) => {
+        const c = cur[i];
+        return (
+          !c ||
+          c.prKey !== r.prKey ||
+          c.status !== r.status ||
+          c.chat.length !== r.chat.length ||
+          c.body?.summary !== r.body?.summary ||
+          (c.body?.unanchoredCount ?? 0) !== (r.body?.unanchoredCount ?? 0)
+        );
+      });
+    if (changed) setReviews(list);
     if (cursorIndex() >= repos().length + list.length) {
       setCursorIndex(Math.max(repos().length + list.length - 1, 0));
     }
@@ -746,6 +763,7 @@ export default function ReviewsView(props: ReviewsViewProps) {
                   status={r.status}
                   error={r.error}
                   chatInput={chatInput()}
+                  isActivePane={activePane() === 'right'}
                   onChatInput={setChatInput}
                   onSend={() => void sendChat(r.prKey)}
                   onOpenHunk={() => void openHunkForeground(r)}

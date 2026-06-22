@@ -28,6 +28,7 @@ interface HunkReviewPanelProps {
   status: string;
   error?: string;
   chatInput: string;
+  isActivePane: boolean;
   onChatInput: (v: string) => void;
   onSend: () => void;
   onOpenHunk: () => void;
@@ -40,7 +41,7 @@ export function HunkReviewPanel(props: HunkReviewPanelProps) {
       flexGrow={1}
       height="100%"
       borderStyle="single"
-      borderColor={BORDER_DIM}
+      borderColor={props.isActivePane ? BORDER_ACTIVE : BORDER_DIM}
     >
       {/* Title */}
       <box height={1} width="100%" paddingX={1}>
