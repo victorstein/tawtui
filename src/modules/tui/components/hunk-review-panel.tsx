@@ -1,5 +1,4 @@
-import { createEffect, For, Show } from 'solid-js';
-import type { ScrollBoxRenderable } from '@opentui/core';
+import { For, Show } from 'solid-js';
 import type { ReviewFinding } from '../../hunk-review.types';
 import {
   ACCENT_PRIMARY,
@@ -42,14 +41,6 @@ interface HunkReviewPanelProps {
 }
 
 export function HunkReviewPanel(props: HunkReviewPanelProps) {
-  let chatScrollRef: ScrollBoxRenderable | undefined;
-
-  createEffect(() => {
-    void props.chat.length;
-    void props.pending;
-    if (chatScrollRef) chatScrollRef.scrollTo(chatScrollRef.scrollHeight);
-  });
-
   return (
     <box
       flexDirection="column"
@@ -73,12 +64,11 @@ export function HunkReviewPanel(props: HunkReviewPanelProps) {
       </box>
 
       <scrollbox
-        ref={(el: ScrollBoxRenderable) => {
-          chatScrollRef = el;
-        }}
         flexGrow={1}
         width="100%"
         focusable={false}
+        stickyScroll={true}
+        stickyStart="bottom"
       >
         <box flexDirection="column" flexGrow={1} width="100%" paddingX={1}>
           {/* Summary */}
