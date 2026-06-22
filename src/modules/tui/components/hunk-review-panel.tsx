@@ -142,10 +142,9 @@ export function HunkReviewPanel(props: HunkReviewPanelProps) {
           </box>
 
           {/* Status */}
-          <box height={1} paddingY={1}>
-            <text fg={FG_DIM}>
-              Status: <text fg={FG_NORMAL}>{props.status}</text>
-            </text>
+          <box height={1} flexDirection="row">
+            <text fg={FG_DIM}>{'Status: '}</text>
+            <text fg={FG_NORMAL}>{props.status}</text>
           </box>
 
           {/* Error */}
@@ -163,12 +162,11 @@ export function HunkReviewPanel(props: HunkReviewPanelProps) {
             flexDirection="row"
             borderStyle="single"
             borderColor={BORDER_ACTIVE}
+            paddingX={1}
           >
-            <text fg={FG_DIM} paddingX={1}>
-              {'> '}
-              <text fg={FG_NORMAL}>{props.chatInput}</text>
-              <text fg={FG_DIM}> [Enter] send</text>
-            </text>
+            <text fg={FG_DIM}>{'> '}</text>
+            <text fg={FG_NORMAL}>{props.chatInput}</text>
+            <text fg={FG_DIM}>{' [Enter] send'}</text>
           </box>
 
           {/* Open in hunk affordance */}
