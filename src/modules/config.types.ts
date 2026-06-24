@@ -36,11 +36,29 @@ export interface ProjectAgentConfig {
   worktreeEnvFiles?: string[];
 }
 
+export interface HunkConfig {
+  /** Explicit path to the `hunk` binary; overrides autodetect when set. */
+  binaryPath?: string;
+  /** Whether to autodetect `hunk` on PATH and fall back to `bunx hunkdiff`. */
+  autodetect: boolean;
+  /** `author` label stamped on agent-authored annotations/comments. */
+  agentAuthorLabel: string;
+  /** Diffs larger than this (bytes) fall back to review-body-only. */
+  maxDiffBytes: number;
+}
+
+export const DEFAULT_HUNK_CONFIG: HunkConfig = {
+  autodetect: true,
+  agentAuthorLabel: 'tawtui-review',
+  maxDiffBytes: 1_500_000,
+};
+
 export interface AppConfig {
   repos: import('../shared/types').RepoConfig[];
   preferences: UserPreferences;
   agents?: { types: AgentDefinition[] };
   projectAgentConfigs?: ProjectAgentConfig[];
   calendar?: CalendarConfig;
+  hunk?: HunkConfig;
   projects?: string[];
 }

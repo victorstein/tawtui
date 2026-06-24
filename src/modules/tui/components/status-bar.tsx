@@ -3,10 +3,10 @@ import { FG_DIM } from '../theme';
 
 export type ReviewsHintContext =
   | { mode: 'repo-left' }
-  | { mode: 'agent-left' }
   | { mode: 'prs-right' }
-  | { mode: 'terminal-right' }
-  | { mode: 'interactive' }
+  | { mode: 'reviews-list' }
+  | { mode: 'review-panel' }
+  | { mode: 'review-chat' }
   | { mode: 'empty' };
 
 interface StatusBarProps {
@@ -17,7 +17,7 @@ interface StatusBarProps {
 
 const TAB_HINTS = [
   '1-3 switch tab | j/k navigate | n new | enter detail | m/M move | x archive | / filter | q quit',
-  '1-3 switch tab | h/l panes | j/k navigate | a add repo | x remove | n new agent | enter interactive | K kill | r refresh | q quit',
+  '1-3 switch tab | h/l panes | j/k navigate | a add repo | x remove | Shift+H review | K remove review | r refresh | q quit',
   '1-3 switch tab | h/l day | j/k events | [ / ] week | t today | enter convert | r refresh | q quit',
 ];
 
@@ -28,18 +28,18 @@ function getReviewsHint(ctx: ReviewsHintContext): string {
   const base = '1-3 switch tab';
 
   switch (ctx.mode) {
-    case 'interactive':
-      return 'Ctrl+\\ exit | Alt+C copy | Alt+V paste | keys forwarded to agent';
     case 'repo-left':
-      return `${base} | h/l panes | j/k navigate | enter PRs | a add repo | x remove | n new agent | r refresh | q quit`;
-    case 'agent-left':
-      return `${base} | h/l panes | j/k navigate | enter interactive | K kill | n new agent | r refresh | q quit`;
+      return `${base} | h/l panes | j/k navigate | enter PRs | a add repo | x remove | r refresh | q quit`;
     case 'prs-right':
-      return `${base} | h/l panes | j/k navigate | enter detail/spawn | r refresh | q quit`;
-    case 'terminal-right':
-      return `${base} | h/l panes | C-d/C-u scroll | enter interactive | Alt+C copy | Alt+V paste | K kill | r refresh | q quit`;
+      return `${base} | h/l panes | j/k navigate | enter detail | Shift+H review | r refresh | q quit`;
+    case 'reviews-list':
+      return `${base} | j/k navigate | enter open panel | o open hunk | K remove | r refresh | q quit`;
+    case 'review-panel':
+      return `${base} | i chat | o open hunk | esc back | K remove | r refresh | q quit`;
+    case 'review-chat':
+      return 'typing chat message | enter send | backspace delete | esc cancel';
     case 'empty':
-      return `${base} | a add repo | n new agent | q quit`;
+      return `${base} | a add repo | Shift+H review a PR | q quit`;
   }
 }
 

@@ -93,27 +93,30 @@ export class WorktreeService implements OnModuleInit {
   /**
    * Create (or return an existing) worktree for a pull request.
    * The clone is ensured, the PR ref is fetched, and a git worktree is
-   * created at `{baseDir}/{owner}/{repo}-worktrees/pr-{prNumber}`.
+   * created at `{baseDir}/{owner}/{repo}-worktrees/pr-{prNumber}{suffix}`.
+   * Pass `namespace` to isolate a separate flow (e.g. `'hunk'` → `pr-{n}-hunk`).
    */
   async createWorktree(
     owner: string,
     repo: string,
     prNumber: number,
     envFiles?: string[],
+    namespace?: string,
   ): Promise<WorktreeInfo> {
-    const existing = this.findByPr(owner, repo, prNumber);
+    const existing = this.findByPr(owner, repo, prNumber, namespace);
     if (existing) {
       return existing;
     }
 
     const managed = await this.ensureClone(owner, repo);
-    const id = `${owner}/${repo}#pr-${prNumber}`;
-    const branch = `tawtui/pr-${prNumber}`;
+    const suffix = namespace ? `-${namespace}` : '';
+    const id = `${owner}/${repo}#pr-${prNumber}${suffix}`;
+    const branch = `tawtui/pr-${prNumber}${suffix}`;
     const worktreePath = join(
       this.baseDir,
       owner,
       `${repo}-worktrees`,
-      `pr-${prNumber}`,
+      `pr-${prNumber}${suffix}`,
     );
 
     const info: WorktreeInfo = {
@@ -124,6 +127,7 @@ export class WorktreeService implements OnModuleInit {
       repoOwner: owner,
       repoName: repo,
       clonePath: managed.clonePath,
+      namespace,
       createdAt: new Date(),
       status: 'creating',
     };
@@ -246,13 +250,16 @@ export class WorktreeService implements OnModuleInit {
 
   /**
    * Find a worktree associated with a specific PR.
+   * Pass `namespace` to target a namespaced worktree (e.g. `'hunk'`).
    */
   findByPr(
     owner: string,
     repo: string,
     prNumber: number,
+    namespace?: string,
   ): WorktreeInfo | undefined {
-    const id = `${owner}/${repo}#pr-${prNumber}`;
+    const suffix = namespace ? `-${namespace}` : '';
+    const id = `${owner}/${repo}#pr-${prNumber}${suffix}`;
     return this.worktrees.get(id);
   }
 
@@ -381,14 +388,23 @@ export class WorktreeService implements OnModuleInit {
    * Execute a git command via Bun.spawn.
    */
   private async execGit(args: string[], cwd: string): Promise<ExecResult> {
-    const cmd = ['git', ...args];
-    this.logger.debug(`Executing: ${cmd.join(' ')} (cwd: ${cwd})`);
+    const cmd = [
+      'git',
+      '-c',
+      'credential.helper=',
+      '-c',
+      'credential.helper=!gh auth git-credential',
+      ...args,
+    ];
+    this.logger.debug(`Executing: git ${args.join(' ')} (cwd: ${cwd})`);
 
     try {
       const proc = Bun.spawn(cmd, {
         cwd,
+        stdin: 'ignore',
         stdout: 'pipe',
         stderr: 'pipe',
+        env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
       });
 
       const [stdout, stderr, exitCode] = await Promise.all([
@@ -457,8 +473,10 @@ export class WorktreeService implements OnModuleInit {
     try {
       const proc = Bun.spawn(cmd, {
         cwd,
+        stdin: 'ignore',
         stdout: 'pipe',
         stderr: 'pipe',
+        env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
       });
 
       const [stdout, stderr, exitCode] = await Promise.all([
@@ -542,6 +560,7 @@ export class WorktreeService implements OnModuleInit {
         repoName: w.repoName,
         clonePath: w.clonePath,
         sessionId: w.sessionId,
+        namespace: w.namespace,
         createdAt: w.createdAt.toISOString(),
         status: w.status,
       }));
@@ -576,6 +595,7 @@ export class WorktreeService implements OnModuleInit {
           repoName: item.repoName as string,
           clonePath: item.clonePath as string,
           sessionId: item.sessionId as string | undefined,
+          namespace: item.namespace as string | undefined,
           createdAt: new Date(item.createdAt as string),
           status: item.status as WorktreeInfo['status'],
         });

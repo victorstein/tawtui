@@ -1,0 +1,13 @@
+export const createSignal = jest.fn(() => [jest.fn(), jest.fn()]);
+export const createMemo = jest.fn((fn: () => unknown) => fn);
+export const createEffect = jest.fn();
+export const onCleanup = jest.fn();
+export const onMount = jest.fn();
+export const For = jest.fn();
+export const Show = jest.fn();
+export const Switch = jest.fn();
+export const Match = jest.fn();
+export const createContext = jest.fn(() => ({ Provider: jest.fn() }));
+export const useContext = jest.fn();
+export const untrack = jest.fn((fn: () => unknown) => fn());
+export const batch = jest.fn((fn: () => unknown) => fn());

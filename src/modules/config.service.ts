@@ -13,10 +13,11 @@ import type {
   AppConfig,
   ProjectAgentConfig,
   CalendarConfig,
+  HunkConfig,
   RepoConfig,
   UserPreferences,
 } from './config.types';
-import { DEFAULT_CALENDAR_CONFIG } from './config.types';
+import { DEFAULT_CALENDAR_CONFIG, DEFAULT_HUNK_CONFIG } from './config.types';
 
 const DEFAULT_CONFIG: AppConfig = {
   repos: [],
@@ -197,6 +198,21 @@ export class ConfigService {
     const config = this.load();
     const current = config.calendar ?? { ...DEFAULT_CALENDAR_CONFIG };
     config.calendar = { ...current, ...update };
+    this.save(config);
+  }
+
+  configDirPublic(): string {
+    return this.configDir;
+  }
+
+  getHunkConfig(): HunkConfig {
+    const config = this.load();
+    return { ...DEFAULT_HUNK_CONFIG, ...config.hunk };
+  }
+
+  updateHunkConfig(update: Partial<HunkConfig>): void {
+    const config = this.load();
+    config.hunk = { ...DEFAULT_HUNK_CONFIG, ...config.hunk, ...update };
     this.save(config);
   }
 }
