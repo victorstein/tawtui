@@ -22,6 +22,8 @@ interface TerminalOutputProps {
   isInteractive: boolean;
   agentName: string | null;
   onScrollRef?: (ref: ScrollBoxRenderable) => void;
+  onActivate?: () => void;
+  onScroll?: (direction: 'up' | 'down') => void;
 }
 
 export function TerminalOutput(props: TerminalOutputProps) {
@@ -66,6 +68,11 @@ export function TerminalOutput(props: TerminalOutputProps) {
       height="100%"
       borderStyle={borderStyle()}
       borderColor={borderColorVal()}
+      onMouseDown={() => props.onActivate?.()}
+      onMouseScroll={(event) => {
+        const dir = event.scroll?.direction;
+        if (dir === 'up' || dir === 'down') props.onScroll?.(dir);
+      }}
     >
       {/* Header */}
       <box height={1} width="100%" paddingX={1} flexDirection="row">

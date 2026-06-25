@@ -394,6 +394,54 @@ export class TerminalService implements OnModuleDestroy, OnModuleInit {
   }
 
   /**
+   * Forward a mouse-wheel scroll into the session's tmux pane as SGR mouse
+   * sequences.  Interactive full-screen programs (e.g. the Claude CLI) render
+   * on the alternate screen and have no mirror-side scrollback, so we make the
+   * program scroll its OWN view by injecting wheel events; the mirror then
+   * reflects the resulting frame.
+   *
+   * SGR wheel encoding: `ESC [ < <button> ; <col> ; <row> M` where button 64 is
+   * wheel-up and 65 is wheel-down, with 1-based pane coordinates.  Raw mouse
+   * bytes can't go through {@link sendInput} (it would interpret them via the
+   * key map), so they are sent verbatim with `send-keys -H` (hex input).
+   */
+  async scrollAgent(
+    id: string,
+    direction: 'up' | 'down',
+    ticks = 1,
+  ): Promise<void> {
+    const session = this.sessions.get(id);
+    if (!session) {
+      throw new Error(`Session not found: ${id}`);
+    }
+
+    const button = direction === 'up' ? 64 : 65;
+    // A coordinate comfortably inside any reasonably sized pane. The exact
+    // position is irrelevant to the program — only the wheel button matters.
+    const col = 2;
+    const row = 2;
+    const seq = `\x1b[<${button};${col};${row}M`;
+    const hexBytes = Buffer.from(seq).toString('hex').match(/.{2}/g) ?? [];
+
+    const count = Math.max(1, Math.floor(ticks));
+    for (let i = 0; i < count; i++) {
+      const result = await this.execTmux([
+        'send-keys',
+        '-t',
+        session.tmuxPaneId,
+        '-H',
+        ...hexBytes,
+      ]);
+
+      if (result.exitCode !== 0) {
+        throw new Error(
+          `Failed to scroll session ${id}: ${result.stderr.trim()}`,
+        );
+      }
+    }
+  }
+
+  /**
    * Capture the current visible content of the tmux pane together with the
    * cursor position.  The `changed` flag indicates whether the content differs
    * from the previous capture for the same session.
