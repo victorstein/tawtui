@@ -1009,4 +1009,119 @@ describe('TerminalService Integration', () => {
       });
     });
   });
+
+  // ================================================================
+  // Mouse Wheel Forwarding
+  // ================================================================
+  describe('Mouse Wheel Forwarding', () => {
+    async function createRunningSession(
+      service: TerminalService,
+    ): Promise<string> {
+      mockSpawnSequence([
+        ['tmux 3.4', '', 0], // isTmuxInstalled → tmux -V
+        ['', '', 0], // new-session
+        ['', '', 0], // set-option remain-on-exit
+        ['%7', '', 0], // list-panes → pane id
+      ]);
+      const session = await service.createSession({
+        name: 'Scroll Test',
+        cwd: '/tmp/scroll',
+      });
+      mockSpawn.mockClear();
+      mockSpawnSuccess();
+      return session.id;
+    }
+
+    // TS-MW-1: wheel-up encodes SGR button 64 as hex send-keys bytes
+    it('should send SGR wheel-up (button 64) as hex bytes via send-keys -H', async () => {
+      const { service } = createService();
+      const sessionId = await createRunningSession(service);
+
+      await service.scrollAgent(sessionId, 'up');
+
+      const call = mockSpawn.mock.calls[0] as [string[], unknown];
+      const args = call[0];
+
+      // ESC [ < 64 ; 2 ; 2 M  → exact byte stream for wheel-up at col=2,row=2
+      expect(args).toEqual([
+        'tmux',
+        'send-keys',
+        '-t',
+        '%7',
+        '-H',
+        '1b',
+        '5b',
+        '3c',
+        '36',
+        '34', // "64" → wheel up
+        '3b',
+        '32', // col 2
+        '3b',
+        '32', // row 2
+        '4d', // 'M'
+      ]);
+    });
+
+    // TS-MW-2: wheel-down encodes SGR button 65 (differs from up by one byte)
+    it('should send SGR wheel-down (button 65) as hex bytes via send-keys -H', async () => {
+      const { service } = createService();
+      const sessionId = await createRunningSession(service);
+
+      await service.scrollAgent(sessionId, 'down');
+
+      const call = mockSpawn.mock.calls[0] as [string[], unknown];
+      const args = call[0];
+
+      // Identical to wheel-up except the button digit "64" → "65".
+      expect(args).toEqual([
+        'tmux',
+        'send-keys',
+        '-t',
+        '%7',
+        '-H',
+        '1b',
+        '5b',
+        '3c',
+        '36',
+        '35', // "65" → wheel down
+        '3b',
+        '32',
+        '3b',
+        '32',
+        '4d',
+      ]);
+    });
+
+    // TS-MW-3: ticks repeat the send-keys invocation
+    it('should emit one send-keys call per tick', async () => {
+      const { service } = createService();
+      const sessionId = await createRunningSession(service);
+
+      // Fresh response per tick — a single ReadableStream can only be read once.
+      mockSpawn.mockReset();
+      mockSpawnSequence([
+        ['', '', 0],
+        ['', '', 0],
+        ['', '', 0],
+      ]);
+
+      await service.scrollAgent(sessionId, 'up', 3);
+
+      expect(mockSpawn).toHaveBeenCalledTimes(3);
+      for (const call of mockSpawn.mock.calls) {
+        const args = (call as [string[], unknown])[0];
+        expect(args).toContain('send-keys');
+        expect(args).toContain('-H');
+        expect(args).toContain('34'); // wheel-up button byte
+      }
+    });
+
+    // TS-MW-4: scrolling an unknown session throws
+    it('should throw when the session does not exist', async () => {
+      const { service } = createService();
+      await expect(service.scrollAgent('nope', 'up')).rejects.toThrow(
+        /not found/,
+      );
+    });
+  });
 });

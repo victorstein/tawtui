@@ -1080,6 +1080,14 @@ export default function ReviewsView(props: ReviewsViewProps) {
                 return sel.kind === 'agent' ? sel.agent.name : null;
               })()}
               onScrollRef={setTerminalScrollRef}
+              onActivate={() => setActivePane('right')}
+              onScroll={(dir) => {
+                const ts = getTerminalService();
+                const sel = selectedItem();
+                if (ts && sel.kind === 'agent') {
+                  void ts.scrollAgent(sel.agent.id, dir);
+                }
+              }}
             />
           </Match>
         </Switch>
