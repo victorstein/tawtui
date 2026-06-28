@@ -1,8 +1,9 @@
-import { For, Show } from 'solid-js';
+import { For, Show, createEffect } from 'solid-js';
+import type { BoxRenderable, ScrollBoxRenderable } from '@opentui/core';
 import type { Task } from '../../taskwarrior.types';
 import { TaskCard } from './task-card';
 import { BORDER_DIM, FG_DIM } from '../theme';
-import { lerpHex, darkenHex, LEFT_CAP, RIGHT_CAP } from '../utils';
+import { lerpHex, darkenHex, LEFT_CAP, RIGHT_CAP, computeScrollTop } from '../utils';
 
 const COLUMN_GRADIENTS: Record<string, [string, string]> = {
   TODO: ['#8a7aaa', '#445f80'],
@@ -22,6 +23,31 @@ interface BoardColumnProps {
 }
 
 export function BoardColumn(props: BoardColumnProps) {
+  let scrollRef: ScrollBoxRenderable | undefined;
+  const cardRefs: (BoxRenderable | undefined)[] = [];
+
+  createEffect(() => {
+    const idx = props.selectedIndex;
+    if (!props.isActiveColumn) return;
+    if (!scrollRef) return;
+    const sb = scrollRef;
+    if (sb.viewport.height <= 0) return;
+
+    const card = cardRefs[idx];
+    if (!card) return;
+
+    const itemTop = card.y - sb.content.y;
+    const itemBottom = itemTop + card.height;
+
+    const next = computeScrollTop({
+      itemTop,
+      itemBottom,
+      viewTop: sb.scrollTop,
+      viewHeight: sb.viewport.height,
+    });
+    if (next !== null) sb.scrollTo(next);
+  });
+
   const headerLabel = () => ` ${props.title} (${props.tasks.length}) `;
   const gradient = () => COLUMN_GRADIENTS[props.title] ?? DEFAULT_GRADIENT;
   const gradStart = () => gradient()[0];
@@ -103,10 +129,22 @@ export function BoardColumn(props: BoardColumnProps) {
           </box>
         }
       >
-        <scrollbox flexGrow={1} width="100%">
+        <scrollbox
+          ref={(el: ScrollBoxRenderable) => {
+            scrollRef = el;
+          }}
+          flexGrow={1}
+          width="100%"
+        >
           <For each={props.tasks}>
             {(task, index) => (
-              <box width="100%" flexDirection="column">
+              <box
+                ref={(el: BoxRenderable) => {
+                  cardRefs[index()] = el;
+                }}
+                width="100%"
+                flexDirection="column"
+              >
                 <TaskCard
                   task={task}
                   isSelected={
