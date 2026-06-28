@@ -167,6 +167,23 @@ export function getAuthorGradient(author: string): {
   return { start, end };
 }
 
+/**
+ * Compute the scrollTop needed to keep the selected item within the viewport,
+ * given the item's real post-layout geometry (in content coordinate space).
+ * Returns the new scrollTop, or null when no scroll is needed.
+ */
+export function computeScrollTop(opts: {
+  itemTop: number;
+  itemBottom: number;
+  viewTop: number;
+  viewHeight: number;
+}): number | null {
+  const { itemTop, itemBottom, viewTop, viewHeight } = opts;
+  if (itemBottom > viewTop + viewHeight) return itemBottom - viewHeight;
+  if (itemTop < viewTop) return itemTop;
+  return null;
+}
+
 /** Generate a gradient pair for a calendar event ID using HSL color space. */
 export function getEventGradient(eventId: string): {
   start: string;
