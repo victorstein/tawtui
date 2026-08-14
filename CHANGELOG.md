@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/victorstein/tawtui/compare/v0.3.1...v0.3.2) (2026-08-14)
+
+
+### Documentation
+
+* add tawtui agent skill for Taskwarrior task management ([#46](https://github.com/victorstein/tawtui/issues/46)) ([94e7308](https://github.com/victorstein/tawtui/commit/94e7308bb4b9bb6b785f0d6c14801363dc3fef1d))
+
 ## [0.3.1](https://github.com/victorstein/tawtui/compare/v0.3.0...v0.3.1) (2026-06-28)
 
 
