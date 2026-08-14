@@ -135,6 +135,18 @@ Configuration is stored at `~/.config/tawtui/config.json` and is created automat
 | `projectAgentConfigs` | Per-repo agent and worktree settings | `[]` |
 | `calendar.defaultCalendarId` | Google Calendar ID | `primary` |
 
+## Agent integration
+
+tawtui is a view over Taskwarrior, so any AI coding agent can manage your board by driving the
+`task` CLI. The repo ships a skill that teaches agents the board's semantics — how columns map to
+task state, how archiving works, and the gotchas that make tasks silently vanish:
+
+```sh
+cp -r .claude/skills/tawtui ~/.claude/skills/
+```
+
+Agents working inside this repo pick it up automatically.
+
 ## License
 
 [MIT](LICENSE)
